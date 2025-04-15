@@ -12,6 +12,8 @@ import { Clock, History, LogOut, Calendar, User } from "lucide-react"
 import { getCurrentUser, logout } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
 
+export const dynamic = "force-dynamic"
+
 export default function EmployeeDashboard() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)

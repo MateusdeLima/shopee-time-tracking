@@ -14,6 +14,8 @@ import { CalendarDays, FileText, Users, LogOut, Calendar } from "lucide-react"
 import { getCurrentUser, logout } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
 
+export const dynamic = "force-dynamic"
+
 export default function AdminDashboard() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
