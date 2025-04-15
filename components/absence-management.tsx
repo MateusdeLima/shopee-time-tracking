@@ -102,37 +102,46 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const handleDateSelect = (date: Date | undefined) => {
     if (!date) return
 
+    // Ajustar a data para meio-dia para evitar problemas de fuso horário
+    const adjustedDate = new Date(date)
+    adjustedDate.setHours(12, 0, 0, 0)
+
     // Se não temos data inicial, definimos esta como a data inicial
     if (!formData.dateRange.start) {
       setFormData({
         ...formData,
         dateRange: {
-          start: date,
+          start: adjustedDate,
           end: null,
         },
-        dates: [date],
+        dates: [adjustedDate],
       })
       return
     }
 
     // Se já temos uma data inicial, mas não uma data final
     if (formData.dateRange.start && !formData.dateRange.end) {
-      // Se a data selecionada é anterior à data inicial, trocamos as datas
-      if (isBefore(date, formData.dateRange.start)) {
-        const newStart = date
-        const newEnd = formData.dateRange.start
+      // Ajustar a data inicial também
+      const adjustedStart = new Date(formData.dateRange.start)
+      adjustedStart.setHours(12, 0, 0, 0)
 
+      // Se a data selecionada é anterior à data inicial, trocamos as datas
+      if (isBefore(adjustedDate, adjustedStart)) {
         // Gerar todas as datas no intervalo
         const dateRange = eachDayOfInterval({
-          start: newStart,
-          end: newEnd,
+          start: adjustedDate,
+          end: adjustedStart,
+        }).map(d => {
+          const adjusted = new Date(d)
+          adjusted.setHours(12, 0, 0, 0)
+          return adjusted
         })
 
         setFormData({
           ...formData,
           dateRange: {
-            start: newStart,
-            end: newEnd,
+            start: adjustedDate,
+            end: adjustedStart,
           },
           dates: dateRange,
         })
@@ -140,15 +149,19 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         // Caso contrário, a data selecionada é a data final
         // Gerar todas as datas no intervalo
         const dateRange = eachDayOfInterval({
-          start: formData.dateRange.start,
-          end: date,
+          start: adjustedStart,
+          end: adjustedDate,
+        }).map(d => {
+          const adjusted = new Date(d)
+          adjusted.setHours(12, 0, 0, 0)
+          return adjusted
         })
 
         setFormData({
           ...formData,
           dateRange: {
-            start: formData.dateRange.start,
-            end: date,
+            start: adjustedStart,
+            end: adjustedDate,
           },
           dates: dateRange,
         })
@@ -158,10 +171,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       setFormData({
         ...formData,
         dateRange: {
-          start: date,
+          start: adjustedDate,
           end: null,
         },
-        dates: [date],
+        dates: [adjustedDate],
       })
     }
   }
@@ -200,7 +213,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
 
     try {
-      // Formatar datas para string ISO
+      // Formatar datas para string ISO mantendo o fuso horário local
       const formattedDates = formData.dates.map((date) => format(date, "yyyy-MM-dd"))
 
       // Determinar o status inicial com base no motivo
@@ -321,7 +334,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    // Criar uma nova data considerando que a string está em UTC
+    const [year, month, day] = dateString.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
     return format(date, "dd/MM/yyyy", { locale: ptBR })
   }
 
@@ -378,11 +393,17 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
   const formatDateRange = (absence: any) => {
     if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
-      return `De ${formatDate(absence.dateRange.start)} até ${formatDate(absence.dateRange.end)}`
+      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
+      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
+      const startDate = new Date(startYear, startMonth - 1, startDay)
+      const endDate = new Date(endYear, endMonth - 1, endDay)
+      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
     } else if (absence.dates.length > 1) {
       return `${absence.dates.length} dias`
     } else {
-      return formatDate(absence.dates[0])
+      const [year, month, day] = absence.dates[0].split('-').map(Number)
+      const date = new Date(year, month - 1, day)
+      return format(date, "dd/MM/yyyy")
     }
   }
 

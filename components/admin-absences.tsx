@@ -31,40 +31,40 @@ export function AdminAbsences() {
   })
 
   useEffect(() => {
-    // Carregar ausências
-    const loadAbsences = async () => {
-      try {
-        const allAbsences = await getAbsenceRecords()
-        if (Array.isArray(allAbsences)) {
-          setAbsences(allAbsences)
-        } else {
-          console.error("getAbsenceRecords() did not return an array:", allAbsences)
-          setAbsences([])
-        }
-      } catch (error) {
-        console.error("Error loading absences:", error)
-        setAbsences([])
-      }
-    }
-
     loadAbsences()
   }, [])
 
-  const loadAbsences = () => {
-    const allAbsences = getAbsenceRecords()
-    setAbsences(allAbsences)
-
-    // Extrair funcionários únicos
-    const uniqueEmployees = Array.from(new Set(allAbsences.map((record) => record.userId))).map((userId) => {
-      const user = getUserById(userId as string)
-      return {
-        id: userId,
-        name: user ? `${user.firstName} ${user.lastName}` : userId,
-        email: user ? user.email : "",
+  const loadAbsences = async () => {
+    try {
+      const allAbsences = await getAbsenceRecords()
+      if (!Array.isArray(allAbsences)) {
+        console.error("getAbsenceRecords() não retornou um array:", allAbsences)
+        setAbsences([])
+        return
       }
-    })
 
-    setEmployees(uniqueEmployees)
+      // Extrair IDs únicos dos funcionários
+      const uniqueUserIds = Array.from(new Set(allAbsences.map(record => record.userId)))
+
+      // Buscar dados de todos os funcionários
+      const employeesData = await Promise.all(
+        uniqueUserIds.map(async (userId) => {
+          const user = await getUserById(userId as string)
+          return {
+            id: userId,
+            name: user ? `${user.firstName} ${user.lastName}` : 'Usuário não encontrado',
+            email: user ? user.email : '',
+          }
+        })
+      )
+
+      setEmployees(employeesData)
+      setAbsences(allAbsences)
+    } catch (error) {
+      console.error("Erro ao carregar ausências:", error)
+      setAbsences([])
+      setEmployees([])
+    }
   }
 
   const handleFilterChange = (field: string, value: string) => {
@@ -162,13 +162,15 @@ export function AdminAbsences() {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    // Criar uma nova data considerando que a string está em UTC
+    const [year, month, day] = dateString.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
     return format(date, "dd/MM/yyyy", { locale: ptBR })
   }
 
   const getEmployeeName = (userId: string) => {
     const employee = employees.find((e) => e.id === userId)
-    return employee ? employee.name : userId
+    return employee ? `${employee.name} (${employee.email})` : userId
   }
 
   const getReasonText = (absence: any) => {
@@ -180,11 +182,17 @@ export function AdminAbsences() {
 
   const formatDateRange = (absence: any) => {
     if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
-      return `De ${formatDate(absence.dateRange.start)} até ${formatDate(absence.dateRange.end)}`
+      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
+      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
+      const startDate = new Date(startYear, startMonth - 1, startDay)
+      const endDate = new Date(endYear, endMonth - 1, endDay)
+      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
     } else if (absence.dates.length > 1) {
       return `${absence.dates.length} dias`
     } else {
-      return formatDate(absence.dates[0])
+      const [year, month, day] = absence.dates[0].split('-').map(Number)
+      const date = new Date(year, month - 1, day)
+      return format(date, "dd/MM/yyyy")
     }
   }
 

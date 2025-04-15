@@ -452,23 +452,6 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
       throw new Error("Campos obrigatórios faltando")
     }
 
-    // Verificar se já existe um registro para este usuário neste feriado
-    const { data: existingRecord, error: checkError } = await supabase
-      .from("overtime_records")
-      .select("*")
-      .eq("user_id", record.userId)
-      .eq("holiday_id", record.holidayId)
-      .single()
-
-    if (checkError && checkError.code !== "PGRST116") {
-      console.error("Erro ao verificar registro existente:", checkError)
-      throw new Error("Erro ao verificar registro existente")
-    }
-
-    if (existingRecord) {
-      throw new Error("Já existe um registro de horas extras para este feriado")
-    }
-
     // Converter para snake_case para o Supabase
     const recordData = convertToSnakeCase({
       user_id: record.userId,
