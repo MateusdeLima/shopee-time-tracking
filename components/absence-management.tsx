@@ -427,14 +427,6 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
                   <CardTitle className="text-lg font-medium">{getReasonLabel(absence)}</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                    onClick={() => handleDeleteAbsence(absence.id)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
                 </div>
               </CardHeader>
               <CardContent>

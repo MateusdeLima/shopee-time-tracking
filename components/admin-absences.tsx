@@ -12,16 +12,18 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Search, Calendar, Eye, Download, AlertCircle, Check, PartyPopper } from "lucide-react"
+import { Search, Calendar, Eye, Download, AlertCircle, Check, PartyPopper, Trash2 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { getAbsenceRecords, getUserById, updateAbsenceRecord } from "@/lib/db"
+import { getAbsenceRecords, getUserById, updateAbsenceRecord, deleteAbsenceRecord } from "@/lib/db"
+import { toast } from "@/components/ui/use-toast"
 
 export function AdminAbsences() {
   const [absences, setAbsences] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedAbsence, setSelectedAbsence] = useState<any>(null)
   const [filters, setFilters] = useState({
     employee: "",
@@ -106,10 +108,17 @@ export function AdminAbsences() {
       setIsDetailsOpen(false)
 
       // Mostrar mensagem de sucesso
-      alert("Ausência aprovada com sucesso!")
+      toast({
+        title: "Ausência aprovada",
+        description: "Ausência aprovada com sucesso!",
+      })
     } catch (error) {
       console.error("Erro ao aprovar ausência:", error)
-      alert("Erro ao aprovar ausência. Tente novamente.")
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao aprovar a ausência. Tente novamente mais tarde.",
+        variant: "destructive",
+      })
     }
   }
 
@@ -227,6 +236,34 @@ export function AdminAbsences() {
 
     return true
   })
+
+  // Adicionar função de exclusão
+  const handleDeleteAbsence = async () => {
+    if (!selectedAbsence) return
+
+    try {
+      await deleteAbsenceRecord(selectedAbsence.id)
+      
+      // Atualizar a lista de ausências
+      await loadAbsences()
+
+      // Fechar os diálogos
+      setIsDeleteDialogOpen(false)
+      setIsDetailsOpen(false)
+
+      toast({
+        title: "Ausência excluída",
+        description: "O registro de ausência foi excluído com sucesso",
+      })
+    } catch (error) {
+      console.error("Erro ao excluir ausência:", error)
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao excluir a ausência. Tente novamente.",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -495,11 +532,55 @@ export function AdminAbsences() {
             )}
           </div>
 
-          <div className="flex justify-end">
+          <div className="flex justify-end space-x-2">
+            {selectedAbsence && (
+              <Button 
+                variant="destructive" 
+                onClick={() => setIsDeleteDialogOpen(true)}
+                className="mr-auto"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir Ausência
+              </Button>
+            )}
             <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>
               Fechar
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Confirmação de Exclusão */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir Ausência</DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4">
+            <p>
+              Você está prestes a excluir a ausência de{" "}
+              <strong>{selectedAbsence && getEmployeeName(selectedAbsence.userId)}</strong> para o período{" "}
+              <strong>{selectedAbsence && formatDateRange(selectedAbsence)}</strong>.
+            </p>
+
+            <Alert className="mt-4" variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Esta ação não pode ser desfeita. Todos os dados relacionados a esta ausência serão permanentemente excluídos.
+              </AlertDescription>
+            </Alert>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAbsence}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Confirmar Exclusão
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
