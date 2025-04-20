@@ -457,33 +457,42 @@ export function EmployeeReports() {
               ) : (
                 <div className="space-y-2">
                   {detailRecords.map((record) => (
-                    <div key={record.id} className="p-3 bg-gray-50 rounded-md border">
-                      <div className="flex justify-between items-center mb-2">
-                        <div className="flex items-center">
-                          <Clock className="h-4 w-4 text-gray-500 mr-2" />
-                          <span className="font-medium">
-                            {record.optionLabel} ({formatHours(record.hours)})
-                          </span>
+                    <Card key={record.id} className="p-4 hover:shadow-md transition-shadow">
+                      <div className="flex flex-col sm:flex-row justify-between gap-4">
+                        <div>
+                          <h4 className="font-medium text-[#EE4D2D]">{record.holidayName}</h4>
+                          <div className="flex items-center text-sm text-gray-600 mt-1">
+                            <Calendar className="h-3.5 w-3.5 mr-1" />
+                            {formatDate(record.date)}
+                          </div>
+                          <div className="mt-2">
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                              <Clock className="h-3 w-3 mr-1" />
+                              {formatHours(record.hours)} - {record.optionLabel}
+                            </Badge>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-gray-500">
+                        <div className="flex flex-col justify-between items-end">
+                          <div className="text-sm text-gray-500">
                             {formatDateTime(record.createdAt)}
-                            {record.updatedAt &&
-                              record.updatedAt !== record.createdAt &&
-                              ` (Editado: ${formatDateTime(record.updatedAt)})`}
-                          </span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                            onClick={() => handleDeleteRecord(record.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            <span className="sr-only">Excluir registro</span>
-                          </Button>
+                            {record.updatedAt && record.updatedAt !== record.createdAt && (
+                              <span className="text-xs"> (Editado: {formatDateTime(record.updatedAt)})</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                              onClick={() => handleDeleteRecord(record.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              <span className="sr-only">Excluir registro</span>
+                            </Button>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
               )}

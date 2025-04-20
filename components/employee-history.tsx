@@ -280,7 +280,7 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
                 <div className="mt-2">
                   <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                     <Clock className="h-3 w-3 mr-1" />
-                    {formatHours(record.hours)}
+                    {formatHours(record.hours)} - {record.optionLabel}
                   </Badge>
                 </div>
               </div>
@@ -304,32 +304,6 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
                 </div>
               </div>
             </div>
-
-            {/* Detalhes adicionais do registro de ponto */}
-            {record.startTime && record.endTime && (
-              <div className="mt-4 bg-gray-50 p-3 rounded-md border">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label className="text-xs text-gray-500">Horário de Entrada</Label>
-                    <div className="flex items-center">
-                      <Calendar className="h-3 w-3 mr-1 text-gray-500" />
-                      <span>{formatDate(record.date)}</span>
-                      <Clock className="h-3 w-3 mx-1 text-gray-500" />
-                      <span>{formatTime(record.startTime)}</span>
-                    </div>
-                  </div>
-                  <div>
-                    <Label className="text-xs text-gray-500">Horário de Saída</Label>
-                    <div className="flex items-center">
-                      <Calendar className="h-3 w-3 mr-1 text-gray-500" />
-                      <span>{formatDate(record.date)}</span>
-                      <Clock className="h-3 w-3 mx-1 text-gray-500" />
-                      <span>{formatTime(record.endTime)}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
           </Card>
         )
       })}

@@ -53,26 +53,37 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   useEffect(() => {
     loadAbsences()
 
-    // Inscrever-se para atualizações em tempo real
-    const subscription = supabase
-      .channel('absence_changes')
+    // Configurar canal do Supabase para atualizações em tempo real
+    const channel = supabase
+      .channel('absence_records_changes')
       .on(
         'postgres_changes',
         {
-          event: '*',
+          event: 'INSERT', // Escutar apenas eventos de inserção
           schema: 'public',
           table: 'absence_records',
           filter: `user_id=eq.${user.id}`
         },
-        () => {
-          loadAbsences()
+        async () => {
+          await loadAbsences()
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE', // Escutar eventos de exclusão
+          schema: 'public',
+          table: 'absence_records',
+          filter: `user_id=eq.${user.id}`
+        },
+        async () => {
+          await loadAbsences()
         }
       )
       .subscribe()
 
-    // Limpar inscrição quando o componente for desmontado
     return () => {
-      subscription.unsubscribe()
+      channel.unsubscribe()
     }
   }, [user.id])
 
@@ -202,7 +213,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
   }
 
-  const handleSaveAbsence = () => {
+  const handleSaveAbsence = async () => {
     setError("")
 
     if (!formData.reason) {
@@ -243,7 +254,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       const initialStatus = formData.reason === "vacation" ? "pending" : "pending"
 
       // Criar novo registro de ausência
-      createAbsenceRecord({
+      const newAbsence = await createAbsenceRecord({
         userId: user.id,
         reason: formData.reason,
         customReason: formData.reason === "other" ? formData.customReason : undefined,
@@ -258,6 +269,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             : undefined,
       })
 
+      // Atualizar o estado local imediatamente
+      setAbsences(prevAbsences => [newAbsence, ...prevAbsences])
+
       toast({
         title: "Ausência registrada",
         description:
@@ -266,8 +280,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             : "Sua ausência foi registrada com sucesso",
       })
 
-      // Atualizar lista e fechar diálogo
-      loadAbsences()
+      // Fechar diálogo
       setIsAddDialogOpen(false)
     } catch (error: any) {
       setError(error.message || "Ocorreu um erro ao registrar a ausência")
@@ -335,17 +348,15 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     reader.readAsDataURL(file)
   }
 
-  const handleDeleteAbsence = (absenceId: number) => {
+  const handleDeleteAbsence = async (absenceId: number) => {
     if (confirm("Tem certeza que deseja excluir este registro de ausência?")) {
       try {
-        deleteAbsenceRecord(absenceId)
+        await deleteAbsenceRecord(absenceId)
 
         toast({
           title: "Ausência excluída",
           description: "O registro de ausência foi excluído com sucesso",
         })
-
-        loadAbsences()
       } catch (error: any) {
         toast({
           title: "Erro",
@@ -569,7 +580,14 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                         : "Selecione as datas"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
+                <PopoverContent 
+                  className="w-auto p-0 sm:w-[280px] md:w-auto" 
+                  align="center"
+                  side="bottom"
+                  sideOffset={5}
+                  alignOffset={0}
+                  avoidCollisions={true}
+                >
                   <Calendar
                     mode="single"
                     selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
@@ -581,6 +599,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                       return isBefore(date, today)
                     }}
                     initialFocus
+                    className="rounded-md border shadow-md max-w-full"
                   />
                 </PopoverContent>
               </Popover>
