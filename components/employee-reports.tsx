@@ -269,6 +269,18 @@ export function EmployeeReports() {
     return timeString
   }
 
+  const formatHours = (hours: number) => {
+    return hours === 0.5 ? "30 min" : `${hours}h`
+  }
+
+  if (records.length === 0) {
+    return (
+      <div className="text-center p-6">
+        <p className="text-gray-500">Nenhum registro encontrado</p>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -361,13 +373,13 @@ export function EmployeeReports() {
                       <TableCell>
                         <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                           <Clock className="h-3 w-3 mr-1" />
-                          {item.hoursCompleted}h
+                          {formatHours(item.hoursCompleted)}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
                           <Clock className="h-3 w-3 mr-1" />
-                          {item.hoursRemaining}h
+                          {formatHours(item.hoursRemaining)}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -417,7 +429,7 @@ export function EmployeeReports() {
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                   <Clock className="h-3 w-3 mr-1" />
-                  {selectedDetails?.hoursCompleted}h de {selectedDetails?.maxHours}h
+                  {formatHours(selectedDetails?.hoursCompleted)} de {selectedDetails?.maxHours}h
                 </Badge>
               </div>
               <div className="text-xs text-gray-500">
@@ -450,7 +462,7 @@ export function EmployeeReports() {
                         <div className="flex items-center">
                           <Clock className="h-4 w-4 text-gray-500 mr-2" />
                           <span className="font-medium">
-                            {record.optionLabel} ({record.hours}h)
+                            {record.optionLabel} ({formatHours(record.hours)})
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
@@ -471,32 +483,6 @@ export function EmployeeReports() {
                           </Button>
                         </div>
                       </div>
-
-                      {/* Detalhes adicionais do registro de ponto */}
-                      {record.startTime && record.endTime && (
-                        <div className="mt-2 bg-white p-2 rounded border border-gray-200">
-                          <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div>
-                              <Label className="text-xs text-gray-500">Horário de Entrada</Label>
-                              <div className="flex items-center">
-                                <Calendar className="h-3 w-3 mr-1 text-gray-500" />
-                                <span>{formatDate(record.date)}</span>
-                                <Clock className="h-3 w-3 mx-1 text-gray-500" />
-                                <span>{formatTime(record.startTime)}</span>
-                              </div>
-                            </div>
-                            <div>
-                              <Label className="text-xs text-gray-500">Horário de Saída</Label>
-                              <div className="flex items-center">
-                                <Calendar className="h-3 w-3 mr-1 text-gray-500" />
-                                <span>{formatDate(record.date)}</span>
-                                <Clock className="h-3 w-3 mx-1 text-gray-500" />
-                                <span>{formatTime(record.endTime)}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>

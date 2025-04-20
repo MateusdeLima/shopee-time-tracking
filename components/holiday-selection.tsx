@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { TimeClock } from "@/components/time-clock"
 import { getActiveHolidays, getOvertimeRecordsByUserId, createOvertimeRecord, getUserHolidayStats } from "@/lib/db"
+import { supabase } from "@/lib/supabase"
 
 interface HolidaySelectionProps {
   user: any
@@ -55,24 +56,64 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
       }
     }
 
+    // Configurar subscription para atualizações em tempo real
+    const channel = supabase
+      .channel('overtime_records_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Escutar todos os eventos (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'overtime_records',
+          filter: `user_id=eq.${user.id}` // Filtrar apenas registros do usuário atual
+        },
+        async (payload) => {
+          console.log('Mudança detectada:', payload)
+          // Recarregar registros quando houver mudanças
+          await loadUserRecords()
+          
+          // Se houver um feriado selecionado, atualizar suas estatísticas
+          if (selectedHoliday?.id) {
+            const stats = await getUserHolidayStats(user.id, selectedHoliday.id)
+            const maxHours = stats.max - stats.used
+            setRemainingHours(maxHours)
+          }
+        }
+      )
+      .subscribe()
+
     loadActiveHolidays()
     loadUserRecords()
-  }, [user.id])
+
+    // Cleanup da subscription
+    return () => {
+      channel.unsubscribe()
+    }
+  }, [user.id, selectedHoliday?.id])
 
   useEffect(() => {
-    if (selectedHoliday) {
-      // Calcular horas restantes para este feriado
-      const stats = getUserHolidayStats(user.id, selectedHoliday.id)
-      setRemainingHours(stats.max - stats.used)
+    const updateHolidayStats = async () => {
+      if (selectedHoliday) {
+        try {
+          const stats = await getUserHolidayStats(user.id, selectedHoliday.id)
+          const maxHours = stats.max - stats.used
+          setRemainingHours(maxHours)
+        } catch (error) {
+          console.error("Error getting holiday stats:", error)
+          setRemainingHours(0)
+        }
+      }
     }
-  }, [selectedHoliday, userRecords, user.id])
+
+    updateHolidayStats()
+  }, [selectedHoliday, user.id, userRecords])
 
   const handleHolidaySelect = (holiday: any) => {
     setSelectedHoliday(holiday)
     setError("")
   }
 
-  const handleOvertimeCalculated = (
+  const handleOvertimeCalculated = async (
     hours: number,
     startTime: string,
     endTime: string,
@@ -99,7 +140,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
 
     try {
       // Criar novo registro com os horários selecionados
-      const newRecord = createOvertimeRecord({
+      const newRecord = await createOvertimeRecord({
         userId: user.id,
         holidayId: selectedHoliday.id,
         holidayName: selectedHoliday.name,
@@ -111,8 +152,13 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
         endTime: endTime,
       })
 
-      // Atualizar registros locais
-      setUserRecords([...userRecords, newRecord])
+      // Atualizar registros locais imediatamente
+      setUserRecords(prevRecords => [...prevRecords, newRecord])
+
+      // Atualizar estatísticas do feriado
+      const stats = await getUserHolidayStats(user.id, selectedHoliday.id)
+      const maxHours = stats.max - stats.used
+      setRemainingHours(maxHours)
 
       toast({
         title: "Horas extras registradas",
@@ -130,6 +176,10 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+  }
+
+  const formatHours = (hours: number) => {
+    return hours === 0.5 ? "30 min" : `${hours}h`
   }
 
   if (activeHolidays.length === 0) {
@@ -182,7 +232,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
                     className="bg-green-100 text-green-800 hover:bg-green-100"
                   >
                     <Clock className="h-3 w-3 mr-1" />
-                    {remaining}h restantes
+                    {formatHours(remaining)} restantes
                   </Badge>
                 </div>
                 <div className="mt-2 text-sm">
@@ -194,7 +244,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
                     ></div>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    {hoursUsed}h de {holiday.maxHours}h utilizadas
+                    {formatHours(hoursUsed)} de {formatHours(holiday.maxHours)} utilizadas
                   </p>
                 </div>
               </Card>

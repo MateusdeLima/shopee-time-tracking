@@ -2,14 +2,14 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Edit2, Trash2, AlertCircle, Calendar } from "lucide-react"
+import { Edit2, Trash2, AlertCircle, Calendar, Clock } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -19,6 +19,7 @@ import {
   deleteOvertimeRecord,
   getUserHolidayStats,
 } from "@/lib/db"
+import { supabase } from "@/lib/supabase"
 
 const OVERTIME_OPTIONS = [
   { id: "7h_18h", label: "7h às 18h", value: 2 },
@@ -92,12 +93,36 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
       }
     }
 
-    loadHolidays()
-    loadUserRecords()
+    const loadRecords = async () => {
+      await loadHolidays()
+      await loadUserRecords()
+      calculateHoursMap()
+    }
 
-    // Calculate hours map after holidays are loaded
-    calculateHoursMap()
-  }, [user.id, holidays])
+    loadRecords()
+
+    // Inscrever-se para atualizações em tempo real
+    const subscription = supabase
+      .channel('overtime_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'overtime_records',
+          filter: `user_id=eq.${user.id}`
+        },
+        () => {
+          loadRecords()
+        }
+      )
+      .subscribe()
+
+    // Limpar inscrição quando o componente for desmontado
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [user.id])
 
   const handleEdit = (record: any) => {
     setSelectedRecord(record)
@@ -211,6 +236,10 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
     return timeString
   }
 
+  const formatHours = (hours: number) => {
+    return hours === 0.5 ? "30 min" : `${hours}h`
+  }
+
   // Get available options for editing based on remaining hours
   const getAvailableOptions = (record: any) => {
     const holidayId = record.holidayId
@@ -241,112 +270,66 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
 
         return (
           <Card key={record.id} className="p-4 hover:shadow-md transition-shadow">
-            <div className="flex justify-between">
+            <div className="flex flex-col sm:flex-row justify-between gap-4">
               <div>
-                <div className="flex items-center">
-                  <h4 className="font-medium text-[#EE4D2D]">{record.holidayName}</h4>
-                  {holiday && (
-                    <Badge className="ml-2 bg-gray-100 text-gray-700">
-                      {hoursInfo ? `${hoursInfo.used}/${hoursInfo.max}h` : ""}
-                    </Badge>
+                <h4 className="font-medium text-[#EE4D2D]">{record.holidayName}</h4>
+                <div className="flex items-center text-sm text-gray-600 mt-1">
+                  <Calendar className="h-3.5 w-3.5 mr-1" />
+                  {formatDate(record.date)}
+                </div>
+                <div className="mt-2">
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                    <Clock className="h-3 w-3 mr-1" />
+                    {formatHours(record.hours)}
+                  </Badge>
+                </div>
+              </div>
+              <div className="flex flex-col justify-between items-end">
+                <div className="text-sm text-gray-500">
+                  {formatDate(record.createdAt)}
+                  {record.updatedAt && record.updatedAt !== record.createdAt && (
+                    <span className="text-xs"> (Editado: {formatDate(record.updatedAt)})</span>
                   )}
                 </div>
-                <p className="text-sm text-gray-600">{formatDate(record.date)}</p>
-                <p className="mt-1">
-                  {record.optionLabel} ({record.hours}h)
-                </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Registrado em: {format(parseISO(record.createdAt), "dd/MM/yyyy HH:mm")}
-                </p>
-
-                {/* Mostrar detalhes do registro de ponto, se disponíveis */}
-                {record.startTime && record.endTime && (
-                  <div className="mt-2 bg-gray-50 p-2 rounded border border-gray-100 text-xs">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-3 w-3 text-gray-500" />
-                      <span>Entrada: {formatTime(record.startTime)}</span>
-                      <span>-</span>
-                      <span>Saída: {formatTime(record.endTime)}</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-              <div className="flex space-x-2">
-                <Dialog
-                  open={isEditing && selectedRecord?.id === record.id}
-                  onOpenChange={(open) => !open && setIsEditing(false)}
-                >
-                  <DialogTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 px-2" onClick={() => handleEdit(record)}>
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Editar Registro</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div>
-                        <h4 className="font-medium">{selectedRecord?.holidayName}</h4>
-                        <p className="text-sm text-gray-600">{selectedRecord && formatDate(selectedRecord.date)}</p>
-                      </div>
-
-                      {error && (
-                        <Alert variant="destructive" className="mb-4">
-                          <AlertCircle className="h-4 w-4" />
-                          <AlertDescription>{error}</AlertDescription>
-                        </Alert>
-                      )}
-
-                      <div>
-                        <h3 className="text-sm font-medium mb-3">Opções de Hora Extra</h3>
-                        {availableOptions.length > 0 ? (
-                          <RadioGroup value={selectedOption} onValueChange={setSelectedOption}>
-                            {availableOptions.map((option) => (
-                              <div key={option.id} className="flex items-center space-x-2 mb-2">
-                                <RadioGroupItem value={option.id} id={`edit-${option.id}`} />
-                                <Label htmlFor={`edit-${option.id}`} className="cursor-pointer">
-                                  {option.label} ({option.value}h)
-                                </Label>
-                              </div>
-                            ))}
-                          </RadioGroup>
-                        ) : (
-                          <Alert className="bg-amber-50 text-amber-800 border-amber-200">
-                            <AlertCircle className="h-4 w-4" />
-                            <AlertDescription>
-                              Não há opções disponíveis devido ao limite de horas do feriado
-                            </AlertDescription>
-                          </Alert>
-                        )}
-                      </div>
-
-                      <div className="flex justify-end space-x-2">
-                        <Button variant="outline" onClick={() => setIsEditing(false)}>
-                          Cancelar
-                        </Button>
-                        <Button
-                          className="bg-[#EE4D2D] hover:bg-[#D23F20]"
-                          onClick={handleSaveEdit}
-                          disabled={!selectedOption || availableOptions.length === 0}
-                        >
-                          Salvar Alterações
-                        </Button>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-8 px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
-                  onClick={() => handleDelete(record.id)}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => handleDelete(record.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span className="sr-only">Excluir registro</span>
+                  </Button>
+                </div>
               </div>
             </div>
+
+            {/* Detalhes adicionais do registro de ponto */}
+            {record.startTime && record.endTime && (
+              <div className="mt-4 bg-gray-50 p-3 rounded-md border">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label className="text-xs text-gray-500">Horário de Entrada</Label>
+                    <div className="flex items-center">
+                      <Calendar className="h-3 w-3 mr-1 text-gray-500" />
+                      <span>{formatDate(record.date)}</span>
+                      <Clock className="h-3 w-3 mx-1 text-gray-500" />
+                      <span>{formatTime(record.startTime)}</span>
+                    </div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">Horário de Saída</Label>
+                    <div className="flex items-center">
+                      <Calendar className="h-3 w-3 mr-1 text-gray-500" />
+                      <span>{formatDate(record.date)}</span>
+                      <Clock className="h-3 w-3 mx-1 text-gray-500" />
+                      <span>{formatTime(record.endTime)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </Card>
         )
       })}

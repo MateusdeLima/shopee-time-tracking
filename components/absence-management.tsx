@@ -19,6 +19,7 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { getAbsenceRecordsByUserId, createAbsenceRecord, updateAbsenceRecord, deleteAbsenceRecord } from "@/lib/db"
+import { supabase } from "@/lib/supabase"
 
 const ABSENCE_REASONS = [
   { id: "medical", label: "Consulta Médica" },
@@ -51,6 +52,28 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
   useEffect(() => {
     loadAbsences()
+
+    // Inscrever-se para atualizações em tempo real
+    const subscription = supabase
+      .channel('absence_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'absence_records',
+          filter: `user_id=eq.${user.id}`
+        },
+        () => {
+          loadAbsences()
+        }
+      )
+      .subscribe()
+
+    // Limpar inscrição quando o componente for desmontado
+    return () => {
+      subscription.unsubscribe()
+    }
   }, [user.id])
 
   const loadAbsences = async () => {

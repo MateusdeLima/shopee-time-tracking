@@ -893,27 +893,35 @@ export async function getHolidayStats(holidayId: number): Promise<{ used: number
 }
 
 export async function getUserHolidayStats(userId: string, holidayId: number): Promise<{ used: number; max: number }> {
-  const holiday = await getHolidayById(holidayId)
-  if (!holiday) {
-    return { used: 0, max: 0 }
-  }
+  try {
+    // Buscar informações do feriado
+    const holiday = await getHolidayById(holidayId)
+    if (!holiday) {
+      return { used: 0, max: 0 }
+    }
 
-  const { data, error } = await supabase
-    .from("overtime_records")
-    .select("hours")
-    .eq("user_id", userId)
-    .eq("holiday_id", holidayId)
+    // Buscar registros de horas extras do usuário para este feriado
+    const { data, error } = await supabase
+      .from("overtime_records")
+      .select("hours")
+      .eq("user_id", userId)
+      .eq("holiday_id", holidayId)
 
-  if (error) {
+    if (error) {
+      console.error("Erro ao buscar estatísticas de usuário para feriado:", error)
+      return { used: 0, max: holiday.maxHours }
+    }
+
+    // Calcular total de horas usadas
+    const hoursUsed = data.reduce((total, record) => total + record.hours, 0)
+
+    return {
+      used: hoursUsed,
+      max: holiday.maxHours
+    }
+  } catch (error) {
     console.error("Erro ao buscar estatísticas de usuário para feriado:", error)
-    return { used: 0, max: holiday.maxHours }
-  }
-
-  const hoursUsed = data.reduce((total, record) => total + record.hours, 0)
-
-  return {
-    used: hoursUsed,
-    max: holiday.maxHours,
+    return { used: 0, max: 0 }
   }
 }
 
