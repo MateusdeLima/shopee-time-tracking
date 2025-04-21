@@ -36,6 +36,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [absences, setAbsences] = useState<any[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [selectedAbsence, setSelectedAbsence] = useState<any>(null)
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -563,7 +564,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   ? "Selecione a data final para criar um intervalo"
                   : "Selecione a data inicial e depois a data final para criar um intervalo"}
               </p>
-              <Popover modal={true}>
+              <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -586,17 +587,18 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   side="bottom"
                   sideOffset={5}
                   avoidCollisions={true}
-                  forceMount
-                  onInteractOutside={(e) => {
-                    // Prevenir fechamento automático em dispositivos móveis
-                    e.preventDefault()
-                  }}
                 >
                   <div className="p-3 bg-white rounded-lg shadow-lg">
                     <Calendar
                       mode="single"
                       selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
-                      onSelect={handleDateSelect}
+                      onSelect={(date) => {
+                        handleDateSelect(date)
+                        // Se já temos data inicial e final, fechar o calendário
+                        if (formData.dateRange.start && date) {
+                          setIsCalendarOpen(false)
+                        }
+                      }}
                       disabled={(date) => {
                         // Desabilitar datas passadas
                         const today = new Date()
@@ -606,6 +608,15 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                       initialFocus
                       className="rounded-md border shadow-md w-full touch-manipulation"
                     />
+                    <div className="p-2 flex justify-end border-t">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => setIsCalendarOpen(false)}
+                      >
+                        Fechar
+                      </Button>
+                    </div>
                   </div>
                 </PopoverContent>
               </Popover>
