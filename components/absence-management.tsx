@@ -581,26 +581,28 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent 
-                  className="w-auto p-0 sm:w-[280px] md:w-auto" 
+                  className="p-0 w-screen sm:w-auto"
                   align="center"
                   side="bottom"
                   sideOffset={5}
-                  alignOffset={0}
                   avoidCollisions={true}
+                  forceMount
                 >
-                  <Calendar
-                    mode="single"
-                    selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
-                    onSelect={handleDateSelect}
-                    disabled={(date) => {
-                      // Desabilitar datas passadas
-                      const today = new Date()
-                      today.setHours(0, 0, 0, 0)
-                      return isBefore(date, today)
-                    }}
-                    initialFocus
-                    className="rounded-md border shadow-md max-w-full"
-                  />
+                  <div className="p-1">
+                    <Calendar
+                      mode="single"
+                      selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
+                      onSelect={handleDateSelect}
+                      disabled={(date) => {
+                        // Desabilitar datas passadas
+                        const today = new Date()
+                        today.setHours(0, 0, 0, 0)
+                        return isBefore(date, today)
+                      }}
+                      initialFocus
+                      className="rounded-md border shadow-md w-full"
+                    />
+                  </div>
                 </PopoverContent>
               </Popover>
 
