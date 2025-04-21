@@ -563,12 +563,12 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   ? "Selecione a data final para criar um intervalo"
                   : "Selecione a data inicial e depois a data final para criar um intervalo"}
               </p>
-              <Popover>
+              <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     className={cn(
-                      "w-full justify-start text-left font-normal",
+                      "w-full justify-start text-left font-normal relative",
                       !formData.dates.length && "text-muted-foreground",
                     )}
                   >
@@ -581,14 +581,18 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent 
-                  className="p-0 w-screen sm:w-auto"
-                  align="center"
+                  className="p-0 w-[calc(100vw-2rem)] sm:w-auto absolute z-50"
+                  align="start"
                   side="bottom"
                   sideOffset={5}
                   avoidCollisions={true}
                   forceMount
+                  onInteractOutside={(e) => {
+                    // Prevenir fechamento automático em dispositivos móveis
+                    e.preventDefault()
+                  }}
                 >
-                  <div className="p-1">
+                  <div className="p-3 bg-white rounded-lg shadow-lg">
                     <Calendar
                       mode="single"
                       selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
@@ -600,7 +604,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                         return isBefore(date, today)
                       }}
                       initialFocus
-                      className="rounded-md border shadow-md w-full"
+                      className="rounded-md border shadow-md w-full touch-manipulation"
                     />
                   </div>
                 </PopoverContent>
