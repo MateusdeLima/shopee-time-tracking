@@ -37,6 +37,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(false)
   const [selectedAbsence, setSelectedAbsence] = useState<any>(null)
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -83,8 +84,17 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       )
       .subscribe()
 
+    // Detectar se é dispositivo móvel
+    const checkIfMobile = () => {
+      setIsMobile(window.innerWidth <= 768)
+    }
+    
+    checkIfMobile()
+    window.addEventListener('resize', checkIfMobile)
+    
     return () => {
       channel.unsubscribe()
+      window.removeEventListener('resize', checkIfMobile)
     }
   }, [user.id])
 
@@ -564,7 +574,11 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   ? "Selecione a data final para criar um intervalo"
                   : "Selecione a data inicial e depois a data final para criar um intervalo"}
               </p>
-              <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+              <Popover 
+                open={isCalendarOpen} 
+                onOpenChange={setIsCalendarOpen}
+                modal={isMobile}
+              >
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
@@ -572,6 +586,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                       "w-full justify-start text-left font-normal relative",
                       !formData.dates.length && "text-muted-foreground",
                     )}
+                    onClick={() => setIsCalendarOpen(true)}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {formData.dateRange.start && formData.dateRange.end
@@ -582,13 +597,19 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent 
-                  className="p-0 w-[calc(100vw-2rem)] sm:w-auto absolute z-50"
-                  align="start"
+                  className={cn(
+                    "p-0 absolute z-50",
+                    isMobile ? "w-[calc(100vw-2rem)] fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" : "w-auto"
+                  )}
+                  align={isMobile ? "center" : "start"}
                   side="bottom"
-                  sideOffset={5}
-                  avoidCollisions={true}
+                  sideOffset={isMobile ? 0 : 5}
+                  avoidCollisions
                 >
-                  <div className="p-3 bg-white rounded-lg shadow-lg">
+                  <div className={cn(
+                    "p-3 bg-white rounded-lg shadow-lg",
+                    isMobile && "max-h-[80vh] overflow-y-auto"
+                  )}>
                     <Calendar
                       mode="single"
                       selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
@@ -606,17 +627,23 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                         return isBefore(date, today)
                       }}
                       initialFocus
-                      className="rounded-md border shadow-md w-full touch-manipulation"
+                      className={cn(
+                        "rounded-md border shadow-md w-full touch-manipulation",
+                        isMobile && "text-base"
+                      )}
                     />
-                    <div className="p-2 flex justify-end border-t">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => setIsCalendarOpen(false)}
-                      >
-                        Fechar
-                      </Button>
-                    </div>
+                    {isMobile && (
+                      <div className="p-2 flex justify-end border-t">
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => setIsCalendarOpen(false)}
+                          className="w-full bg-[#EE4D2D] hover:bg-[#D23F20] text-white"
+                        >
+                          Fechar
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </PopoverContent>
               </Popover>
