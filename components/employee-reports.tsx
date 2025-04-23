@@ -86,13 +86,13 @@ export function EmployeeReports() {
 
         const uniqueEmployees = uniqueUserIds.map((userId, index) => {
           const user = usersData[index]
-          return {
-            id: userId,
+      return {
+        id: userId,
             email: user ? `${user.firstName} ${user.lastName} (${user.email})` : `Usuário ${userId}` // Usar dados ou um placeholder
-          }
-        })
+      }
+    })
 
-        setEmployees(uniqueEmployees)
+    setEmployees(uniqueEmployees)
       } catch (error) {
         console.error("Erro ao buscar dados dos funcionários:", error)
         // Opcional: Lidar com o erro, talvez mostrando os IDs
@@ -194,7 +194,7 @@ export function EmployeeReports() {
 
   const handleViewDetails = async (item: any) => {
     try {
-      // Buscar registros específicos para este funcionário e feriado
+    // Buscar registros específicos para este funcionário e feriado
       const userRecords = await getOvertimeRecordsByUserId(item.employeeId)
 
       if (!Array.isArray(userRecords)) {
@@ -205,14 +205,14 @@ export function EmployeeReports() {
         return
       }
 
-      const holidayRecords = userRecords.filter((record) => record.holidayId === item.holidayId)
+    const holidayRecords = userRecords.filter((record) => record.holidayId === item.holidayId)
 
-      // Ordenar por data de criação (mais recentes primeiro)
-      holidayRecords.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    // Ordenar por data de criação (mais recentes primeiro)
+    holidayRecords.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 
-      setSelectedDetails(item)
-      setDetailRecords(holidayRecords)
-      setIsDetailsOpen(true)
+    setSelectedDetails(item)
+    setDetailRecords(holidayRecords)
+    setIsDetailsOpen(true)
     } catch (error) {
       console.error("Erro ao buscar detalhes dos registros:", error)
       setDetailRecords([])
@@ -474,11 +474,11 @@ export function EmployeeReports() {
                         </div>
                         <div className="flex flex-col justify-between items-end">
                           <div className="text-sm text-gray-500">
-                            {formatDateTime(record.createdAt)}
+                          {formatDateTime(record.createdAt)}
                             {record.updatedAt && record.updatedAt !== record.createdAt && (
                               <span className="text-xs"> (Editado: {formatDateTime(record.updatedAt)})</span>
                             )}
-                          </div>
+                      </div>
                           <div className="flex items-center gap-2">
                             <Button
                               variant="ghost"
@@ -491,7 +491,7 @@ export function EmployeeReports() {
                             </Button>
                           </div>
                         </div>
-                      </div>
+                    </div>
                     </Card>
                   ))}
                 </div>

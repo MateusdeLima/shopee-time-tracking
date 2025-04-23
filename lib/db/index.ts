@@ -452,18 +452,18 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
       throw new Error("Campos obrigatórios faltando")
     }
 
-    // Converter para snake_case para o Supabase
-    const recordData = convertToSnakeCase({
+  // Converter para snake_case para o Supabase
+  const recordData = convertToSnakeCase({
       user_id: record.userId,
       holiday_id: record.holidayId,
       holiday_name: record.holidayName,
-      date: record.date,
+    date: record.date,
       option_id: record.optionId,
       option_label: record.optionLabel,
       hours: Number(record.hours),
       start_time: record.startTime || null,
       end_time: record.endTime || null,
-    })
+  })
 
     const { data, error } = await supabase
       .from("overtime_records")
@@ -471,16 +471,16 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
       .select()
       .single()
 
-    if (error) {
+  if (error) {
       console.error("Erro detalhado ao criar registro:", error)
       throw new Error(`Falha ao criar registro: ${error.message}`)
     }
 
     if (!data) {
       throw new Error("Nenhum dado retornado após a inserção")
-    }
+  }
 
-    return convertToCamelCase<OvertimeRecord>(data)
+  return convertToCamelCase<OvertimeRecord>(data)
   } catch (error: any) {
     console.error("Erro ao criar registro de horas extras:", error)
     throw new Error(error.message || "Falha ao criar registro de horas extras")
@@ -895,28 +895,28 @@ export async function getHolidayStats(holidayId: number): Promise<{ used: number
 export async function getUserHolidayStats(userId: string, holidayId: number): Promise<{ used: number; max: number }> {
   try {
     // Buscar informações do feriado
-    const holiday = await getHolidayById(holidayId)
-    if (!holiday) {
-      return { used: 0, max: 0 }
-    }
+  const holiday = await getHolidayById(holidayId)
+  if (!holiday) {
+    return { used: 0, max: 0 }
+  }
 
     // Buscar registros de horas extras do usuário para este feriado
-    const { data, error } = await supabase
-      .from("overtime_records")
-      .select("hours")
-      .eq("user_id", userId)
-      .eq("holiday_id", holidayId)
+  const { data, error } = await supabase
+    .from("overtime_records")
+    .select("hours")
+    .eq("user_id", userId)
+    .eq("holiday_id", holidayId)
 
-    if (error) {
-      console.error("Erro ao buscar estatísticas de usuário para feriado:", error)
-      return { used: 0, max: holiday.maxHours }
-    }
+  if (error) {
+    console.error("Erro ao buscar estatísticas de usuário para feriado:", error)
+    return { used: 0, max: holiday.maxHours }
+  }
 
     // Calcular total de horas usadas
-    const hoursUsed = data.reduce((total, record) => total + record.hours, 0)
+  const hoursUsed = data.reduce((total, record) => total + record.hours, 0)
 
-    return {
-      used: hoursUsed,
+  return {
+    used: hoursUsed,
       max: holiday.maxHours
     }
   } catch (error) {

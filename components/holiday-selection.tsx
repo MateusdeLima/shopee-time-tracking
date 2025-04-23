@@ -93,7 +93,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
 
   useEffect(() => {
     const updateHolidayStats = async () => {
-      if (selectedHoliday) {
+    if (selectedHoliday) {
         try {
           const stats = await getUserHolidayStats(user.id, selectedHoliday.id)
           const maxHours = stats.max - stats.used
@@ -101,7 +101,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
         } catch (error) {
           console.error("Error getting holiday stats:", error)
           setRemainingHours(0)
-        }
+    }
       }
     }
 

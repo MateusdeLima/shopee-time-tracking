@@ -34,7 +34,7 @@ function getAllOvertimeOptions(): OvertimeOptions {
       { id: "9h_19h", label: "9h às 19h", value: 1 },
       // Opções para 2 horas
       { id: "7h_18h_9h", label: "7h às 18h", value: 2 },
-      { id: "9h_20h", label: "9h às 20h", value: 2 },
+  { id: "9h_20h", label: "9h às 20h", value: 2 },
     ],
     horario8h: [
       // Opções para 30 minutos (0.5h)
@@ -45,8 +45,8 @@ function getAllOvertimeOptions(): OvertimeOptions {
       { id: "8h_18h_8h", label: "8h às 18h", value: 1 },
       // Opções para 2 horas
       { id: "6h_17h", label: "6h às 17h", value: 2 },
-      { id: "8h_19h", label: "8h às 19h", value: 2 },
-    ]
+  { id: "8h_19h", label: "8h às 19h", value: 2 },
+]
   }
 }
 
@@ -207,10 +207,10 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
                     {overtimeOptions.horario9h.map((option) => (
                       <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100">
                         <div className="flex items-center space-x-2">
-                          <RadioGroupItem value={option.id} id={option.id} />
-                          <Label htmlFor={option.id} className="cursor-pointer">
+                  <RadioGroupItem value={option.id} id={option.id} />
+                  <Label htmlFor={option.id} className="cursor-pointer">
                             {option.label} ({option.value === 0.5 ? "30 min" : `${option.value}h`})
-                          </Label>
+                  </Label>
                         </div>
                       </div>
                     ))}
@@ -229,8 +229,8 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
                             {option.label} ({option.value === 0.5 ? "30 min" : `${option.value}h`})
                           </Label>
                         </div>
-                      </div>
-                    ))}
+                </div>
+              ))}
                   </div>
                 </div>
               </div>

@@ -225,17 +225,17 @@ export function HolidayManagement() {
         <TabsContent value="active" className="space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h3 className="text-lg font-medium">Lista de Feriados</h3>
-          </div>
+      </div>
 
-          {loading ? (
-            <div className="text-center p-6">
-              <p className="text-gray-500">Carregando feriados...</p>
-            </div>
+      {loading ? (
+        <div className="text-center p-6">
+          <p className="text-gray-500">Carregando feriados...</p>
+        </div>
           ) : holidays.filter(holiday => holiday.active).length === 0 ? (
-            <div className="text-center p-6">
+        <div className="text-center p-6">
               <p className="text-gray-500">Nenhum feriado ativo cadastrado</p>
-            </div>
-          ) : (
+        </div>
+      ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {holidays
                 .filter(holiday => holiday.active)
@@ -285,11 +285,11 @@ export function HolidayManagement() {
           {loading ? (
             <div className="text-center p-6">
               <p className="text-gray-500">Carregando feriados...</p>
-            </div>
+                  </div>
           ) : holidays.filter(holiday => !holiday.active).length === 0 ? (
             <div className="text-center p-6">
               <p className="text-gray-500">Nenhum feriado inativo</p>
-            </div>
+                </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {holidays
@@ -313,23 +313,23 @@ export function HolidayManagement() {
                           disabled={loading}
                         />
                         <Label>Ativo</Label>
-                      </div>
+                  </div>
                     </CardContent>
                     <CardFooter className="flex justify-end space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditHoliday(holiday)}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleEditHoliday(holiday)}
                         disabled={loading}
-                      >
+                  >
                         <Pencil className="h-4 w-4 mr-2" />
                         Editar
-                      </Button>
+                  </Button>
                     </CardFooter>
-                  </Card>
-                ))}
-            </div>
-          )}
+            </Card>
+          ))}
+        </div>
+      )}
         </TabsContent>
 
         <TabsContent value="reports" className="space-y-4">

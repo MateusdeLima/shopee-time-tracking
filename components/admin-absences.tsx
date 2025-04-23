@@ -36,9 +36,9 @@ export function AdminAbsences() {
     loadAbsences()
   }, [])
 
-  const loadAbsences = async () => {
-    try {
-      const allAbsences = await getAbsenceRecords()
+    const loadAbsences = async () => {
+      try {
+        const allAbsences = await getAbsenceRecords()
       if (!Array.isArray(allAbsences)) {
         console.error("getAbsenceRecords() não retornou um array:", allAbsences)
         setAbsences([])
@@ -52,12 +52,12 @@ export function AdminAbsences() {
       const employeesData = await Promise.all(
         uniqueUserIds.map(async (userId) => {
           const user = await getUserById(userId as string)
-          return {
-            id: userId,
+      return {
+        id: userId,
             name: user ? `${user.firstName} ${user.lastName}` : 'Usuário não encontrado',
             email: user ? user.email : '',
-          }
-        })
+      }
+    })
       )
 
       setEmployees(employeesData)

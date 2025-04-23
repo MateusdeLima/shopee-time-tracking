@@ -102,9 +102,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     try {
       const userAbsences = await getAbsenceRecordsByUserId(user.id)
       if (Array.isArray(userAbsences)) {
-        // Ordenar por data (mais recentes primeiro)
-        userAbsences.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-        setAbsences(userAbsences)
+    // Ordenar por data (mais recentes primeiro)
+    userAbsences.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    setAbsences(userAbsences)
       } else {
         console.error("loadAbsences: getAbsenceRecordsByUserId não retornou um array:", userAbsences)
         setAbsences([])
@@ -610,8 +610,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     "p-3 bg-white rounded-lg shadow-lg",
                     isMobile && "max-h-[80vh] overflow-y-auto"
                   )}>
-                    <Calendar
-                      mode="single"
+                  <Calendar
+                    mode="single"
                       selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
                       onSelect={(date) => {
                         handleDateSelect(date)
@@ -620,13 +620,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           setIsCalendarOpen(false)
                         }
                       }}
-                      disabled={(date) => {
-                        // Desabilitar datas passadas
-                        const today = new Date()
-                        today.setHours(0, 0, 0, 0)
-                        return isBefore(date, today)
-                      }}
-                      initialFocus
+                    disabled={(date) => {
+                      // Desabilitar datas passadas
+                      const today = new Date()
+                      today.setHours(0, 0, 0, 0)
+                      return isBefore(date, today)
+                    }}
+                    initialFocus
                       className={cn(
                         "rounded-md border shadow-md w-full touch-manipulation",
                         isMobile && "text-base"

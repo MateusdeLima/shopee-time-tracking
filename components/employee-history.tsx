@@ -96,7 +96,7 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
     const loadRecords = async () => {
       await loadHolidays()
       await loadUserRecords()
-      calculateHoursMap()
+    calculateHoursMap()
     }
 
     loadRecords()
@@ -272,7 +272,7 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
           <Card key={record.id} className="p-4 hover:shadow-md transition-shadow">
             <div className="flex flex-col sm:flex-row justify-between gap-4">
               <div>
-                <h4 className="font-medium text-[#EE4D2D]">{record.holidayName}</h4>
+                  <h4 className="font-medium text-[#EE4D2D]">{record.holidayName}</h4>
                 <div className="flex items-center text-sm text-gray-600 mt-1">
                   <Calendar className="h-3.5 w-3.5 mr-1" />
                   {formatDate(record.date)}
@@ -282,25 +282,25 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
                     <Clock className="h-3 w-3 mr-1" />
                     {formatHours(record.hours)} - {record.optionLabel}
                   </Badge>
-                </div>
+                  </div>
               </div>
               <div className="flex flex-col justify-between items-end">
                 <div className="text-sm text-gray-500">
                   {formatDate(record.createdAt)}
                   {record.updatedAt && record.updatedAt !== record.createdAt && (
                     <span className="text-xs"> (Editado: {formatDate(record.updatedAt)})</span>
-                  )}
-                </div>
+                        )}
+                      </div>
                 <div className="flex items-center gap-2">
-                  <Button
+                        <Button
                     variant="ghost"
-                    size="sm"
+                  size="sm"
                     className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    onClick={() => handleDelete(record.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
+                  onClick={() => handleDelete(record.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
                     <span className="sr-only">Excluir registro</span>
-                  </Button>
+                </Button>
                 </div>
               </div>
             </div>
