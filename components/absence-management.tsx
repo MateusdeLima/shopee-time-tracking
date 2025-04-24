@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
 import { format, isAfter, isBefore, parseISO, eachDayOfInterval } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper } from "lucide-react"
+import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
@@ -36,9 +36,11 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [absences, setAbsences] = useState<any[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
+  const [isViewProofDialogOpen, setIsViewProofDialogOpen] = useState(false)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
   const [selectedAbsence, setSelectedAbsence] = useState<any>(null)
+  const [selectedProof, setSelectedProof] = useState<string | null>(null)
   const [error, setError] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -50,6 +52,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       start: null as Date | null,
       end: null as Date | null,
     },
+    proofDocument: null as string | null,
   })
 
   useEffect(() => {
@@ -124,6 +127,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         start: null,
         end: null,
       },
+      proofDocument: null,
     })
     setError("")
     setIsAddDialogOpen(true)
@@ -224,6 +228,16 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
   }
 
+  const hasPastDates = () => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return formData.dates.some((date) => {
+      const dateToCheck = new Date(date)
+      dateToCheck.setHours(0, 0, 0, 0)
+      return dateToCheck < today
+    })
+  }
+
   const handleSaveAbsence = async () => {
     setError("")
 
@@ -242,18 +256,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return
     }
 
-    // Verificar se todas as datas são futuras
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    const hasPastDate = formData.dates.some((date) => {
-      const dateToCheck = new Date(date)
-      dateToCheck.setHours(0, 0, 0, 0)
-      return dateToCheck < today
-    })
-
-    if (hasPastDate) {
-      setError("Todas as datas devem ser futuras")
+    if (hasPastDates() && !formData.proofDocument) {
+      setError("É necessário anexar um comprovante para datas passadas")
       return
     }
 
@@ -261,8 +265,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       // Formatar datas para string ISO mantendo o fuso horário local
       const formattedDates = formData.dates.map((date) => format(date, "yyyy-MM-dd"))
 
-      // Determinar o status inicial com base no motivo
-      const initialStatus = formData.reason === "vacation" ? "pending" : "pending"
+      // Determinar o status inicial com base no motivo e se há comprovante
+      const initialStatus = formData.reason === "vacation" ? "pending" : 
+                          formData.proofDocument ? "completed" : "pending"
 
       // Criar novo registro de ausência
       const newAbsence = await createAbsenceRecord({
@@ -278,6 +283,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                 end: format(formData.dateRange.end, "yyyy-MM-dd"),
               }
             : undefined,
+        proofDocument: formData.proofDocument || undefined,
       })
 
       // Atualizar o estado local imediatamente
@@ -330,23 +336,31 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
     // Converter arquivo para base64
     const reader = new FileReader()
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       if (!selectedAbsence) return
 
       try {
         // Atualizar registro com o documento
-        updateAbsenceRecord(selectedAbsence.id, {
+        const updatedAbsence = await updateAbsenceRecord(selectedAbsence.id, {
           proofDocument: event.target?.result as string,
           status: "completed",
         })
+
+        // Atualizar o estado local imediatamente
+        setAbsences(prevAbsences => 
+          prevAbsences.map(absence => 
+            absence.id === selectedAbsence.id 
+              ? { ...absence, proofDocument: event.target?.result as string, status: "completed" }
+              : absence
+          )
+        )
 
         toast({
           title: "Comprovante enviado",
           description: "Seu comprovante foi enviado com sucesso",
         })
 
-        // Atualizar lista e fechar diálogo
-        loadAbsences()
+        // Fechar diálogo
         setIsUploadDialogOpen(false)
       } catch (error: any) {
         toast({
@@ -452,6 +466,53 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
   }
 
+  const handleViewProof = (absence: any) => {
+    setSelectedProof(absence.proofDocument)
+    setIsViewProofDialogOpen(true)
+  }
+
+  const handleDownloadProof = (proofDocument: string) => {
+    // Extrair tipo de arquivo da string base64
+    const matches = proofDocument.match(/^data:([A-Za-z-+/]+);base64,(.+)$/)
+
+    if (!matches || matches.length !== 3) {
+      return
+    }
+
+    const type = matches[1]
+    const base64Data = matches[2]
+    const byteCharacters = atob(base64Data)
+    const byteNumbers = new Array(byteCharacters.length)
+
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i)
+    }
+
+    const byteArray = new Uint8Array(byteNumbers)
+    const blob = new Blob([byteArray], { type })
+
+    // Criar URL para download
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement("a")
+    link.href = url
+
+    // Determinar extensão de arquivo
+    let extension = "file"
+    if (type.includes("pdf")) extension = "pdf"
+    else if (type.includes("jpeg")) extension = "jpg"
+    else if (type.includes("png")) extension = "png"
+    else if (type.includes("gif")) extension = "gif"
+
+    const date = format(new Date(), "yyyyMMdd")
+    link.download = `comprovante_${date}.${extension}`
+    document.body.appendChild(link)
+    link.click()
+
+    // Limpar
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -506,19 +567,43 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
                     {getStatusBadge(absence)}
 
-                    {absence.status === "pending" &&
-                      absence.reason !== "vacation" &&
-                      absence.dates.some(isDateInFuture) && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8"
-                          onClick={() => handleUploadProof(absence.id)}
-                        >
-                          <Upload className="h-3.5 w-3.5 mr-1.5" />
-                          Enviar Comprovante
-                        </Button>
+                    <div className="flex gap-2">
+                      {absence.status === "completed" && absence.proofDocument && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => handleViewProof(absence)}
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1.5" />
+                            Visualizar
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => handleDownloadProof(absence.proofDocument)}
+                          >
+                            <Download className="h-3.5 w-3.5 mr-1.5" />
+                            Baixar
+                          </Button>
+                        </>
                       )}
+                      {absence.status === "pending" &&
+                        absence.reason !== "vacation" &&
+                        absence.dates.some(isDateInFuture) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-8"
+                            onClick={() => handleUploadProof(absence.id)}
+                          >
+                            <Upload className="h-3.5 w-3.5 mr-1.5" />
+                            Enviar Comprovante
+                          </Button>
+                        )}
+                    </div>
                   </div>
                 </div>
               </CardContent>
@@ -610,23 +695,16 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     "p-3 bg-white rounded-lg shadow-lg",
                     isMobile && "max-h-[80vh] overflow-y-auto"
                   )}>
-                  <Calendar
-                    mode="single"
+                    <Calendar
+                      mode="single"
                       selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
                       onSelect={(date) => {
                         handleDateSelect(date)
-                        // Se já temos data inicial e final, fechar o calendário
                         if (formData.dateRange.start && date) {
                           setIsCalendarOpen(false)
                         }
                       }}
-                    disabled={(date) => {
-                      // Desabilitar datas passadas
-                      const today = new Date()
-                      today.setHours(0, 0, 0, 0)
-                      return isBefore(date, today)
-                    }}
-                    initialFocus
+                      initialFocus
                       className={cn(
                         "rounded-md border shadow-md w-full touch-manipulation",
                         isMobile && "text-base"
@@ -667,6 +745,85 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               )}
             </div>
 
+            {hasPastDates() && (
+              <div className="space-y-2">
+                <Alert className="bg-yellow-50 border-yellow-200">
+                  <AlertCircle className="h-4 w-4 text-yellow-500" />
+                  <AlertDescription className="text-yellow-700">
+                    Você selecionou datas passadas. É necessário anexar um comprovante para registrar a ausência.
+                  </AlertDescription>
+                </Alert>
+
+                <div
+                  className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="h-10 w-10 text-gray-400 mb-2" />
+                  <p className="text-sm font-medium">Clique para selecionar um comprovante</p>
+                  <p className="text-xs text-gray-500 mt-1">Ou arraste e solte aqui</p>
+                  <p className="text-xs text-gray-500 mt-2">Formatos aceitos: JPEG, PNG, GIF, PDF</p>
+                  <p className="text-xs text-gray-500">Tamanho máximo: 5MB</p>
+
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    className="hidden"
+                    accept="image/jpeg,image/png,image/gif,application/pdf"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (!file) return
+
+                      // Verificar tamanho do arquivo (máximo 5MB)
+                      if (file.size > 5 * 1024 * 1024) {
+                        toast({
+                          title: "Arquivo muito grande",
+                          description: "O tamanho máximo permitido é 5MB",
+                          variant: "destructive",
+                        })
+                        return
+                      }
+
+                      // Verificar tipo do arquivo
+                      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "application/pdf"]
+                      if (!allowedTypes.includes(file.type)) {
+                        toast({
+                          title: "Tipo de arquivo não suportado",
+                          description: "Apenas imagens (JPEG, PNG, GIF) e PDF são permitidos",
+                          variant: "destructive",
+                        })
+                        return
+                      }
+
+                      // Converter arquivo para base64
+                      const reader = new FileReader()
+                      reader.onload = (event) => {
+                        setFormData({
+                          ...formData,
+                          proofDocument: event.target?.result as string,
+                        })
+                      }
+                      reader.readAsDataURL(file)
+                    }}
+                  />
+                </div>
+
+                {formData.proofDocument && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <Check className="h-4 w-4 text-green-500" />
+                    <span className="text-sm text-green-700">Comprovante anexado</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="ml-auto"
+                      onClick={() => setFormData({ ...formData, proofDocument: null })}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {formData.reason === "vacation" && (
               <Alert className="bg-blue-50 border-blue-200">
                 <AlertCircle className="h-4 w-4 text-blue-500" />
@@ -680,7 +837,11 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
                 Cancelar
               </Button>
-              <Button className="bg-[#EE4D2D] hover:bg-[#D23F20]" onClick={handleSaveAbsence}>
+              <Button 
+                className="bg-[#EE4D2D] hover:bg-[#D23F20]" 
+                onClick={handleSaveAbsence}
+                disabled={hasPastDates() && !formData.proofDocument}
+              >
                 Registrar Ausência
               </Button>
             </div>
@@ -726,6 +887,62 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               <Button className="bg-[#EE4D2D] hover:bg-[#D23F20]" onClick={() => fileInputRef.current?.click()}>
                 Selecionar Arquivo
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para visualizar comprovante */}
+      <Dialog open={isViewProofDialogOpen} onOpenChange={setIsViewProofDialogOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Visualizar Comprovante</DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {selectedProof && (
+              <div className="flex flex-col items-center justify-center">
+                {selectedProof.includes("image") ? (
+                  <img
+                    src={selectedProof}
+                    alt="Comprovante"
+                    className="max-h-[70vh] object-contain rounded-lg"
+                  />
+                ) : selectedProof.includes("pdf") ? (
+                  <div className="flex flex-col items-center gap-4">
+                    <AlertCircle className="h-16 w-16 text-gray-400" />
+                    <p className="text-gray-500">Este é um arquivo PDF</p>
+                    <Button 
+                      variant="outline" 
+                      onClick={() => handleDownloadProof(selectedProof)}
+                      className="flex items-center gap-2"
+                    >
+                      <Download className="h-4 w-4" />
+                      Baixar PDF
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <AlertCircle className="h-12 w-12 text-gray-400 mb-2" />
+                    <p className="text-sm text-gray-500">Visualização não disponível</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setIsViewProofDialogOpen(false)}>
+                Fechar
+              </Button>
+              {selectedProof && (
+                <Button 
+                  className="bg-[#EE4D2D] hover:bg-[#D23F20]" 
+                  onClick={() => handleDownloadProof(selectedProof)}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Baixar Comprovante
+                </Button>
+              )}
             </div>
           </div>
         </DialogContent>

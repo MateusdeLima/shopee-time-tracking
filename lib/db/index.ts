@@ -10,6 +10,9 @@ export interface User {
   role: "employee" | "admin"
   username: string
   createdAt: string
+  cpf?: string
+  birthDate?: string
+  isFirstAccess?: boolean
 }
 
 export interface Holiday {
@@ -201,66 +204,46 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
       throw new Error("Email já cadastrado")
     }
 
-    // Gerar username único baseado no nome e sobrenome
-    const baseUsername = `${user.firstName.toLowerCase().replace(/\s+/g, "")}.${user.lastName.toLowerCase().replace(/\s+/g, "")}`
-
-    // Verificar se o username já existe
-    const { data: usernameCheck, error: usernameCheckError } = await supabase
-      .from("users")
-      .select("username")
-      .eq("username", baseUsername)
-
-    if (usernameCheckError) {
-      console.error("Erro ao verificar username existente:", usernameCheckError)
-      throw new Error("Erro ao verificar username. Tente novamente.")
-    }
-
+    // Gerar username único baseado no nome
+    const firstName = user.firstName.toLowerCase().replace(/[^a-z]/g, "")
+    const lastName = user.lastName.toLowerCase().replace(/[^a-z]/g, "")
+    const baseUsername = `${firstName}.${lastName}`
     let username = baseUsername
     let counter = 1
 
-    // Se o username já existe, adicionar um número
-    if (usernameCheck && usernameCheck.length > 0) {
-      let usernameExists = true
+    // Verificar se o username já existe e incrementar contador se necessário
+    while (true) {
+      const { data: existingUsername } = await supabase
+        .from("users")
+        .select("username")
+        .eq("username", username)
+        .maybeSingle()
 
-      while (usernameExists) {
-        username = `${baseUsername}${counter}`
-        counter++
-
-        const { data: checkAgain, error: checkAgainError } = await supabase
-          .from("users")
-          .select("username")
-          .eq("username", username)
-          .maybeSingle()
-
-        if (checkAgainError && checkAgainError.code !== "PGRST116") {
-          console.error("Erro ao verificar username alternativo:", checkAgainError)
-          throw new Error("Erro ao verificar username. Tente novamente.")
-        }
-
-        usernameExists = !!checkAgain
-      }
+      if (!existingUsername) break
+      username = `${baseUsername}${counter}`
+      counter++
     }
 
-    // Inserir o novo usuário diretamente no Supabase
-    const { data, error } = await supabase
-      .from("users")
-      .insert({
+    // Criar novo usuário com os campos adicionais
+    const { data: newUser, error } = await supabase.from("users").insert([
+      {
         first_name: user.firstName,
         last_name: user.lastName,
         email: user.email,
         role: user.role,
-        username: username,
-      })
-      .select()
-      .single()
+        username,
+        cpf: user.cpf,
+        birth_date: user.birthDate,
+        is_first_access: true,
+      },
+    ]).select().single()
 
     if (error) {
       console.error("Erro ao criar usuário:", error)
-      throw new Error("Falha ao criar usuário. Tente novamente.")
+      throw new Error("Erro ao criar usuário. Tente novamente.")
     }
 
-    // Converter o resultado para o formato camelCase
-    return convertToCamelCase<User>(data)
+    return convertToCamelCase<User>(newUser)
   } catch (error) {
     console.error("Erro em createUser:", error)
     throw error

@@ -12,6 +12,7 @@ import { AlertCircle, ArrowLeft } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { authenticateEmployee, setCurrentUser, isEmailRegistered } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
+import type { User } from "@/lib/db"
 
 enum LoginStep {
   INITIAL = "initial",
@@ -32,6 +33,8 @@ export function EmployeeLoginForm() {
     lastName: "",
     email: "",
     username: "",
+    cpf: "",
+    birthDate: "",
   })
 
   useEffect(() => {
@@ -134,30 +137,65 @@ export function EmployeeLoginForm() {
       // Inicializar o banco de dados primeiro
       await initializeDb()
 
-      let user
+      let user: User | undefined
 
       // Lógica baseada na etapa atual
       if (currentStep === LoginStep.FIRST_ACCESS) {
+        // Validar CPF
+        if (!formData.cpf || formData.cpf.length !== 11) {
+          setError("Por favor, insira um CPF válido (11 dígitos)")
+          setIsLoading(false)
+          return
+        }
+
+        // Validar data de nascimento
+        if (!formData.birthDate) {
+          setError("Por favor, insira sua data de nascimento")
+          setIsLoading(false)
+          return
+        }
+
         // Primeiro acesso - criar novo usuário
-        user = await authenticateEmployee(formData.firstName, formData.lastName, formData.email)
+        user = await authenticateEmployee(
+          formData.firstName, 
+          formData.lastName, 
+          formData.email, 
+          undefined, 
+          formData.cpf, 
+          formData.birthDate
+        )
+
+        if (!user) {
+          throw new Error("Falha ao criar usuário. Tente novamente.")
+        }
 
         // Mostrar o username gerado para o usuário
         toast({
           title: "Conta criada com sucesso",
           description: `Seu user único é: ${user.username}. Guarde-o para futuros acessos.`,
         })
+
+        // Salvar usuário e mostrar mensagem de boas-vindas
+        setCurrentUser(user)
+        toast({
+          title: "Login realizado com sucesso",
+          description: `Bem-vindo(a), ${user.firstName}!`,
+        })
       } else if (currentStep === LoginStep.USERNAME_INPUT) {
         // Login com email e username
         user = await authenticateEmployee(undefined, undefined, formData.email, formData.username)
+
+        if (!user) {
+          throw new Error("Falha na autenticação. Tente novamente.")
+        }
+
+        // Salvar usuário e mostrar mensagem de boas-vindas
+        setCurrentUser(user)
+        toast({
+          title: "Login realizado com sucesso",
+          description: `Bem-vindo(a), ${user.firstName}!`,
+        })
       }
-
-      // Salvar usuário autenticado
-      setCurrentUser(user)
-
-      toast({
-        title: "Login realizado com sucesso",
-        description: `Bem-vindo(a), ${user.firstName}!`,
-      })
 
       router.push("/employee/dashboard")
     } catch (error: any) {
@@ -302,42 +340,66 @@ export function EmployeeLoginForm() {
 
       case LoginStep.FIRST_ACCESS:
         return (
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="firstName">Nome</Label>
-              <Input
-                id="firstName"
-                name="firstName"
-                placeholder="Digite seu nome"
-                value={formData.firstName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="lastName">Sobrenome</Label>
-              <Input
-                id="lastName"
-                name="lastName"
-                placeholder="Digite seu sobrenome"
-                value={formData.lastName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email Corporativo</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="seu.nome@shopeemobile-external.com"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
+          <div className="space-y-4">
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="firstName">Nome</Label>
+                <Input
+                  id="firstName"
+                  name="firstName"
+                  placeholder="Digite seu nome"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lastName">Sobrenome</Label>
+                <Input
+                  id="lastName"
+                  name="lastName"
+                  placeholder="Digite seu sobrenome"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email Corporativo</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="seuemail@shopeemobile-external.com"
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="cpf">CPF</Label>
+                <Input
+                  id="cpf"
+                  name="cpf"
+                  placeholder="Digite seu CPF (apenas números)"
+                  value={formData.cpf}
+                  onChange={handleChange}
+                  pattern="[0-9]{11}"
+                  maxLength={11}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="birthDate">Data de Nascimento</Label>
+                <Input
+                  id="birthDate"
+                  name="birthDate"
+                  type="date"
+                  value={formData.birthDate}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
             </div>
 
             <div className="flex gap-2">

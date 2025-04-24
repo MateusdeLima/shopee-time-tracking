@@ -115,6 +115,8 @@ export function EmployeeManagement() {
                     <TableHead className="min-w-[180px]">Nome</TableHead>
                     <TableHead className="min-w-[180px]">User Único</TableHead>
                     <TableHead className="min-w-[220px]">Email</TableHead>
+                    <TableHead className="min-w-[140px]">CPF</TableHead>
+                    <TableHead className="min-w-[140px]">Data de Nascimento</TableHead>
                     <TableHead className="min-w-[120px]">Data de Cadastro</TableHead>
                     <TableHead className="text-right min-w-[100px]">Ações</TableHead>
                   </TableRow>
@@ -127,6 +129,10 @@ export function EmployeeManagement() {
                       </TableCell>
                       <TableCell>{employee.username}</TableCell>
                       <TableCell>{employee.email}</TableCell>
+                      <TableCell>{employee.cpf || "-"}</TableCell>
+                      <TableCell>
+                        {employee.birthDate ? formatDate(employee.birthDate) : "-"}
+                      </TableCell>
                       <TableCell>{formatDate(employee.createdAt)}</TableCell>
                       <TableCell className="text-right">
                         <Button

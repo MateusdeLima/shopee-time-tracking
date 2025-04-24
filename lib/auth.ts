@@ -31,6 +31,8 @@ export async function authenticateEmployee(
   lastName?: string,
   email?: string,
   username?: string,
+  cpf?: string,
+  birthDate?: string,
 ): Promise<User> {
   try {
     // Inicializar o banco de dados primeiro
@@ -84,6 +86,8 @@ export async function authenticateEmployee(
             lastName,
             email,
             role: "employee",
+            cpf,
+            birthDate,
           })
 
           return newUser
