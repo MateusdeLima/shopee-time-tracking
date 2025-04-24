@@ -531,8 +531,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           {absences.filter(isAbsenceActive).map((absence) => (
             <Card key={absence.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                   <CardTitle className="text-lg font-medium">{getReasonLabel(absence)}</CardTitle>
+                  {getStatusBadge(absence)}
                 </div>
               </CardHeader>
               <CardContent>
@@ -546,11 +547,12 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           <Badge
                             key={index}
                             variant={isDateInFuture(date) ? "outline" : "default"}
-                            className={
+                            className={cn(
                               isDateInFuture(date)
                                 ? "bg-blue-50 text-blue-700 border-blue-200"
-                                : "bg-gray-100 text-gray-700 border-gray-200"
-                            }
+                                : "bg-gray-100 text-gray-700 border-gray-200",
+                              "text-xs sm:text-sm"
+                            )}
                           >
                             <CalendarIcon className="h-3 w-3 mr-1" />
                             {formatDate(date)}
@@ -560,20 +562,18 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     )}
                   </div>
 
-                  <div className="flex justify-between items-center">
-                    <p className="text-xs text-gray-500">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                    <p className="text-xs text-gray-500 order-2 sm:order-1">
                       Registrado em: {format(parseISO(absence.createdAt), "dd/MM/yyyy")}
                     </p>
 
-                    {getStatusBadge(absence)}
-
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2 order-1 sm:order-2 w-full sm:w-auto">
                       {absence.status === "completed" && absence.proofDocument && (
                         <>
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8"
+                            className="h-8 text-xs sm:text-sm flex-1 sm:flex-none"
                             onClick={() => handleViewProof(absence)}
                           >
                             <Eye className="h-3.5 w-3.5 mr-1.5" />
@@ -582,7 +582,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8"
+                            className="h-8 text-xs sm:text-sm flex-1 sm:flex-none"
                             onClick={() => handleDownloadProof(absence.proofDocument)}
                           >
                             <Download className="h-3.5 w-3.5 mr-1.5" />
@@ -596,7 +596,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           <Button
                             variant="outline"
                             size="sm"
-                            className="h-8"
+                            className="h-8 text-xs sm:text-sm flex-1 sm:flex-none"
                             onClick={() => handleUploadProof(absence.id)}
                           >
                             <Upload className="h-3.5 w-3.5 mr-1.5" />
