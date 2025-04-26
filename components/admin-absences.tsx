@@ -12,10 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Search, Calendar, Eye, Download, AlertCircle, Check, PartyPopper, Trash2 } from "lucide-react"
+import { Search, Calendar, Eye, Download, AlertCircle, Check, PartyPopper, Trash2, FileSpreadsheet } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { getAbsenceRecords, getUserById, updateAbsenceRecord, deleteAbsenceRecord } from "@/lib/db"
+import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
 
 export function AdminAbsences() {
@@ -31,6 +32,7 @@ export function AdminAbsences() {
     reason: "",
     searchTerm: "",
   })
+  const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
     loadAbsences()
@@ -265,8 +267,102 @@ export function AdminAbsences() {
     }
   }
 
+  const exportToGoogleSheets = async () => {
+    try {
+      setIsExporting(true)
+      // Filtrar ausências excluindo férias
+      const absencesToExport = filteredAbsences.filter(absence => absence.reason !== "vacation")
+      
+      if (absencesToExport.length === 0) {
+        toast({
+          title: "Nenhum dado para exportar",
+          description: "Não há registros de ausências para gerar o relatório",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Formatar dados para exportação
+      const data = absencesToExport.map(absence => ({
+        funcionario: getEmployeeName(absence.userId).split(' (')[0], // Remove o email
+        motivo: getReasonText(absence),
+        periodo: formatDateRange(absence),
+        data_registro: format(parseISO(absence.createdAt), "dd/MM/yyyy"),
+        status: absence.status === "approved" ? "Aprovado" : 
+               absence.status === "completed" ? "Comprovante Enviado" : "Pendente",
+        comprovante: absence.proofDocument ? "Sim" : "Não"
+      }))
+
+      // Obter email do usuário atual
+      const currentUser = getCurrentUser()
+      if (!currentUser?.email) {
+        toast({
+          title: "Erro ao exportar",
+          description: "Email do usuário não encontrado",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Chamar API para criar planilha
+      const response = await fetch('/api/sheets/export-absences', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          data,
+          userEmail: currentUser.email
+        })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Erro ao exportar dados')
+      }
+
+      toast({
+        title: "Relatório exportado com sucesso",
+        description: "O relatório foi gerado no Google Sheets",
+      })
+
+      // Abrir planilha em nova aba
+      window.open(result.spreadsheetUrl, '_blank')
+    } catch (error: any) {
+      console.error('Erro ao exportar:', error)
+      toast({
+        title: "Erro ao exportar",
+        description: error.message || "Ocorreu um erro ao gerar o relatório. Verifique as credenciais do Google Sheets.",
+        variant: "destructive"
+      })
+    }
+    setIsExporting(false)
+  }
+
   return (
     <div className="space-y-6">
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-semibold">Registros de Ausências</h2>
+        <Button 
+          onClick={exportToGoogleSheets}
+          className="bg-green-600 hover:bg-green-700"
+          disabled={isExporting}
+        >
+          {isExporting ? (
+            <>
+              <div className="h-4 w-4 mr-2 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              Exportando...
+            </>
+          ) : (
+            <>
+              <FileSpreadsheet className="h-4 w-4 mr-2" />
+              Exportar Relatório
+            </>
+          )}
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div>
           <Label htmlFor="employee-filter">Filtrar por Funcionário</Label>

@@ -214,10 +214,10 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
     // Verificar se o username já existe e incrementar contador se necessário
     while (true) {
       const { data: existingUsername } = await supabase
-        .from("users")
-        .select("username")
-        .eq("username", username)
-        .maybeSingle()
+          .from("users")
+          .select("username")
+          .eq("username", username)
+          .maybeSingle()
 
       if (!existingUsername) break
       username = `${baseUsername}${counter}`

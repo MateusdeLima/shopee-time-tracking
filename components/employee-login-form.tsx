@@ -187,14 +187,14 @@ export function EmployeeLoginForm() {
 
         if (!user) {
           throw new Error("Falha na autenticação. Tente novamente.")
-        }
+      }
 
         // Salvar usuário e mostrar mensagem de boas-vindas
-        setCurrentUser(user)
-        toast({
-          title: "Login realizado com sucesso",
-          description: `Bem-vindo(a), ${user.firstName}!`,
-        })
+      setCurrentUser(user)
+      toast({
+        title: "Login realizado com sucesso",
+        description: `Bem-vindo(a), ${user.firstName}!`,
+      })
       }
 
       router.push("/employee/dashboard")
@@ -341,40 +341,40 @@ export function EmployeeLoginForm() {
       case LoginStep.FIRST_ACCESS:
         return (
           <div className="space-y-4">
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="firstName">Nome</Label>
-                <Input
-                  id="firstName"
-                  name="firstName"
-                  placeholder="Digite seu nome"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="lastName">Sobrenome</Label>
-                <Input
-                  id="lastName"
-                  name="lastName"
-                  placeholder="Digite seu sobrenome"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email Corporativo</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
+          <div className="grid gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="firstName">Nome</Label>
+              <Input
+                id="firstName"
+                name="firstName"
+                placeholder="Digite seu nome"
+                value={formData.firstName}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="lastName">Sobrenome</Label>
+              <Input
+                id="lastName"
+                name="lastName"
+                placeholder="Digite seu sobrenome"
+                value={formData.lastName}
+                onChange={handleChange}
+                required
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email Corporativo</Label>
+              <Input
+                id="email"
+                name="email"
+                type="email"
                   placeholder="seuemail@shopeemobile-external.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
+                value={formData.email}
+                onChange={handleChange}
+                required
+              />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="cpf">CPF</Label>

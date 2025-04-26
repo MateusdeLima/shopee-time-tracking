@@ -590,19 +590,19 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           </Button>
                         </>
                       )}
-                      {absence.status === "pending" &&
-                        absence.reason !== "vacation" &&
-                        absence.dates.some(isDateInFuture) && (
-                          <Button
-                            variant="outline"
-                            size="sm"
+                    {absence.status === "pending" &&
+                      absence.reason !== "vacation" &&
+                      absence.dates.some(isDateInFuture) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
                             className="h-8 text-xs sm:text-sm flex-1 sm:flex-none"
-                            onClick={() => handleUploadProof(absence.id)}
-                          >
-                            <Upload className="h-3.5 w-3.5 mr-1.5" />
-                            Enviar Comprovante
-                          </Button>
-                        )}
+                          onClick={() => handleUploadProof(absence.id)}
+                        >
+                          <Upload className="h-3.5 w-3.5 mr-1.5" />
+                          Enviar Comprovante
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -695,16 +695,16 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     "p-3 bg-white rounded-lg shadow-lg",
                     isMobile && "max-h-[80vh] overflow-y-auto"
                   )}>
-                    <Calendar
-                      mode="single"
+                  <Calendar
+                    mode="single"
                       selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
                       onSelect={(date) => {
                         handleDateSelect(date)
                         if (formData.dateRange.start && date) {
                           setIsCalendarOpen(false)
                         }
-                      }}
-                      initialFocus
+                    }}
+                    initialFocus
                       className={cn(
                         "rounded-md border shadow-md w-full touch-manipulation",
                         isMobile && "text-base"
