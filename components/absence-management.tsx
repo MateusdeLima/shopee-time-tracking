@@ -652,9 +652,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               </>
             )}
           </Button>
-          <Button onClick={handleAddAbsence} className="bg-[#EE4D2D] hover:bg-[#D23F20]">
-            Registrar Ausência
-          </Button>
+        <Button onClick={handleAddAbsence} className="bg-[#EE4D2D] hover:bg-[#D23F20]">
+          Registrar Ausência
+        </Button>
         </div>
       </div>
 
@@ -820,7 +820,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                 <PopoverContent 
                   className={cn(
                     "p-0 absolute z-50",
-                    isMobile ? "w-[calc(100vw-2rem)] fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" : "w-auto"
+                    isMobile ? "w-screen h-screen max-w-none max-h-none fixed top-0 left-0 -translate-x-0 -translate-y-0 rounded-none" : "w-auto"
                   )}
                   align={isMobile ? "center" : "start"}
                   side="bottom"
@@ -829,25 +829,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                 >
                   <div className={cn(
                     "p-3 bg-white rounded-lg shadow-lg",
-                    isMobile && "max-h-[80vh] overflow-y-auto"
+                    isMobile && "h-full flex flex-col justify-between rounded-none"
                   )}>
-                  <Calendar
-                    mode="single"
-                      selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
-                      onSelect={(date) => {
-                        handleDateSelect(date)
-                        if (formData.dateRange.start && date) {
-                          setIsCalendarOpen(false)
-                        }
-                    }}
-                    initialFocus
-                      className={cn(
-                        "rounded-md border shadow-md w-full touch-manipulation",
-                        isMobile && "text-base"
-                      )}
-                    />
                     {isMobile && (
-                      <div className="p-2 flex justify-end border-t">
+                      <div className="p-2 border-b flex justify-end sticky top-0 bg-white z-10">
                         <Button 
                           variant="outline" 
                           size="sm"
@@ -858,6 +843,21 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                         </Button>
                       </div>
                     )}
+                    <Calendar
+                      mode="single"
+                      selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
+                      onSelect={(date) => {
+                        handleDateSelect(date)
+                        if (formData.dateRange.start && date) {
+                          setIsCalendarOpen(false)
+                        }
+                      }}
+                      initialFocus
+                      className={cn(
+                        "rounded-md border shadow-md w-full touch-manipulation",
+                        isMobile && "text-base flex-1"
+                      )}
+                    />
                   </div>
                 </PopoverContent>
               </Popover>

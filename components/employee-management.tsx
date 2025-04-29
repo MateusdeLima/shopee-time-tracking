@@ -13,6 +13,16 @@ import { ptBR } from "date-fns/locale"
 import { Search, Trash2 } from "lucide-react"
 import { getUsers, deleteUser } from "@/lib/db"
 
+// Função utilitária para formatar CPF
+function formatCPF(value: string) {
+  value = value.replace(/\D/g, "");
+  return value
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d{1,2})/, "$1.$2.$3-$4")
+    .slice(0, 14);
+}
+
 export function EmployeeManagement() {
   const [employees, setEmployees] = useState<any[]>([])
   const [filteredEmployees, setFilteredEmployees] = useState<any[]>([])
@@ -73,7 +83,9 @@ export function EmployeeManagement() {
           title: "Funcionário excluído",
           description: "O funcionário foi excluído com sucesso",
         })
-        loadEmployees()
+        // Remover funcionário do estado imediatamente
+        setEmployees((prev) => prev.filter((emp) => emp.id !== employeeId))
+        setFilteredEmployees((prev) => prev.filter((emp) => emp.id !== employeeId))
       } catch (error: any) {
         toast({
           title: "Erro",
@@ -85,7 +97,18 @@ export function EmployeeManagement() {
   }
 
   const formatDate = (dateString: string) => {
+    if (!dateString) return "-"
+    // Se vier no formato YYYY-MM-DD, tratar como local
+    const regex = /^\d{4}-\d{2}-\d{2}$/
+    if (regex.test(dateString)) {
+      const [year, month, day] = dateString.split("-").map(Number)
+      // Mês no JS começa do zero
+      const date = new Date(year, month - 1, day)
+      return format(date, "dd/MM/yyyy", { locale: ptBR })
+    }
+    // Outros formatos (ISO, etc)
     const date = new Date(dateString)
+    if (isNaN(date.getTime())) return "-"
     return format(date, "dd/MM/yyyy", { locale: ptBR })
   }
 
@@ -129,7 +152,7 @@ export function EmployeeManagement() {
                       </TableCell>
                       <TableCell>{employee.username}</TableCell>
                       <TableCell>{employee.email}</TableCell>
-                      <TableCell>{employee.cpf || "-"}</TableCell>
+                      <TableCell>{employee.cpf ? formatCPF(employee.cpf) : "-"}</TableCell>
                       <TableCell>
                         {employee.birthDate ? formatDate(employee.birthDate) : "-"}
                       </TableCell>

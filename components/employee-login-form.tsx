@@ -21,6 +21,16 @@ enum LoginStep {
   USERNAME_INPUT = "username_input",
 }
 
+// Função utilitária para formatar CPF
+function formatCPF(value: string) {
+  value = value.replace(/\D/g, "");
+  return value
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d{1,2})/, "$1.$2.$3-$4")
+    .slice(0, 14);
+}
+
 export function EmployeeLoginForm() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -381,11 +391,10 @@ export function EmployeeLoginForm() {
                 <Input
                   id="cpf"
                   name="cpf"
-                  placeholder="Digite seu CPF (apenas números)"
-                  value={formData.cpf}
-                  onChange={handleChange}
-                  pattern="[0-9]{11}"
-                  maxLength={11}
+                  placeholder="000.000.000-00"
+                  value={formatCPF(formData.cpf)}
+                  onChange={e => setFormData({ ...formData, cpf: e.target.value.replace(/\D/g, "") })}
+                  maxLength={14}
                   required
                 />
               </div>
