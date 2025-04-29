@@ -631,13 +631,22 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className={cn(
+        "flex justify-between items-center",
+        isMobile && "flex-col gap-2 items-stretch"
+      )}>
         <h3 className="text-lg font-medium">Ausências Futuras</h3>
-        <div className="flex gap-2">
+        <div className={cn(
+          "flex gap-2",
+          isMobile && "flex-col gap-2 w-full"
+        )}>
           <Button
             onClick={generateReport}
             variant="outline"
-            className="flex items-center gap-2"
+            className={cn(
+              "flex items-center gap-2",
+              isMobile && "w-full"
+            )}
             disabled={isGeneratingReport || absences.length === 0}
           >
             {isGeneratingReport ? (
@@ -652,9 +661,15 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               </>
             )}
           </Button>
-        <Button onClick={handleAddAbsence} className="bg-[#EE4D2D] hover:bg-[#D23F20]">
-          Registrar Ausência
-        </Button>
+          <Button 
+            onClick={handleAddAbsence} 
+            className={cn(
+              "bg-[#EE4D2D] hover:bg-[#D23F20]",
+              isMobile && "w-full"
+            )}
+          >
+            Registrar Ausência
+          </Button>
         </div>
       </div>
 
