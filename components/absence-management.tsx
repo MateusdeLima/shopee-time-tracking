@@ -10,9 +10,9 @@ import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
-import { format, isAfter, isBefore, parseISO, eachDayOfInterval } from "date-fns"
+import { format, isAfter, isBefore, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, getMonth, getYear } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download } from "lucide-react"
+import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download, FileDown } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
@@ -20,6 +20,9 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils"
 import { getAbsenceRecordsByUserId, createAbsenceRecord, updateAbsenceRecord, deleteAbsenceRecord } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
+import jsPDF from 'jspdf'
+import 'jspdf-autotable'
+import autoTable from 'jspdf-autotable'
 
 const ABSENCE_REASONS = [
   { id: "medical", label: "Consulta Médica" },
@@ -42,6 +45,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [selectedAbsence, setSelectedAbsence] = useState<any>(null)
   const [selectedProof, setSelectedProof] = useState<string | null>(null)
   const [error, setError] = useState("")
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
@@ -513,13 +517,145 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     URL.revokeObjectURL(url)
   }
 
+  const generateReport = async () => {
+    try {
+      setIsGeneratingReport(true)
+
+      // Criar novo documento PDF
+      const doc = new jsPDF()
+      
+      // Configurar fonte para suportar caracteres especiais
+      doc.setFont("helvetica")
+      
+      // Adicionar cabeçalho
+      doc.setFontSize(16)
+      doc.text("Relatório de Ausências", 105, 15, { align: "center" })
+      
+      // Adicionar informações do funcionário
+      doc.setFontSize(12)
+      doc.text(`Funcionário: ${user.firstName} ${user.lastName}`, 14, 25)
+      doc.text(`Email: ${user.email}`, 14, 32)
+      doc.text(`Data do relatório: ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}`, 14, 39)
+
+      // Agrupar ausências por mês
+      const groupedAbsences = absences.reduce((acc, absence) => {
+        const date = parseISO(absence.createdAt)
+        const monthYear = format(date, "MMMM yyyy", { locale: ptBR })
+        
+        if (!acc[monthYear]) {
+          acc[monthYear] = []
+        }
+        
+        acc[monthYear].push(absence)
+        return acc
+      }, {} as Record<string, typeof absences>)
+
+      // Posição inicial para a tabela
+      let yPos = 50
+
+      // Iterar sobre cada mês
+      for (const [monthYear, monthAbsences] of Object.entries(groupedAbsences)) {
+        // Adicionar título do mês
+        doc.setFont("helvetica", "bold")
+        doc.text(monthYear, 14, yPos)
+        doc.setFont("helvetica", "normal")
+        
+        // Preparar dados para a tabela
+        const tableData = (monthAbsences as typeof absences).map((absence: typeof absences[0]) => [
+          format(parseISO(absence.createdAt), "dd/MM/yyyy"),
+          getReasonLabel(absence),
+          formatDateRange(absence),
+          absence.status === "approved" ? "Aprovado" :
+          absence.status === "completed" ? "Comprovante Enviado" :
+          absence.reason === "vacation" ? "Aguardando Aprovação" : "Pendente"
+        ])
+
+        // Adicionar tabela
+        autoTable(doc, {
+          startY: yPos + 5,
+          head: [["Data Registro", "Motivo", "Período", "Status"]],
+          body: tableData,
+          theme: "grid",
+          headStyles: { fillColor: [238, 77, 45] },
+          styles: { font: "helvetica", fontSize: 10 },
+          columnStyles: {
+            0: { cellWidth: 30 },
+            1: { cellWidth: 50 },
+            2: { cellWidth: 60 },
+            3: { cellWidth: 40 }
+          }
+        })
+
+        // Atualizar posição Y para o próximo mês
+        yPos = (doc as any).lastAutoTable.finalY + 15
+
+        // Verificar se precisa adicionar nova página
+        if (yPos > 270) {
+          doc.addPage()
+          yPos = 20
+        }
+      }
+
+      // Adicionar rodapé
+      const pageCount = doc.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setFontSize(10)
+        doc.text(
+          `Página ${i} de ${pageCount}`,
+          doc.internal.pageSize.width / 2,
+          doc.internal.pageSize.height - 10,
+          { align: "center" }
+        )
+      }
+
+      // Salvar o PDF
+      const fileName = `relatorio_ausencias_${format(new Date(), "yyyy-MM-dd")}.pdf`
+      doc.save(fileName)
+
+      toast({
+        title: "Relatório gerado com sucesso",
+        description: "O relatório foi baixado para o seu computador",
+      })
+    } catch (error) {
+      console.error("Erro ao gerar relatório:", error)
+      toast({
+        title: "Erro ao gerar relatório",
+        description: "Ocorreu um erro ao gerar o relatório. Tente novamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingReport(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium">Ausências Futuras</h3>
-        <Button onClick={handleAddAbsence} className="bg-[#EE4D2D] hover:bg-[#D23F20]">
-          Registrar Ausência
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={generateReport}
+            variant="outline"
+            className="flex items-center gap-2"
+            disabled={isGeneratingReport || absences.length === 0}
+          >
+            {isGeneratingReport ? (
+              <>
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                Gerando...
+              </>
+            ) : (
+              <>
+                <FileDown className="h-4 w-4" />
+                Gerar Relatório
+              </>
+            )}
+          </Button>
+          <Button onClick={handleAddAbsence} className="bg-[#EE4D2D] hover:bg-[#D23F20]">
+            Registrar Ausência
+          </Button>
+        </div>
       </div>
 
       {absences.length === 0 ? (

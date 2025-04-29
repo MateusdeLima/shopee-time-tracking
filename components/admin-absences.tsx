@@ -10,11 +10,14 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { format, parseISO } from "date-fns"
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Search, Calendar, Eye, Download, AlertCircle, Check, PartyPopper, Trash2, FileSpreadsheet } from "lucide-react"
+import { Search, Calendar, Eye, Download, AlertCircle, Check, PartyPopper, Trash2, FileSpreadsheet, CalendarIcon, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Calendar as CalendarComponent } from "@/components/ui/calendar"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { cn } from "@/lib/utils"
 import { getAbsenceRecords, getUserById, updateAbsenceRecord, deleteAbsenceRecord } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
@@ -31,6 +34,11 @@ export function AdminAbsences() {
     status: "",
     reason: "",
     searchTerm: "",
+    month: "",
+    dateRange: {
+      from: undefined as Date | undefined,
+      to: undefined as Date | undefined
+    }
   })
   const [isExporting, setIsExporting] = useState(false)
 
@@ -76,6 +84,27 @@ export function AdminAbsences() {
       ...filters,
       [field]: value,
     })
+  }
+
+  const handleDateRangeChange = (field: 'from' | 'to', value: Date | undefined) => {
+    setFilters(prev => ({
+      ...prev,
+      month: "", // Limpa o filtro de mês quando seleciona período personalizado
+      dateRange: {
+        ...prev.dateRange,
+        [field]: value
+      }
+    }))
+  }
+
+  const clearDateRange = () => {
+    setFilters(prev => ({
+      ...prev,
+      dateRange: {
+        from: undefined,
+        to: undefined
+      }
+    }))
   }
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -226,6 +255,28 @@ export function AdminAbsences() {
       if (absence.reason !== filters.reason) return false
     }
 
+    // Filtrar por período personalizado
+    if (filters.dateRange.from && filters.dateRange.to) {
+      const absenceDate = parseISO(absence.createdAt)
+      if (!isWithinInterval(absenceDate, { 
+        start: startOfDay(filters.dateRange.from), 
+        end: endOfDay(filters.dateRange.to) 
+      })) {
+        return false
+      }
+    }
+    // Filtrar por mês (apenas se não houver período personalizado selecionado)
+    else if (filters.month && filters.month !== "all") {
+      const absenceDate = parseISO(absence.createdAt)
+      const [year, month] = filters.month.split("-")
+      const startDate = startOfMonth(new Date(parseInt(year), parseInt(month) - 1))
+      const endDate = endOfMonth(startDate)
+      
+      if (!isWithinInterval(absenceDate, { start: startDate, end: endDate })) {
+        return false
+      }
+    }
+
     // Filtrar por termo de busca
     if (filters.searchTerm) {
       const searchLower = filters.searchTerm.toLowerCase()
@@ -363,8 +414,10 @@ export function AdminAbsences() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div>
+      {/* Grid de filtros */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 mb-6">
+        {/* Filtro de Funcionário */}
+        <div className="col-span-1">
           <Label htmlFor="employee-filter">Filtrar por Funcionário</Label>
           <Select value={filters.employee} onValueChange={(value) => handleFilterChange("employee", value)}>
             <SelectTrigger id="employee-filter">
@@ -381,7 +434,8 @@ export function AdminAbsences() {
           </Select>
         </div>
 
-        <div>
+        {/* Filtro de Status */}
+        <div className="col-span-1">
           <Label htmlFor="status-filter">Filtrar por Status</Label>
           <Select value={filters.status} onValueChange={(value) => handleFilterChange("status", value)}>
             <SelectTrigger id="status-filter">
@@ -396,7 +450,8 @@ export function AdminAbsences() {
           </Select>
         </div>
 
-        <div>
+        {/* Filtro de Motivo */}
+        <div className="col-span-1">
           <Label htmlFor="reason-filter">Filtrar por Motivo</Label>
           <Select value={filters.reason} onValueChange={(value) => handleFilterChange("reason", value)}>
             <SelectTrigger id="reason-filter">
@@ -412,7 +467,8 @@ export function AdminAbsences() {
           </Select>
         </div>
 
-        <div>
+        {/* Campo de Busca */}
+        <div className="col-span-1">
           <Label htmlFor="search">Buscar</Label>
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-gray-500" />
@@ -423,6 +479,89 @@ export function AdminAbsences() {
               value={filters.searchTerm}
               onChange={handleSearchChange}
             />
+          </div>
+        </div>
+      </div>
+
+      {/* Filtro de Período em uma linha separada */}
+      <div className="mb-6">
+        <div className="space-y-2">
+          <Label>Filtrar por Período</Label>
+          <div className="flex flex-wrap gap-2">
+            <div className="flex-1 min-w-[200px]">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !filters.dateRange.from && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {filters.dateRange.from ? (
+                      format(filters.dateRange.from, "dd/MM/yyyy")
+                    ) : (
+                      "Data inicial"
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={filters.dateRange.from}
+                    onSelect={(date) => handleDateRangeChange('from', date)}
+                    initialFocus
+                    locale={ptBR}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="flex-1 min-w-[200px]">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !filters.dateRange.to && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {filters.dateRange.to ? (
+                      format(filters.dateRange.to, "dd/MM/yyyy")
+                    ) : (
+                      "Data final"
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <CalendarComponent
+                    mode="single"
+                    selected={filters.dateRange.to}
+                    onSelect={(date) => handleDateRangeChange('to', date)}
+                    initialFocus
+                    locale={ptBR}
+                    disabled={(date) =>
+                      filters.dateRange.from ? date < filters.dateRange.from : false
+                    }
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            {(filters.dateRange.from || filters.dateRange.to) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={clearDateRange}
+                className="h-10 w-10"
+              >
+                <X className="h-4 w-4" />
+                <span className="sr-only">Limpar período</span>
+              </Button>
+            )}
           </div>
         </div>
       </div>

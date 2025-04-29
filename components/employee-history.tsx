@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Edit2, Trash2, AlertCircle, Calendar, Clock } from "lucide-react"
+import { Edit2, Trash2, AlertCircle, Calendar, Clock, FileDown } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -20,6 +20,9 @@ import {
   getUserHolidayStats,
 } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
+import jsPDF from "jspdf"
+import "jspdf-autotable"
+import autoTable from "jspdf-autotable"
 
 const OVERTIME_OPTIONS = [
   { id: "7h_18h", label: "7h às 18h", value: 2 },
@@ -41,6 +44,7 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
   const [selectedOption, setSelectedOption] = useState("")
   const [error, setError] = useState("")
   const [holidayHoursMap, setHolidayHoursMap] = useState<Record<number, { used: number; max: number }>>({})
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false)
 
   useEffect(() => {
     // Carregar feriados
@@ -253,6 +257,126 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
     return OVERTIME_OPTIONS.filter((option) => option.value <= remainingHours)
   }
 
+  const generateReport = async () => {
+    try {
+      setIsGeneratingReport(true)
+
+      // Criar novo documento PDF
+      const doc = new jsPDF()
+      
+      // Configurar fonte para suportar caracteres especiais
+      doc.setFont("helvetica")
+      
+      // Adicionar cabeçalho
+      doc.setFontSize(16)
+      doc.text("Relatório de Horas Extras", 105, 15, { align: "center" })
+      
+      // Adicionar informações do funcionário
+      doc.setFontSize(12)
+      doc.text(`Funcionário: ${user.firstName} ${user.lastName}`, 14, 25)
+      doc.text(`Email: ${user.email}`, 14, 32)
+      doc.text(`Data do relatório: ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}`, 14, 39)
+
+      // Agrupar registros por feriado
+      const groupedRecords = records.reduce((acc, record) => {
+        if (!acc[record.holidayId]) {
+          acc[record.holidayId] = {
+            holidayName: record.holidayName,
+            records: []
+          }
+        }
+        acc[record.holidayId].records.push(record)
+        return acc
+      }, {} as Record<number, { holidayName: string; records: typeof records }>)
+
+      // Posição inicial para a tabela
+      let yPos = 50
+
+      // Iterar sobre cada feriado
+      for (const [holidayId, data] of Object.entries(groupedRecords)) {
+        const holidayData = data as { holidayName: string; records: typeof records }
+        // Adicionar título do feriado
+        doc.setFont("helvetica", "bold")
+        doc.text(holidayData.holidayName, 14, yPos)
+        doc.setFont("helvetica", "normal")
+        
+        // Calcular total de horas para este feriado
+        const totalHours = holidayData.records.reduce((sum: number, record: any) => sum + record.hours, 0)
+        
+        // Preparar dados para a tabela
+        const tableData = holidayData.records.map((record: any) => [
+          formatDate(record.date),
+          formatHours(record.hours),
+          record.optionLabel,
+          format(parseISO(record.createdAt), "dd/MM/yyyy HH:mm")
+        ])
+
+        // Adicionar tabela
+        autoTable(doc, {
+          startY: yPos + 5,
+          head: [["Data", "Horas", "Período", "Registrado em"]],
+          body: tableData,
+          theme: "grid",
+          headStyles: { fillColor: [238, 77, 45] },
+          styles: { font: "helvetica", fontSize: 10 },
+          columnStyles: {
+            0: { cellWidth: 30 },
+            1: { cellWidth: 25 },
+            2: { cellWidth: 70 },
+            3: { cellWidth: 40 }
+          },
+          foot: [[
+            "Total",
+            formatHours(totalHours),
+            "",
+            ""
+          ]],
+          footStyles: { fillColor: [245, 245, 245], textColor: [0, 0, 0], font: "helvetica-bold" }
+        })
+
+        // Atualizar posição Y para o próximo feriado
+        yPos = (doc as any).lastAutoTable.finalY + 15
+
+        // Verificar se precisa adicionar nova página
+        if (yPos > 270) {
+          doc.addPage()
+          yPos = 20
+        }
+      }
+
+      // Adicionar rodapé
+      const pageCount = doc.getNumberOfPages()
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i)
+        doc.setFontSize(10)
+        doc.text(
+          `Página ${i} de ${pageCount}`,
+          doc.internal.pageSize.width / 2,
+          doc.internal.pageSize.height - 10,
+          { align: "center" }
+        )
+      }
+
+      // Salvar o PDF
+      const fileName = `relatorio_horas_extras_${format(new Date(), "yyyy-MM-dd")}.pdf`
+      doc.save(fileName)
+
+      toast({
+        title: "Relatório gerado com sucesso",
+        description: "O relatório foi baixado para o seu computador",
+      })
+    } catch (error) {
+      console.error("Erro ao gerar relatório:", error)
+      toast({
+        title: "Erro ao gerar relatório",
+        description: "Ocorreu um erro ao gerar o relatório. Tente novamente.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingReport(false)
+    }
+  }
+
   if (records.length === 0) {
     return (
       <div className="text-center p-6">
@@ -263,6 +387,27 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
 
   return (
     <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-medium">Histórico de Horas Extras</h3>
+        <Button
+          onClick={generateReport}
+          variant="outline"
+          className="flex items-center gap-2"
+          disabled={isGeneratingReport || records.length === 0}
+        >
+          {isGeneratingReport ? (
+            <>
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              Gerando...
+            </>
+          ) : (
+            <>
+              <FileDown className="h-4 w-4" />
+              Exportar PDF
+            </>
+          )}
+        </Button>
+      </div>
       {records.map((record) => {
         const holiday = holidays.find((h) => h.id === record.holidayId)
         const hoursInfo = holidayHoursMap[record.holidayId]
