@@ -56,3 +56,27 @@ export async function setupDatabase() {
   }
 }
 
+// Função para upload de arquivo no Supabase Storage
+export async function uploadProfilePicture(userId: string, file: File): Promise<string | null> {
+  const fileExt = file.name.split('.').pop()
+  const filePath = `profile-pictures/${userId}.${fileExt}`
+  const { data, error } = await supabase.storage.from('profile-pictures').upload(filePath, file, {
+    upsert: true,
+    contentType: file.type,
+  })
+  if (error) {
+    console.error('Erro ao fazer upload da foto de perfil:', error)
+    return null
+  }
+  // Gerar URL pública
+  const { data: publicUrlData } = supabase.storage.from('profile-pictures').getPublicUrl(filePath)
+  return publicUrlData?.publicUrl || null
+}
+
+// Função para obter a URL pública da foto de perfil
+export function getProfilePictureUrl(userId: string, ext: string = 'jpg'): string {
+  const filePath = `profile-pictures/${userId}.${ext}`
+  const { data } = supabase.storage.from('profile-pictures').getPublicUrl(filePath)
+  return data?.publicUrl || ''
+}
+

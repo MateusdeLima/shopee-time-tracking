@@ -12,6 +12,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Search, Trash2 } from "lucide-react"
 import { getUsers, deleteUser } from "@/lib/db"
+import Image from "next/image"
 
 // Função utilitária para formatar CPF
 function formatCPF(value: string) {
@@ -141,6 +142,7 @@ export function EmployeeManagement() {
                     <TableHead className="min-w-[140px]">CPF</TableHead>
                     <TableHead className="min-w-[140px]">Data de Nascimento</TableHead>
                     <TableHead className="min-w-[120px]">Data de Cadastro</TableHead>
+                    <TableHead className="min-w-[120px]">Foto de Perfil</TableHead>
                     <TableHead className="text-right min-w-[100px]">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -157,6 +159,30 @@ export function EmployeeManagement() {
                         {employee.birthDate ? formatDate(employee.birthDate) : "-"}
                       </TableCell>
                       <TableCell>{formatDate(employee.createdAt)}</TableCell>
+                      <TableCell>
+                        {employee.profilePictureUrl ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <Image
+                              src={employee.profilePictureUrl}
+                              alt="Foto de perfil"
+                              width={40}
+                              height={40}
+                              className="rounded border"
+                            />
+                            <a
+                              href={employee.profilePictureUrl}
+                              download
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-blue-600 underline mt-1"
+                            >
+                              Baixar
+                            </a>
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </TableCell>
                       <TableCell className="text-right">
                         <Button
                           variant="outline"

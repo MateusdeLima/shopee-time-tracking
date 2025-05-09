@@ -13,6 +13,7 @@ export interface User {
   cpf?: string
   birthDate?: string
   isFirstAccess?: boolean
+  profilePictureUrl?: string
 }
 
 export interface Holiday {
@@ -186,7 +187,7 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   }
 }
 
-export async function createUser(user: Omit<User, "id" | "createdAt" | "username">): Promise<User> {
+export async function createUser(user: Omit<User, "id" | "createdAt" | "username"> & { profilePictureUrl?: string }): Promise<User> {
   try {
     // Verificar se email já existe
     const { data: existingUser, error: checkError } = await supabase
@@ -235,6 +236,7 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
         cpf: user.cpf,
         birth_date: user.birthDate,
         is_first_access: true,
+        profile_picture_url: user.profilePictureUrl || null,
       },
     ]).select().single()
 
@@ -1022,6 +1024,15 @@ export async function getSystemSummary() {
       totalAbsences: 0,
       pendingAbsences: 0,
     }
+  }
+}
+
+// Função para atualizar foto de perfil do usuário
+export async function updateUserProfilePicture(userId: string, profilePictureUrl: string): Promise<void> {
+  const { error } = await supabase.from("users").update({ profile_picture_url: profilePictureUrl }).eq("id", userId)
+  if (error) {
+    console.error("Erro ao atualizar foto de perfil:", error)
+    throw new Error("Erro ao atualizar foto de perfil")
   }
 }
 
