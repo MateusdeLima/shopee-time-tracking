@@ -207,8 +207,8 @@ export function HolidayManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold tracking-tight">Gerenciamento de Feriados</h2>
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-0 mb-4">
+        <h2 className="text-2xl font-bold tracking-tight mb-2 sm:mb-0">Gerenciamento de Feriados</h2>
         <Button onClick={() => setIsAddDialogOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Adicionar Feriado
@@ -236,7 +236,7 @@ export function HolidayManagement() {
               <p className="text-gray-500">Nenhum feriado ativo cadastrado</p>
         </div>
       ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-3 w-full">
               {holidays
                 .filter(holiday => holiday.active)
                 .map((holiday) => (
@@ -291,7 +291,7 @@ export function HolidayManagement() {
               <p className="text-gray-500">Nenhum feriado inativo</p>
                 </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-3 w-full">
               {holidays
                 .filter(holiday => !holiday.active)
                 .map((holiday) => (
