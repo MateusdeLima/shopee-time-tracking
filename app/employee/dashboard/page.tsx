@@ -10,7 +10,6 @@ import { EmployeeHistory } from "@/components/employee-history"
 import { AbsenceManagement } from "@/components/absence-management"
 import { Clock, History, LogOut, Calendar, User } from "lucide-react"
 import { getCurrentUser, logout } from "@/lib/auth"
-<<<<<<< HEAD
 import { initializeDb, updateUser, getUserById } from "@/lib/db"
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
@@ -18,11 +17,6 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { uploadProfilePicture } from "@/lib/supabase"
 import { toast } from "@/components/ui/use-toast"
-=======
-import { initializeDb } from "@/lib/db"
-import Image from "next/image"
-import { getProfilePictureUrl } from "@/lib/supabase"
->>>>>>> 7b01d9cd7610a9cf476e10aa40e92871b824f302
 
 export const dynamic = "force-dynamic"
 
@@ -51,12 +45,6 @@ export default function EmployeeDashboard() {
 
     if (user.role !== "employee") {
       router.push("/")
-      return
-    }
-
-    // Se for o primeiro acesso ou não tiver foto de perfil, redireciona para upload obrigatório
-    if (user.isFirstAccess || !user.profilePictureUrl) {
-      router.push("/employee/primeiro-acesso")
       return
     }
 
@@ -138,7 +126,6 @@ export default function EmployeeDashboard() {
             <Button variant="ghost" onClick={handleLogout} className="text-white hover:bg-[#D23F20]">
               <LogOut className="mr-2 h-4 w-4" /> Sair
             </Button>
-<<<<<<< HEAD
             <div className="flex items-center mt-1 text-sm text-white/80 gap-2">
               <Avatar className="w-8 h-10 border border-white cursor-pointer" onClick={handleOpenPhotoModal}>
                 <AvatarImage
@@ -149,23 +136,6 @@ export default function EmployeeDashboard() {
                 <AvatarFallback>{user.firstName?.[0]}</AvatarFallback>
               </Avatar>
               <User className="h-3 w-3 mr-1" />
-=======
-            <div className="flex items-center mt-1 text-sm text-white/80">
-              {/* Foto de perfil */}
-              {user.profilePictureUrl ? (
-                <Image
-                  src={user.profilePictureUrl}
-                  alt="Foto de perfil"
-                  width={32}
-                  height={32}
-                  className="rounded-full mr-2 border border-white"
-                />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center mr-2 border border-white">
-                  <User className="h-5 w-5 text-gray-500" />
-                </div>
-              )}
->>>>>>> 7b01d9cd7610a9cf476e10aa40e92871b824f302
               <span>
                 User: <strong>{user.username}</strong>
               </span>
