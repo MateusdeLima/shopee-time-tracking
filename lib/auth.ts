@@ -33,6 +33,7 @@ export async function authenticateEmployee(
   username?: string,
   cpf?: string,
   birthDate?: string,
+  profilePictureUrl?: string,
 ): Promise<User> {
   try {
     // Inicializar o banco de dados primeiro
@@ -88,6 +89,7 @@ export async function authenticateEmployee(
             role: "employee",
             cpf,
             birthDate,
+            profilePictureUrl,
           })
 
           return newUser

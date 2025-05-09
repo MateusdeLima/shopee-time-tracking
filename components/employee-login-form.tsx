@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { authenticateEmployee, setCurrentUser, isEmailRegistered } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
 import type { User } from "@/lib/db"
+import { uploadProfilePicture } from "@/lib/supabase"
 
 enum LoginStep {
   INITIAL = "initial",
@@ -37,6 +38,8 @@ export function EmployeeLoginForm() {
   const [error, setError] = useState("")
   const [currentStep, setCurrentStep] = useState<LoginStep>(LoginStep.INITIAL)
   const [dbInitialized, setDbInitialized] = useState(false)
+  const [profilePicture, setProfilePicture] = useState<File | null>(null)
+  const [profilePicturePreview, setProfilePicturePreview] = useState<string>("")
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -132,6 +135,16 @@ export function EmployeeLoginForm() {
     }
   }
 
+  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    setProfilePicture(file)
+    if (file) {
+      setProfilePicturePreview(URL.createObjectURL(file))
+    } else {
+      setProfilePicturePreview("")
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -165,6 +178,28 @@ export function EmployeeLoginForm() {
           return
         }
 
+        // Validar foto de perfil
+        if (!profilePicture) {
+          setError("Por favor, envie uma foto de perfil 3x4 (obrigatório)")
+          setIsLoading(false)
+          return
+        }
+
+        // Upload da foto de perfil
+        let profilePictureUrl = null
+        try {
+          profilePictureUrl = await uploadProfilePicture(profilePicture, formData.email.replace(/[^a-zA-Z0-9]/g, ""))
+          if (!profilePictureUrl) {
+            setError("Falha ao fazer upload da foto de perfil. Tente novamente.")
+            setIsLoading(false)
+            return
+          }
+        } catch (err) {
+          setError("Erro ao fazer upload da foto de perfil.")
+          setIsLoading(false)
+          return
+        }
+
         // Primeiro acesso - criar novo usuário
         user = await authenticateEmployee(
           formData.firstName, 
@@ -172,7 +207,8 @@ export function EmployeeLoginForm() {
           formData.email, 
           undefined, 
           formData.cpf, 
-          formData.birthDate
+          formData.birthDate,
+          profilePictureUrl // Passa a URL da foto
         )
 
         if (!user) {
@@ -351,40 +387,40 @@ export function EmployeeLoginForm() {
       case LoginStep.FIRST_ACCESS:
         return (
           <div className="space-y-4">
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="firstName">Nome</Label>
-              <Input
-                id="firstName"
-                name="firstName"
-                placeholder="Digite seu nome"
-                value={formData.firstName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lastName">Sobrenome</Label>
-              <Input
-                id="lastName"
-                name="lastName"
-                placeholder="Digite seu sobrenome"
-                value={formData.lastName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email Corporativo</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="firstName">Nome</Label>
+                <Input
+                  id="firstName"
+                  name="firstName"
+                  placeholder="Digite seu nome"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lastName">Sobrenome</Label>
+                <Input
+                  id="lastName"
+                  name="lastName"
+                  placeholder="Digite seu sobrenome"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email Corporativo</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
                   placeholder="seuemail@shopeemobile-external.com"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="cpf">CPF</Label>
@@ -408,6 +444,24 @@ export function EmployeeLoginForm() {
                   onChange={handleChange}
                   required
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="profilePicture">Foto de Perfil (3x4, obrigatório)</Label>
+                <Input
+                  id="profilePicture"
+                  name="profilePicture"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePictureChange}
+                  required
+                />
+                {profilePicturePreview && (
+                  <img
+                    src={profilePicturePreview}
+                    alt="Pré-visualização da foto de perfil"
+                    className="w-24 h-32 object-cover rounded-md border mt-2"
+                  />
+                )}
               </div>
             </div>
 

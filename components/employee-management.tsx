@@ -10,8 +10,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { toast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Search, Trash2 } from "lucide-react"
+import { Search, Trash2, Download } from "lucide-react"
 import { getUsers, deleteUser } from "@/lib/db"
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
 
 // Função utilitária para formatar CPF
 function formatCPF(value: string) {
@@ -21,6 +22,12 @@ function formatCPF(value: string) {
     .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
     .replace(/^(\d{3})\.(\d{3})\.(\d{3})(\d{1,2})/, "$1.$2.$3-$4")
     .slice(0, 14);
+}
+
+// Função utilitária para gerar URL da foto de perfil com cache busting
+function getProfilePictureUrl(employee: any) {
+  if (!employee?.profilePictureUrl) return ""
+  return employee.profilePictureUrl + '?t=' + (employee.updatedAt ? new Date(employee.updatedAt).getTime() : Date.now())
 }
 
 export function EmployeeManagement() {
@@ -135,6 +142,7 @@ export function EmployeeManagement() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="min-w-[100px] text-center">Foto</TableHead>
                     <TableHead className="min-w-[180px]">Nome</TableHead>
                     <TableHead className="min-w-[180px]">User Único</TableHead>
                     <TableHead className="min-w-[220px]">Email</TableHead>
@@ -147,6 +155,49 @@ export function EmployeeManagement() {
                 <TableBody>
                   {filteredEmployees.map((employee) => (
                     <TableRow key={employee.id}>
+                      <TableCell className="text-center">
+                        {employee.profilePictureUrl ? (
+                          <div className="flex flex-col items-center gap-2">
+                            <a
+                              href={getProfilePictureUrl(employee)}
+                              download
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="group"
+                            >
+                              <Avatar className="w-12 h-16 rounded-md border-2 border-gray-300 group-hover:border-blue-500 transition cursor-pointer">
+                                <AvatarImage
+                                  src={getProfilePictureUrl(employee)}
+                                  alt={employee.firstName}
+                                  className="object-cover w-12 h-16 rounded-md"
+                                />
+                                <AvatarFallback>{employee.firstName[0]}</AvatarFallback>
+                              </Avatar>
+                            </a>
+                            <a
+                              href={getProfilePictureUrl(employee)}
+                              download
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="w-full flex justify-center"
+                            >
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 text-blue-600 border-blue-200 hover:text-blue-800 hover:bg-blue-50 flex items-center gap-1 w-full"
+                                asChild
+                              >
+                                <span>
+                                  <Download className="h-4 w-4 mr-2" /> Baixar Foto
+                                </span>
+                              </Button>
+                            </a>
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-xs">Sem foto</span>
+                        )}
+                      </TableCell>
                       <TableCell className="font-medium">
                         {employee.firstName} {employee.lastName}
                       </TableCell>

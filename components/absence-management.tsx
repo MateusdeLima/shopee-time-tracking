@@ -668,8 +668,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               isMobile && "w-full"
             )}
           >
-            Registrar Ausência
-          </Button>
+          Registrar Ausência
+        </Button>
         </div>
       </div>
 
@@ -858,21 +858,21 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                         </Button>
                       </div>
                     )}
-                    <Calendar
-                      mode="single"
+                  <Calendar
+                    mode="single"
                       selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
                       onSelect={(date) => {
                         handleDateSelect(date)
                         if (formData.dateRange.start && date) {
                           setIsCalendarOpen(false)
                         }
-                      }}
-                      initialFocus
+                    }}
+                    initialFocus
                       className={cn(
                         "rounded-md border shadow-md w-full touch-manipulation",
                         isMobile && "text-base flex-1"
                       )}
-                    />
+                  />
                   </div>
                 </PopoverContent>
               </Popover>

@@ -13,6 +13,7 @@ export interface User {
   cpf?: string
   birthDate?: string
   isFirstAccess?: boolean
+  profilePictureUrl?: string // URL da foto de perfil
 }
 
 export interface Holiday {
@@ -235,6 +236,7 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
         cpf: user.cpf,
         birth_date: user.birthDate,
         is_first_access: true,
+        profile_picture_url: user.profilePictureUrl,
       },
     ]).select().single()
 
@@ -258,6 +260,28 @@ export async function deleteUser(id: string): Promise<void> {
     console.error("Erro ao excluir usuário:", error)
     throw new Error("Falha ao excluir usuário")
   }
+}
+
+export async function updateUser(id: string, data: Partial<User>): Promise<User> {
+  // Converter para snake_case para o Supabase
+  const userData = convertToSnakeCase({
+    ...data,
+    updatedAt: new Date().toISOString(),
+  })
+
+  const { data: updatedData, error } = await supabase
+    .from("users")
+    .update(userData)
+    .eq("id", id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error("Erro ao atualizar usuário:", error?.message, error)
+    throw new Error("Falha ao atualizar usuário")
+  }
+
+  return convertToCamelCase<User>(updatedData)
 }
 
 // Funções para feriados
