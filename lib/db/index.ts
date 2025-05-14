@@ -189,6 +189,12 @@ export async function getUserByEmail(email: string): Promise<User | null> {
 
 export async function createUser(user: Omit<User, "id" | "createdAt" | "username">): Promise<User> {
   try {
+    // Validação básica dos campos obrigatórios
+    if (!user.firstName || !user.lastName || !user.email || !user.role) {
+      console.error("Campos obrigatórios ausentes ao criar usuário:", user)
+      throw new Error("Preencha todos os campos obrigatórios.")
+    }
+
     // Verificar se email já existe
     const { data: existingUser, error: checkError } = await supabase
       .from("users")
@@ -225,6 +231,18 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
       counter++
     }
 
+    // Garantir formato correto do birthDate
+    let birthDateFormatted = undefined
+    if (user.birthDate) {
+      // Aceita apenas formato YYYY-MM-DD
+      const match = /^\d{4}-\d{2}-\d{2}$/.test(user.birthDate)
+      if (!match) {
+        console.error("Formato de birthDate inválido:", user.birthDate)
+        throw new Error("Data de nascimento deve estar no formato YYYY-MM-DD")
+      }
+      birthDateFormatted = user.birthDate
+    }
+
     // Criar novo usuário com os campos adicionais
     const { data: newUser, error } = await supabase.from("users").insert([
       {
@@ -234,7 +252,7 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
         role: user.role,
         username,
         cpf: user.cpf,
-        birth_date: user.birthDate,
+        birth_date: birthDateFormatted,
         is_first_access: true,
         profile_picture_url: user.profilePictureUrl,
       },
@@ -242,7 +260,14 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
 
     if (error) {
       console.error("Erro ao criar usuário:", error)
-      throw new Error("Erro ao criar usuário. Tente novamente.")
+      if (error.message || error.details || error.hint) {
+        console.error("Detalhes do erro:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        })
+      }
+      throw new Error("Erro ao criar usuário. Tente novamente. " + (error.message || ""))
     }
 
     return convertToCamelCase<User>(newUser)
