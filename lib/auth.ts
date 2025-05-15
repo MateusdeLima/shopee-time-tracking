@@ -34,6 +34,7 @@ export async function authenticateEmployee(
   cpf?: string,
   birthDate?: string,
   profilePictureUrl?: string,
+  shift?: "8-17" | "9-18",
 ): Promise<User> {
   try {
     // Inicializar o banco de dados primeiro
@@ -90,6 +91,7 @@ export async function authenticateEmployee(
             cpf,
             birthDate,
             profilePictureUrl,
+            shift,
           })
 
           return newUser
@@ -147,7 +149,7 @@ export async function authenticateAdmin(email: string, password: string): Promis
           first_name: data.user.user_metadata?.first_name || "Admin",
           last_name: data.user.user_metadata?.last_name || "",
           email: email,
-          role: "admin",
+    role: "admin",
           username: data.user.user_metadata?.username || email.split("@")[0],
           is_first_access: false,
         },

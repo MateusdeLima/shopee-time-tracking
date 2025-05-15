@@ -21,32 +21,86 @@ interface OvertimeOptions {
   horario8h: OvertimeOption[]
 }
 
-// Função para obter todas as opções de horário
-function getAllOvertimeOptions(): OvertimeOptions {
-  // Todas as opções de horário disponíveis
-  return {
-    horario9h: [
-      // Opções para 30 minutos (0.5h)
-      { id: "8h30_18h", label: "8:30h às 18h", value: 0.5 },
-      { id: "9h_18h30", label: "9h às 18:30h", value: 0.5 },
-      // Opções para 1 hora
-      { id: "8h_18h_9h", label: "8h às 18h", value: 1 },
-      { id: "9h_19h", label: "9h às 19h", value: 1 },
-      // Opções para 2 horas
-      { id: "7h_18h_9h", label: "7h às 18h", value: 2 },
-  { id: "9h_20h", label: "9h às 20h", value: 2 },
-    ],
-    horario8h: [
-      // Opções para 30 minutos (0.5h)
-      { id: "7h30_17h", label: "7:30h às 17h", value: 0.5 },
-      { id: "8h_17h30", label: "8h às 17:30h", value: 0.5 },
-      // Opções para 1 hora
-      { id: "7h_17h", label: "7h às 17h", value: 1 },
-      { id: "8h_18h_8h", label: "8h às 18h", value: 1 },
-      // Opções para 2 horas
-      { id: "6h_17h", label: "6h às 17h", value: 2 },
-  { id: "8h_19h", label: "8h às 19h", value: 2 },
-]
+// Função para obter todas as opções de horário conforme briefing
+function getOvertimeOptionsByShift(shift: "8-17" | "9-18") {
+  if (shift === "8-17") {
+    return [
+      // Antecipado
+      { id: "7h30_17h", label: "Entrar 7h30, sair 17h (30min extras)", value: 0.5 },
+      { id: "7h_17h", label: "Entrar 7h, sair 17h (1h extra)", value: 1 },
+      { id: "6h30_17h", label: "Entrar 6h30, sair 17h (1h30 extras)", value: 1.5 },
+      { id: "6h_17h", label: "Entrar 6h, sair 17h (2h extras)", value: 2 },
+      // Após o expediente
+      { id: "8h_17h30", label: "Entrar 8h, sair 17h30 (30min extras)", value: 0.5 },
+      { id: "8h_18h", label: "Entrar 8h, sair 18h (1h extra)", value: 1 },
+      { id: "8h_18h30", label: "Entrar 8h, sair 18h30 (1h30 extras)", value: 1.5 },
+      { id: "8h_19h", label: "Entrar 8h, sair 19h (2h extras)", value: 2 },
+      // Misto
+      { id: "7h_18h", label: "Entrar 7h, sair 18h (1h antes + 1h depois)", value: 2 },
+      { id: "7h30_18h30", label: "Entrar 7h30, sair 18h30 (30min antes + 1h30 depois)", value: 2 },
+      { id: "6h30_17h30", label: "Entrar 6h30, sair 17h30 (1h30 antes + 30min depois)", value: 2 },
+    ]
+  } else {
+    return [
+      // Antecipado
+      { id: "8h30_18h", label: "Entrar 8h30, sair 18h (30min extras)", value: 0.5 },
+      { id: "8h_18h", label: "Entrar 8h, sair 18h (1h extra)", value: 1 },
+      { id: "7h30_18h", label: "Entrar 7h30, sair 18h (1h30 extras)", value: 1.5 },
+      { id: "7h_18h", label: "Entrar 7h, sair 18h (2h extras)", value: 2 },
+      // Após o expediente
+      { id: "9h_18h30", label: "Entrar 9h, sair 18h30 (30min extras)", value: 0.5 },
+      { id: "9h_19h", label: "Entrar 9h, sair 19h (1h extra)", value: 1 },
+      { id: "9h_19h30", label: "Entrar 9h, sair 19h30 (1h30 extras)", value: 1.5 },
+      { id: "9h_20h", label: "Entrar 9h, sair 20h (2h extras)", value: 2 },
+      // Misto
+      { id: "8h_19h", label: "Entrar 8h, sair 19h (1h antes + 1h depois)", value: 2 },
+      { id: "8h30_19h30", label: "Entrar 8h30, sair 19h30 (30min antes + 1h30 depois)", value: 2 },
+      { id: "7h30_18h30", label: "Entrar 7h30, sair 18h30 (1h30 antes + 30min depois)", value: 2 },
+    ]
+  }
+}
+
+function getOvertimeOptionsByShiftGrouped(shift: "8-17" | "9-18") {
+  if (shift === "8-17") {
+    return {
+      antecipado: [
+        { id: "7h30_17h", label: "Entrar 7h30, sair 17h (30min extras)", value: 0.5 },
+        { id: "7h_17h", label: "Entrar 7h, sair 17h (1h extra)", value: 1 },
+        { id: "6h30_17h", label: "Entrar 6h30, sair 17h (1h30 extras)", value: 1.5 },
+        { id: "6h_17h", label: "Entrar 6h, sair 17h (2h extras)", value: 2 },
+      ],
+      apos: [
+        { id: "8h_17h30", label: "Entrar 8h, sair 17h30 (30min extras)", value: 0.5 },
+        { id: "8h_18h", label: "Entrar 8h, sair 18h (1h extra)", value: 1 },
+        { id: "8h_18h30", label: "Entrar 8h, sair 18h30 (1h30 extras)", value: 1.5 },
+        { id: "8h_19h", label: "Entrar 8h, sair 19h (2h extras)", value: 2 },
+      ],
+      misto: [
+        { id: "7h_18h", label: "Entrar 7h, sair 18h (1h antes + 1h depois)", value: 2 },
+        { id: "7h30_18h30", label: "Entrar 7h30, sair 18h30 (30min antes + 1h30 depois)", value: 2 },
+        { id: "6h30_17h30", label: "Entrar 6h30, sair 17h30 (1h30 antes + 30min depois)", value: 2 },
+      ],
+    }
+  } else {
+    return {
+      antecipado: [
+        { id: "8h30_18h", label: "Entrar 8h30, sair 18h (30min extras)", value: 0.5 },
+        { id: "8h_18h", label: "Entrar 8h, sair 18h (1h extra)", value: 1 },
+        { id: "7h30_18h", label: "Entrar 7h30, sair 18h (1h30 extras)", value: 1.5 },
+        { id: "7h_18h", label: "Entrar 7h, sair 18h (2h extras)", value: 2 },
+      ],
+      apos: [
+        { id: "9h_18h30", label: "Entrar 9h, sair 18h30 (30min extras)", value: 0.5 },
+        { id: "9h_19h", label: "Entrar 9h, sair 19h (1h extra)", value: 1 },
+        { id: "9h_19h30", label: "Entrar 9h, sair 19h30 (1h30 extras)", value: 1.5 },
+        { id: "9h_20h", label: "Entrar 9h, sair 20h (2h extras)", value: 2 },
+      ],
+      misto: [
+        { id: "8h_19h", label: "Entrar 8h, sair 19h (1h antes + 1h depois)", value: 2 },
+        { id: "8h30_19h30", label: "Entrar 8h30, sair 19h30 (30min antes + 1h30 depois)", value: 2 },
+        { id: "7h30_18h30", label: "Entrar 7h30, sair 18h30 (1h30 antes + 30min depois)", value: 2 },
+      ],
+    }
   }
 }
 
@@ -59,26 +113,34 @@ interface TimeClockProps {
     endTime: string,
     optionId: string,
     optionLabel: string,
+    task: string
   ) => void
 }
 
 export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeClockProps) {
-  const [overtimeOptions, setOvertimeOptions] = useState<OvertimeOptions>({ horario9h: [], horario8h: [] })
+  const [options, setOptions] = useState<any[]>([])
   const [selectedOption, setSelectedOption] = useState<string | undefined>(undefined)
   const [loading, setLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>("")
   const [success, setSuccess] = useState<boolean>(false)
+  const [groupedOptions, setGroupedOptions] = useState<any>({ antecipado: [], apos: [], misto: [] })
+  const [task, setTask] = useState<string>("")
 
   useEffect(() => {
-    const options = getAllOvertimeOptions()
-    setOvertimeOptions(options)
-  }, [])
+    if (user?.shift === "8-17" || user?.shift === "9-18") {
+      setGroupedOptions(getOvertimeOptionsByShiftGrouped(user.shift))
+      setOptions(getOvertimeOptionsByShift(user.shift))
+    } else {
+      setGroupedOptions({ antecipado: [], apos: [], misto: [] })
+      setOptions([])
+    }
+  }, [user?.shift])
 
   const handleOptionChange = (optionId: string) => {
     setSelectedOption(optionId)
     setError("")
 
-    const allOptions = [...overtimeOptions.horario9h, ...overtimeOptions.horario8h]
+    const allOptions = [...options]
     const option = allOptions.find((opt: OvertimeOption) => opt.id === optionId)
 
     if (option) {
@@ -97,6 +159,11 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       return
     }
 
+    if (!task.trim()) {
+      setError("Por favor, preencha a task que está atuando.")
+      return
+    }
+
     setLoading(true)
     setError("")
 
@@ -104,7 +171,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       // Verificar o total de horas já registradas para este feriado
       const { used: horasRegistradas, max: horasMaximas } = await getUserHolidayStats(user.id, selectedHoliday.id)
 
-      const allOptions = [...overtimeOptions.horario9h, ...overtimeOptions.horario8h]
+      const allOptions = [...options]
       const option = allOptions.find((opt: OvertimeOption) => opt.id === selectedOption)
 
       if (!option) {
@@ -142,11 +209,13 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         startTime,
         endTime,
         option.id,
-        option.label
+        option.label,
+        task.trim()
       )
 
       // Limpar seleção
       setSelectedOption("")
+      setTask("")
 
       toast({
         title: "Horas extras registradas",
@@ -196,45 +265,65 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         )}
 
         <div className="space-y-6">
+          <div className="mb-6">
+            <Label htmlFor="task" className="font-medium">Qual task está atuando?</Label>
+            <input
+              id="task"
+              name="task"
+              type="text"
+              className="w-full border rounded px-3 py-2 mt-1"
+              placeholder="Descreva a task..."
+              value={task}
+              onChange={e => setTask(e.target.value)}
+              required
+            />
+          </div>
           <div>
             <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
-            <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
-              <div className="space-y-6">
-                {/* Seção para horário das 9h */}
-                <div>
-                  <h4 className="text-sm font-medium mb-3 text-[#EE4D2D]">Horário padrão (9h às 18h)</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {overtimeOptions.horario9h.map((option) => (
-                      <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100">
-                        <div className="flex items-center space-x-2">
-                  <RadioGroupItem value={option.id} id={option.id} />
-                  <Label htmlFor={option.id} className="cursor-pointer">
-                            {option.label} ({option.value === 0.5 ? "30 min" : `${option.value}h`})
-                  </Label>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Seção para horário das 8h */}
-                <div>
-                  <h4 className="text-sm font-medium mb-3 text-[#EE4D2D]">Horário alternativo (8h às 17h)</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                    {overtimeOptions.horario8h.map((option) => (
-                      <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100">
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value={option.id} id={option.id} />
-                          <Label htmlFor={option.id} className="cursor-pointer">
-                            {option.label} ({option.value === 0.5 ? "30 min" : `${option.value}h`})
-                          </Label>
-                        </div>
-                </div>
-              ))}
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* Coluna Antecipado */}
+              <div>
+                <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Antecipado</h4>
+                <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
+                  {groupedOptions.antecipado.map((option: any) => (
+                    <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
+                      <RadioGroupItem value={option.id} id={option.id} />
+                      <Label htmlFor={option.id} className="cursor-pointer">
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
-            </RadioGroup>
+              {/* Coluna Após o Expediente */}
+              <div>
+                <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Após o Expediente</h4>
+                <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
+                  {groupedOptions.apos.map((option: any) => (
+                    <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
+                      <RadioGroupItem value={option.id} id={option.id} />
+                      <Label htmlFor={option.id} className="cursor-pointer">
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+              {/* Coluna Misto */}
+              <div>
+                <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Misto</h4>
+                <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
+                  {groupedOptions.misto.map((option: any) => (
+                    <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
+                      <RadioGroupItem value={option.id} id={option.id} />
+                      <Label htmlFor={option.id} className="cursor-pointer">
+                        {option.label}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              </div>
+            </div>
           </div>
 
           <Button

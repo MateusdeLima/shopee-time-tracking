@@ -14,6 +14,7 @@ export interface User {
   birthDate?: string
   isFirstAccess?: boolean
   profilePictureUrl?: string // URL da foto de perfil
+  shift?: "8-17" | "9-18" // Turno do funcionário
 }
 
 export interface Holiday {
@@ -40,6 +41,7 @@ export interface OvertimeRecord {
   endTime?: string
   createdAt: string
   updatedAt?: string
+  task?: string // Task da hora extra
 }
 
 export interface TimeClockRecord {
@@ -239,7 +241,7 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
       if (!match) {
         console.error("Formato de birthDate inválido:", user.birthDate)
         throw new Error("Data de nascimento deve estar no formato YYYY-MM-DD")
-      }
+        }
       birthDateFormatted = user.birthDate
     }
 
@@ -255,6 +257,7 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
         birth_date: birthDateFormatted,
         is_first_access: true,
         profile_picture_url: user.profilePictureUrl,
+        shift: user.shift || "9-18",
       },
     ]).select().single()
 
@@ -495,6 +498,7 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
       hours: Number(record.hours),
       start_time: record.startTime || null,
       end_time: record.endTime || null,
+      task: record.task || null,
   })
 
     const { data, error } = await supabase

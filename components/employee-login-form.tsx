@@ -48,6 +48,7 @@ export function EmployeeLoginForm() {
     username: "",
     cpf: "",
     birthDate: "",
+    shift: "9-18", // valor padrão
   })
 
   useEffect(() => {
@@ -78,7 +79,7 @@ export function EmployeeLoginForm() {
     initialize()
   }, [])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -208,7 +209,8 @@ export function EmployeeLoginForm() {
           undefined, 
           formData.cpf, 
           formData.birthDate,
-          profilePictureUrl // Passa a URL da foto
+          profilePictureUrl, // Passa a URL da foto
+          formData.shift as "8-17" | "9-18" // Cast explícito para o tipo correto
         )
 
         if (!user) {
@@ -444,6 +446,20 @@ export function EmployeeLoginForm() {
                   onChange={handleChange}
                   required
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="shift">Turno</Label>
+                <select
+                  id="shift"
+                  name="shift"
+                  value={formData.shift}
+                  onChange={handleChange}
+                  required
+                  className="border rounded px-2 py-1"
+                >
+                  <option value="8-17">8h às 17h</option>
+                  <option value="9-18">9h às 18h</option>
+                </select>
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="profilePicture">Foto de Perfil (3x4, obrigatório)</Label>

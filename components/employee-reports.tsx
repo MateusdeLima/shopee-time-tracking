@@ -471,6 +471,9 @@ export function EmployeeReports() {
                               {formatHours(record.hours)} - {record.optionLabel}
                             </Badge>
                           </div>
+                          {record.task && (
+                            <div className="text-xs text-gray-700 italic mt-1">Task: {record.task}</div>
+                          )}
                         </div>
                         <div className="flex flex-col justify-between items-end">
                           <div className="text-sm text-gray-500">
