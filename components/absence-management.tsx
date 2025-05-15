@@ -274,14 +274,34 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return
     }
 
+    // Validação de datas: data final não pode ser anterior à inicial
     if (formData.reason === "vacation") {
       if (!formData.startDate || !formData.endDate) {
         setError("Selecione o período de férias")
       return
-    }
+      }
+      const start = new Date(formData.startDate)
+      const end = new Date(formData.endDate)
+      if (end < start) {
+        setError("A data final não pode ser anterior à data inicial.")
+        return
+      }
+      // Validação de limite de 30 dias para férias
+      const diffMs = end.getTime() - start.getTime()
+      const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1
+      if (diffDias > 30) {
+        setError("O período de férias não pode exceder 30 dias.")
+        return
+      }
     } else {
       if (!formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime) {
         setError("Preencha as datas e horários de início e fim da ausência")
+        return
+      }
+      const start = new Date(`${formData.startDate}T${formData.startTime}`)
+      const end = new Date(`${formData.endDate}T${formData.endTime}`)
+      if (end < start) {
+        setError("A data e hora final não podem ser anteriores ao início.")
         return
       }
     }
@@ -795,6 +815,37 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   </div>
                   </div>
 
+                  {/* Exibir datas como badges para férias */}
+                  {absence.reason === "vacation" && absence.dateRange && absence.dateRange.start && absence.dateRange.end && (
+                    <div className="flex flex-col items-start gap-1 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold px-4 py-1 text-xs w-auto min-w-0">
+                          <CalendarIcon className="h-3 w-3 mr-1" />
+                          {(() => {
+                            const start = new Date(absence.dateRange.start)
+                            return `${start.getDate().toString().padStart(2, '0')}/${(start.getMonth()+1).toString().padStart(2, '0')}/${start.getFullYear()}`
+                          })()}
+                        </span>
+                        <span className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold px-4 py-1 text-xs w-auto min-w-0">
+                          <CalendarIcon className="h-3 w-3 mr-1" />
+                          {(() => {
+                            const end = new Date(absence.dateRange.end)
+                            return `${end.getDate().toString().padStart(2, '0')}/${(end.getMonth()+1).toString().padStart(2, '0')}/${end.getFullYear()}`
+                          })()}
+                        </span>
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 text-orange-800 font-semibold px-2 py-0.5 text-xs w-auto min-w-0">
+                        <CalendarIcon className="h-3 w-3 mr-1" />
+                        {(() => {
+                          const start = new Date(absence.dateRange.start)
+                          const end = new Date(absence.dateRange.end)
+                          const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                          return `${diff} ${diff === 1 ? 'dia' : 'dias'}`
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
                   {absence.createdAt && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-800 text-xs font-semibold mt-2">
                       <CalendarIcon className="h-3 w-3" /> Registrado em: {formatDateTime(absence.createdAt)}
@@ -875,6 +926,23 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     onChange={e => setFormData({ ...formData, endTime: e.target.value })}
                   />
                 </div>
+                {/* Mostrar quantidade de dias selecionados */}
+                {formData.startDate && formData.endDate && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    {(() => {
+                      const start = new Date(formData.startDate)
+                      const end = new Date(formData.endDate)
+                      const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                      if (diff > 1) {
+                        return `Período selecionado: ${diff} dias`
+                      } else if (diff === 1) {
+                        return `Período selecionado: 1 dia`
+                      } else {
+                        return null
+                      }
+                    })()}
+                  </div>
+                )}
               </div>
             )}
 
@@ -894,6 +962,17 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     onChange={e => setFormData({ ...formData, endDate: e.target.value })}
                   />
                 </div>
+                {/* Mostrar quantidade de dias de férias */}
+                {formData.startDate && formData.endDate && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    {(() => {
+                      const start = new Date(formData.startDate)
+                      const end = new Date(formData.endDate)
+                      const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                      return `Dias selecionados: ${diff}`
+                    })()}
+                  </div>
+                )}
               </div>
             )}
 

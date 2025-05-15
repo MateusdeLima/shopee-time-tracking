@@ -88,20 +88,20 @@ export function EmployeeManagement() {
 
   const handleDeleteEmployee = async () => {
     if (!employeeToDelete) return
-    try {
+      try {
       await deleteUser(employeeToDelete.id)
-      toast({
-        title: "Funcionário excluído",
-        description: "O funcionário foi excluído com sucesso",
-      })
+        toast({
+          title: "Funcionário excluído",
+          description: "O funcionário foi excluído com sucesso",
+        })
       setEmployees((prev) => prev.filter((emp) => emp.id !== employeeToDelete.id))
       setFilteredEmployees((prev) => prev.filter((emp) => emp.id !== employeeToDelete.id))
-    } catch (error: any) {
-      toast({
-        title: "Erro",
-        description: error.message || "Ocorreu um erro ao excluir o funcionário",
-        variant: "destructive",
-      })
+      } catch (error: any) {
+        toast({
+          title: "Erro",
+          description: error.message || "Ocorreu um erro ao excluir o funcionário",
+          variant: "destructive",
+        })
     } finally {
       setIsDeleteDialogOpen(false)
       setEmployeeToDelete(null)
@@ -290,18 +290,18 @@ export function EmployeeManagement() {
                             <Edit2 className="h-4 w-4 mr-2" />
                             Editar
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 px-2 text-red-500 hover:text-red-700 hover:bg-red-50"
                             onClick={() => {
                               setEmployeeToDelete(employee)
                               setIsDeleteDialogOpen(true)
                             }}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Excluir
-                          </Button>
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Excluir
+                        </Button>
                         </div>
                       </TableCell>
                     </TableRow>

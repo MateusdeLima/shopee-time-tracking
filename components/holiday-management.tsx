@@ -250,7 +250,7 @@ export function HolidayManagement() {
         <TabsContent value="active" className="space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <h3 className="text-lg font-medium">Configuração de um Feriado</h3>
-          </div>
+      </div>
 
       {loading ? (
         <div className="text-center p-6">

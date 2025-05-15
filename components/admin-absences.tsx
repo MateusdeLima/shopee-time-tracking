@@ -238,6 +238,19 @@ export function AdminAbsences() {
     }
   }
 
+  // Função auxiliar para contar dias
+  const getDaysCount = (absence: any) => {
+    if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
+      const start = new Date(absence.dateRange.start)
+      const end = new Date(absence.dateRange.end)
+      return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    } else if (absence.dates && absence.dates.length > 1) {
+      return absence.dates.length
+    } else {
+      return 1
+    }
+  }
+
   // Filtrar ausências
   const filteredAbsences = absences.filter((absence) => {
     // Filtrar por funcionário
@@ -577,6 +590,7 @@ export function AdminAbsences() {
                   <TableHead className="min-w-[180px]">Funcionário</TableHead>
                   <TableHead className="min-w-[120px]">Motivo</TableHead>
                   <TableHead className="min-w-[150px]">Período</TableHead>
+                  <TableHead className="min-w-[80px]">Qtd. Dias</TableHead>
                   <TableHead className="min-w-[100px]">Status</TableHead>
                   <TableHead className="min-w-[140px]">Registrado em</TableHead>
                   <TableHead className="w-[120px]">Ações</TableHead>
@@ -585,7 +599,7 @@ export function AdminAbsences() {
               <TableBody>
                 {filteredAbsences.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6 text-gray-500">
+                    <TableCell colSpan={7} className="text-center py-6 text-gray-500">
                       Nenhum registro encontrado
                     </TableCell>
                   </TableRow>
@@ -595,6 +609,7 @@ export function AdminAbsences() {
                       <TableCell className="font-medium">{getEmployeeName(absence.userId)}</TableCell>
                       <TableCell>{getReasonText(absence)}</TableCell>
                       <TableCell>{formatDateRange(absence)}</TableCell>
+                      <TableCell>{getDaysCount(absence)} {getDaysCount(absence) === 1 ? 'dia' : 'dias'}</TableCell>
                       <TableCell>
                         {absence.status === "approved" ? (
                           <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
@@ -681,6 +696,9 @@ export function AdminAbsences() {
                       ))}
                     </div>
                   )}
+                  <div className="text-xs text-gray-600 mt-2">
+                    {getDaysCount(selectedAbsence)} {getDaysCount(selectedAbsence) === 1 ? 'dia selecionado' : 'dias selecionados'}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -282,20 +282,20 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
           </DialogContent>
         </Dialog>
       )}
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <Clock className="mr-2 h-5 w-5" />
-            Registro de Horas Extras - {selectedHoliday.name}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {error && (
-            <Alert variant="destructive" className="mb-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle className="flex items-center">
+          <Clock className="mr-2 h-5 w-5" />
+          Registro de Horas Extras - {selectedHoliday.name}
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {error && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
           <div className="space-y-6">
             <div className="mb-6">
@@ -315,19 +315,19 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
               <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Coluna Antecipado */}
-                <div>
+          <div>
                   <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Antecipado</h4>
-                  <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
+            <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
                     {groupedOptions.antecipado.map((option: any) => (
                       <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
-                        <RadioGroupItem value={option.id} id={option.id} />
-                        <Label htmlFor={option.id} className="cursor-pointer">
+                  <RadioGroupItem value={option.id} id={option.id} />
+                  <Label htmlFor={option.id} className="cursor-pointer">
                           {option.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
+                  </Label>
                 </div>
+              ))}
+            </RadioGroup>
+          </div>
                 {/* Coluna Após o Expediente */}
                 <div>
                   <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Após o Expediente</h4>
@@ -367,8 +367,8 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
           >
             {loading ? "Processando..." : "Registrar Horas Extras"}
           </Button>
-        </CardContent>
-      </Card>
+      </CardContent>
+    </Card>
     </>
   )
 }

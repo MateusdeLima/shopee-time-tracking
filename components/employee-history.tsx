@@ -432,7 +432,7 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
                   <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs sm:text-sm w-fit">
                     <Clock className="h-3 w-3 mr-1" />
                     {formatHours(record.hours)} - {record.optionLabel}
-                  </Badge>
+                    </Badge>
                   {record.task && (
                     <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-orange-100 text-orange-800 text-xs font-semibold w-fit">
                       <ClipboardCheck className="h-3 w-3" /> Task: {record.task}
