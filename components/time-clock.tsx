@@ -9,6 +9,7 @@ import { toast } from "@/components/ui/use-toast"
 import { Clock, AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { determineOvertimeOption, getOvertimeRecordsByUserId, getUserHolidayStats } from "@/lib/db"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 interface OvertimeOption {
   id: string
@@ -125,6 +126,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
   const [success, setSuccess] = useState<boolean>(false)
   const [groupedOptions, setGroupedOptions] = useState<any>({ antecipado: [], apos: [], misto: [] })
   const [task, setTask] = useState<string>("")
+  const [isDeadlineDialogOpen, setIsDeadlineDialogOpen] = useState(false)
 
   useEffect(() => {
     if (user?.shift === "8-17" || user?.shift === "9-18") {
@@ -148,9 +150,16 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     }
   }
 
+  const isDeadlinePassed = selectedHoliday && new Date() > new Date(selectedHoliday.deadline)
+
   const handleRegisterOvertime = async () => {
     if (!selectedHoliday) {
       setError("Selecione um feriado para registrar horas extras")
+      return
+    }
+
+    if (isDeadlinePassed) {
+      setIsDeadlineDialogOpen(true)
       return
     }
 
@@ -249,79 +258,104 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
   }
 
   return (
-    <Card className="mt-6">
-      <CardHeader>
-        <CardTitle className="flex items-center">
-          <Clock className="mr-2 h-5 w-5" />
-          Registro de Horas Extras - {selectedHoliday.name}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {error && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+    <>
+      {isDeadlineDialogOpen && (
+        <Dialog open={isDeadlineDialogOpen} onOpenChange={setIsDeadlineDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Prazo Expirado</DialogTitle>
+            </DialogHeader>
+            <div className="py-4">
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  O prazo para registrar horas deste feriado já expirou.<br />
+                  Entre em contato com o administrador para mais informações.
+                </AlertDescription>
+              </Alert>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDeadlineDialogOpen(false)}>
+                Fechar
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <Clock className="mr-2 h-5 w-5" />
+            Registro de Horas Extras - {selectedHoliday.name}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {error && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-        <div className="space-y-6">
-          <div className="mb-6">
-            <Label htmlFor="task" className="font-medium">Qual task está atuando?</Label>
-            <input
-              id="task"
-              name="task"
-              type="text"
-              className="w-full border rounded px-3 py-2 mt-1"
-              placeholder="Descreva a task..."
-              value={task}
-              onChange={e => setTask(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Coluna Antecipado */}
-              <div>
-                <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Antecipado</h4>
-                <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
-                  {groupedOptions.antecipado.map((option: any) => (
-                    <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
-                      <RadioGroupItem value={option.id} id={option.id} />
-                      <Label htmlFor={option.id} className="cursor-pointer">
-                        {option.label}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-              {/* Coluna Após o Expediente */}
-              <div>
-                <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Após o Expediente</h4>
-                <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
-                  {groupedOptions.apos.map((option: any) => (
-                    <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
-                      <RadioGroupItem value={option.id} id={option.id} />
-                      <Label htmlFor={option.id} className="cursor-pointer">
-                        {option.label}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              </div>
-              {/* Coluna Misto */}
-              <div>
-                <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Misto</h4>
-                <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
-                  {groupedOptions.misto.map((option: any) => (
-                    <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
-                      <RadioGroupItem value={option.id} id={option.id} />
-                      <Label htmlFor={option.id} className="cursor-pointer">
-                        {option.label}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
+          <div className="space-y-6">
+            <div className="mb-6">
+              <Label htmlFor="task" className="font-medium">Qual task está atuando?</Label>
+              <input
+                id="task"
+                name="task"
+                type="text"
+                className="w-full border rounded px-3 py-2 mt-1"
+                placeholder="Descreva a task..."
+                value={task}
+                onChange={e => setTask(e.target.value)}
+                required
+              />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* Coluna Antecipado */}
+                <div>
+                  <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Antecipado</h4>
+                  <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
+                    {groupedOptions.antecipado.map((option: any) => (
+                      <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
+                        <RadioGroupItem value={option.id} id={option.id} />
+                        <Label htmlFor={option.id} className="cursor-pointer">
+                          {option.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+                {/* Coluna Após o Expediente */}
+                <div>
+                  <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Após o Expediente</h4>
+                  <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
+                    {groupedOptions.apos.map((option: any) => (
+                      <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
+                        <RadioGroupItem value={option.id} id={option.id} />
+                        <Label htmlFor={option.id} className="cursor-pointer">
+                          {option.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
+                {/* Coluna Misto */}
+                <div>
+                  <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Misto</h4>
+                  <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
+                    {groupedOptions.misto.map((option: any) => (
+                      <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
+                        <RadioGroupItem value={option.id} id={option.id} />
+                        <Label htmlFor={option.id} className="cursor-pointer">
+                          {option.label}
+                        </Label>
+                      </div>
+                    ))}
+                  </RadioGroup>
+                </div>
               </div>
             </div>
           </div>
@@ -333,9 +367,9 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
           >
             {loading ? "Processando..." : "Registrar Horas Extras"}
           </Button>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </>
   )
 }
 

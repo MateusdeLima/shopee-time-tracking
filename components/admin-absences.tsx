@@ -201,11 +201,16 @@ export function AdminAbsences() {
     URL.revokeObjectURL(url)
   }
 
-  const formatDate = (dateString: string) => {
-    // Criar uma nova data considerando que a string está em UTC
-    const [year, month, day] = dateString.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
-    return format(date, "dd/MM/yyyy", { locale: ptBR })
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return ""
+    if (dateStr.includes("T")) {
+      const [date, time] = dateStr.split("T")
+      const [year, month, day] = date.split("-")
+      return `${day}/${month}/${year} ${time.slice(0,5)}`
+    } else {
+      const [year, month, day] = dateStr.split("-")
+      return `${day}/${month}/${year}`
+    }
   }
 
   const getEmployeeName = (userId: string) => {
@@ -215,6 +220,7 @@ export function AdminAbsences() {
 
   const getReasonText = (absence: any) => {
     if (absence.reason === "medical") return "Consulta Médica"
+    if (absence.reason === "medical_certificate") return "Atestado Médico"
     if (absence.reason === "personal") return "Compromisso Pessoal"
     if (absence.reason === "vacation") return "Férias"
     return absence.customReason || "Outro"
@@ -222,17 +228,13 @@ export function AdminAbsences() {
 
   const formatDateRange = (absence: any) => {
     if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
-      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
-      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
-      const startDate = new Date(startYear, startMonth - 1, startDay)
-      const endDate = new Date(endYear, endMonth - 1, endDay)
-      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
+      return `De ${formatDateTime(absence.dateRange.start)} até ${formatDateTime(absence.dateRange.end)}`
     } else if (absence.dates.length > 1) {
       return `${absence.dates.length} dias`
+    } else if (absence.dates.length === 1) {
+      return formatDateTime(absence.dates[0])
     } else {
-      const [year, month, day] = absence.dates[0].split('-').map(Number)
-      const date = new Date(year, month - 1, day)
-      return format(date, "dd/MM/yyyy")
+      return "-"
     }
   }
 
@@ -500,7 +502,7 @@ export function AdminAbsences() {
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {filters.dateRange.from ? (
-                      format(filters.dateRange.from, "dd/MM/yyyy")
+                      formatDateTime(filters.dateRange.from.toISOString())
                     ) : (
                       "Data inicial"
                     )}
@@ -530,7 +532,7 @@ export function AdminAbsences() {
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {filters.dateRange.to ? (
-                      format(filters.dateRange.to, "dd/MM/yyyy")
+                      formatDateTime(filters.dateRange.to.toISOString())
                     ) : (
                       "Data final"
                     )}
@@ -669,14 +671,12 @@ export function AdminAbsences() {
 
                 <div>
                   <Label className="text-sm text-gray-500">Período</Label>
-                  <p className="font-medium">{formatDateRange(selectedAbsence)}</p>
-
                   {selectedAbsence.dates.length <= 7 && (
                     <div className="flex flex-wrap gap-2 mt-1">
                       {selectedAbsence.dates.map((date: string, index: number) => (
                         <Badge key={index} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                           <Calendar className="h-3 w-3 mr-1" />
-                          {formatDate(date)}
+                          {formatDateTime(date)}
                         </Badge>
                       ))}
                     </div>
@@ -686,7 +686,7 @@ export function AdminAbsences() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm text-gray-500">Registrado em</Label>
-                    <p>{format(parseISO(selectedAbsence.createdAt), "dd/MM/yyyy HH:mm")}</p>
+                    <p>{formatDateTime(selectedAbsence.createdAt)}</p>
                   </div>
                   <div>
                     <Label className="text-sm text-gray-500">Status</Label>

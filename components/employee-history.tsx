@@ -3,13 +3,13 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Edit2, Trash2, AlertCircle, Calendar, Clock, FileDown } from "lucide-react"
+import { Edit2, Trash2, AlertCircle, Calendar, Clock, FileDown, ClipboardCheck } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -45,6 +45,8 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
   const [error, setError] = useState("")
   const [holidayHoursMap, setHolidayHoursMap] = useState<Record<number, { used: number; max: number }>>({})
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [recordToDelete, setRecordToDelete] = useState<number | null>(null)
 
   useEffect(() => {
     // Carregar feriados
@@ -135,21 +137,17 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
     setIsEditing(true)
   }
 
-  const handleDelete = (recordId: number) => {
-    if (confirm("Tem certeza que deseja excluir este registro?")) {
-      // Excluir registro
-      deleteOvertimeRecord(recordId)
-
-      // Atualizar estado
-      const updatedUserRecords = records.filter((record) => record.id !== recordId)
+  const handleDelete = async () => {
+    if (recordToDelete === null) return
+    try {
+      await deleteOvertimeRecord(recordToDelete)
+      const updatedUserRecords = records.filter((record) => record.id !== recordToDelete)
       setRecords(updatedUserRecords)
-
       // Atualizar mapa de horas
-      const deletedRecord = records.find((record) => record.id === recordId)
+      const deletedRecord = records.find((record) => record.id === recordToDelete)
       if (deletedRecord) {
         const holidayId = deletedRecord.holidayId
         const currentHoursInfo = holidayHoursMap[holidayId]
-
         if (currentHoursInfo) {
           setHolidayHoursMap({
             ...holidayHoursMap,
@@ -160,11 +158,19 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
           })
         }
       }
-
       toast({
         title: "Registro excluído",
         description: "O registro de horas extras foi excluído com sucesso",
       })
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Ocorreu um erro ao excluir o registro",
+        variant: "destructive",
+      })
+    } finally {
+      setIsDeleteDialogOpen(false)
+      setRecordToDelete(null)
     }
   }
 
@@ -415,46 +421,71 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
 
         return (
           <Card key={record.id} className="p-4 hover:shadow-md transition-shadow">
-            <div className="flex flex-col sm:flex-row justify-between gap-4">
-              <div>
-                  <h4 className="font-medium text-[#EE4D2D]">{record.holidayName}</h4>
-                <div className="flex items-center text-sm text-gray-600 mt-1">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+              <div className="flex-1 min-w-0">
+                <h4 className="font-medium text-[#EE4D2D] text-base sm:text-lg break-words">{record.holidayName}</h4>
+                <div className="flex items-center text-xs sm:text-sm text-gray-600 mt-1">
                   <Calendar className="h-3.5 w-3.5 mr-1" />
                   {formatDate(record.date)}
                 </div>
-                <div className="mt-2">
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+                <div className="mt-2 flex flex-col gap-2">
+                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs sm:text-sm w-fit">
                     <Clock className="h-3 w-3 mr-1" />
                     {formatHours(record.hours)} - {record.optionLabel}
                   </Badge>
                   {record.task && (
-                    <div className="text-xs text-gray-700 italic mt-1">Task: {record.task}</div>
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-orange-100 text-orange-800 text-xs font-semibold w-fit">
+                      <ClipboardCheck className="h-3 w-3" /> Task: {record.task}
+                    </span>
                   )}
                 </div>
               </div>
-              <div className="flex flex-col justify-between items-end">
-                <div className="text-sm text-gray-500">
-                  {formatDate(record.createdAt)}
-                  {record.updatedAt && record.updatedAt !== record.createdAt && (
-                    <span className="text-xs"> (Editado: {formatDate(record.updatedAt)})</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                    onClick={() => handleDelete(record.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                    <span className="sr-only">Excluir registro</span>
-                  </Button>
-                </div>
+              <div className="flex flex-row sm:flex-col justify-between items-end sm:items-end gap-2 sm:gap-0 mt-2 sm:mt-0">
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-800 text-xs font-semibold">
+                  <Calendar className="h-3 w-3" /> Registrado em: {formatDate(record.createdAt)}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                  onClick={() => {
+                    setRecordToDelete(record.id)
+                    setIsDeleteDialogOpen(true)
+                  }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span className="sr-only">Excluir registro</span>
+                </Button>
               </div>
             </div>
           </Card>
         )
       })}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir Registro de Hora Extra</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>Você está prestes a excluir este registro de hora extra.</p>
+            <Alert className="mt-4" variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Esta ação não pode ser desfeita. Todos os dados relacionados a este registro serão permanentemente excluídos.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDelete}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Confirmar Exclusão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

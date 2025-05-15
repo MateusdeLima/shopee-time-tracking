@@ -213,10 +213,8 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
       throw new Error("Email já cadastrado")
     }
 
-    // Gerar username único baseado no nome
-    const firstName = user.firstName.toLowerCase().replace(/[^a-z]/g, "")
-    const lastName = user.lastName.toLowerCase().replace(/[^a-z]/g, "")
-    const baseUsername = `${firstName}.${lastName}`
+    // Gerar username único baseado no email (parte antes do @)
+    const baseUsername = user.email.split("@")[0]
     let username = baseUsername
     let counter = 1
 
@@ -427,6 +425,14 @@ export async function toggleHolidayStatus(id: number): Promise<Holiday> {
 
   // Atualizar status
   return await updateHoliday(id, { active: !holiday.active })
+}
+
+export async function deleteHoliday(id: number): Promise<void> {
+  const { error } = await supabase.from("holidays").delete().eq("id", id)
+  if (error) {
+    console.error("Erro ao excluir feriado:", error)
+    throw new Error("Falha ao excluir feriado")
+  }
 }
 
 // Funções para registros de horas extras
@@ -735,7 +741,12 @@ export async function createAbsenceRecord(
   record: Omit<AbsenceRecord, "id" | "createdAt" | "expiresAt">,
 ): Promise<AbsenceRecord> {
   // Calcular data de expiração (30 dias após a primeira data)
-  const firstDate = new Date(record.dates[0])
+  // Aceitar datas com hora (YYYY-MM-DDTHH:mm) ou só data (YYYY-MM-DD)
+  let firstDateStr = record.dates[0]
+  if (firstDateStr.includes("T")) {
+    firstDateStr = firstDateStr.split("T")[0]
+  }
+  const firstDate = new Date(firstDateStr)
   const expiresAt = new Date(firstDate)
   expiresAt.setDate(expiresAt.getDate() + 30)
 
