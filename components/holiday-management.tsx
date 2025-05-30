@@ -503,13 +503,15 @@ export function HolidayManagement() {
                     {formData.date ? format(formData.date, "dd/MM/yyyy") : "Selecione uma data"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.date}
-                    onSelect={(date) => handleDateChange(date, "date")}
-                    initialFocus
-                  />
+                <PopoverContent className="w-auto p-0 sm:w-auto sm:p-0 max-w-[95vw] sm:max-w-xs" sideOffset={4} align="center" style={{ minWidth: '260px', width: '100%', maxWidth: 360 }}>
+                  <div className="flex justify-center items-center w-full overflow-x-auto">
+                    <Calendar
+                      mode="single"
+                      selected={formData.date}
+                      onSelect={(date) => handleDateChange(date, "date")}
+                      initialFocus
+                    />
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
@@ -529,13 +531,15 @@ export function HolidayManagement() {
                     {formData.deadline ? format(formData.deadline, "dd/MM/yyyy") : "Selecione uma data"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.deadline}
-                    onSelect={(date) => handleDateChange(date, "deadline")}
-                    initialFocus
-                  />
+                <PopoverContent className="w-auto p-0 sm:w-auto sm:p-0 max-w-[95vw] sm:max-w-xs" sideOffset={4} align="center" style={{ minWidth: '260px', width: '100%', maxWidth: 360 }}>
+                  <div className="flex justify-center items-center w-full overflow-x-auto">
+                    <Calendar
+                      mode="single"
+                      selected={formData.deadline}
+                      onSelect={(date) => handleDateChange(date, "deadline")}
+                      initialFocus
+                    />
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
@@ -605,13 +609,15 @@ export function HolidayManagement() {
                     {formData.date ? format(formData.date, "dd/MM/yyyy") : "Selecione uma data"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.date}
-                    onSelect={(date) => handleDateChange(date, "date")}
-                    initialFocus
-                  />
+                <PopoverContent className="w-auto p-0 sm:w-auto sm:p-0 max-w-[95vw] sm:max-w-xs" sideOffset={4} align="center" style={{ minWidth: '260px', width: '100%', maxWidth: 360 }}>
+                  <div className="flex justify-center items-center w-full overflow-x-auto">
+                    <Calendar
+                      mode="single"
+                      selected={formData.date}
+                      onSelect={(date) => handleDateChange(date, "date")}
+                      initialFocus
+                    />
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>
@@ -631,13 +637,15 @@ export function HolidayManagement() {
                     {formData.deadline ? format(formData.deadline, "dd/MM/yyyy") : "Selecione uma data"}
                   </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.deadline}
-                    onSelect={(date) => handleDateChange(date, "deadline")}
-                    initialFocus
-                  />
+                <PopoverContent className="w-auto p-0 sm:w-auto sm:p-0 max-w-[95vw] sm:max-w-xs" sideOffset={4} align="center" style={{ minWidth: '260px', width: '100%', maxWidth: 360 }}>
+                  <div className="flex justify-center items-center w-full overflow-x-auto">
+                    <Calendar
+                      mode="single"
+                      selected={formData.deadline}
+                      onSelect={(date) => handleDateChange(date, "deadline")}
+                      initialFocus
+                    />
+                  </div>
                 </PopoverContent>
               </Popover>
             </div>

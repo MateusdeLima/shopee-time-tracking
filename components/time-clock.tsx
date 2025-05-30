@@ -40,6 +40,7 @@ function getOvertimeOptionsByShift(shift: "8-17" | "9-18") {
       { id: "7h_18h", label: "Entrar 7h, sair 18h (1h antes + 1h depois)", value: 2 },
       { id: "7h30_18h30", label: "Entrar 7h30, sair 18h30 (30min antes + 1h30 depois)", value: 2 },
       { id: "6h30_17h30", label: "Entrar 6h30, sair 17h30 (1h30 antes + 30min depois)", value: 2 },
+      { id: "7h30_17h30", label: "Entrar 7h30, sair 17h30 (30min antes + 30min depois)", value: 1 },
     ]
   } else {
     return [
@@ -57,6 +58,7 @@ function getOvertimeOptionsByShift(shift: "8-17" | "9-18") {
       { id: "8h_19h", label: "Entrar 8h, sair 19h (1h antes + 1h depois)", value: 2 },
       { id: "8h30_19h30", label: "Entrar 8h30, sair 19h30 (30min antes + 1h30 depois)", value: 2 },
       { id: "7h30_18h30", label: "Entrar 7h30, sair 18h30 (1h30 antes + 30min depois)", value: 2 },
+      { id: "8h30_18h30", label: "Entrar 8h30, sair 18h30 (30min antes + 30min depois)", value: 1 },
     ]
   }
 }
@@ -80,6 +82,7 @@ function getOvertimeOptionsByShiftGrouped(shift: "8-17" | "9-18") {
         { id: "7h_18h", label: "Entrar 7h, sair 18h (1h antes + 1h depois)", value: 2 },
         { id: "7h30_18h30", label: "Entrar 7h30, sair 18h30 (30min antes + 1h30 depois)", value: 2 },
         { id: "6h30_17h30", label: "Entrar 6h30, sair 17h30 (1h30 antes + 30min depois)", value: 2 },
+        { id: "7h30_17h30", label: "Entrar 7h30, sair 17h30 (30min antes + 30min depois)", value: 1 },
       ],
     }
   } else {
@@ -100,6 +103,7 @@ function getOvertimeOptionsByShiftGrouped(shift: "8-17" | "9-18") {
         { id: "8h_19h", label: "Entrar 8h, sair 19h (1h antes + 1h depois)", value: 2 },
         { id: "8h30_19h30", label: "Entrar 8h30, sair 19h30 (30min antes + 1h30 depois)", value: 2 },
         { id: "7h30_18h30", label: "Entrar 7h30, sair 18h30 (1h30 antes + 30min depois)", value: 2 },
+        { id: "8h30_18h30", label: "Entrar 8h30, sair 18h30 (30min antes + 30min depois)", value: 1 },
       ],
     }
   }
