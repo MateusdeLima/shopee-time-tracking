@@ -232,7 +232,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
 
       toast({
         title: "Horas extras registradas",
-        description: `Foram registradas ${option.value === 0.5 ? "30 min" : `${option.value}h`} extras (${option.label}). Total: ${horasRegistradas + option.value === 0.5 ? "30 min" : `${horasRegistradas + option.value}h`} de ${horasMaximas}h`,
+        description: `Foram registradas ${option.value === 0.5 ? "30 min" : `${option.value}h`} extras (${formatTimeString(startTime)} - ${formatTimeString(endTime)}). Total: ${horasRegistradas + option.value === 0.5 ? "30 min" : `${horasRegistradas + option.value}h`} de ${horasMaximas}h`,
       })
     } catch (error: any) {
       toast({
@@ -252,9 +252,24 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     // Remover sufixos _9h e _8h dos IDs
     const baseId = optionId.replace(/_[89]h$/, "")
     const [start, end] = baseId.split("_")
-    const startTime = start.replace("h", ":00")
-    const endTime = end.replace("h", ":00")
+    // Corrigir para 07:30, 17:30, 07:00, etc
+    function parseHour(h: string) {
+      if (h.includes("h")) {
+        const [hour, min] = h.split("h")
+        return `${hour.padStart(2, "0")}:${min ? min.padEnd(2, "0") : "00"}`
+      }
+      return h
+    }
+    const startTime = parseHour(start)
+    const endTime = parseHour(end)
     return [startTime, endTime]
+  }
+
+  // Função utilitária para formatar horário (ex: '17:00' ou '17:30')
+  function formatTimeString(time: string) {
+    if (!time) return "";
+    const [hour, minute] = time.split(":");
+    return `${hour}:${minute}`;
   }
 
   if (!selectedHoliday) {
