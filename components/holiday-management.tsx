@@ -490,58 +490,24 @@ export function HolidayManagement() {
 
             <div className="grid gap-2">
               <Label>Data do Feriado</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.date && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.date ? format(formData.date, "dd/MM/yyyy") : "Selecione uma data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 sm:w-auto sm:p-0 max-w-[95vw] sm:max-w-xs" sideOffset={4} align="center" style={{ minWidth: '260px', width: '100%', maxWidth: 360 }}>
-                  <div className="flex justify-center items-center w-full overflow-x-auto">
-                    <Calendar
-                      mode="single"
-                      selected={formData.date}
-                      onSelect={(date) => handleDateChange(date, "date")}
-                      initialFocus
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                name="date"
+                value={formData.date ? format(formData.date, "yyyy-MM-dd") : ""}
+                onChange={e => handleDateChange(new Date(e.target.value), "date")}
+                required
+              />
             </div>
 
             <div className="grid gap-2">
               <Label>Prazo para Cumprimento</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.deadline && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.deadline ? format(formData.deadline, "dd/MM/yyyy") : "Selecione uma data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 sm:w-auto sm:p-0 max-w-[95vw] sm:max-w-xs" sideOffset={4} align="center" style={{ minWidth: '260px', width: '100%', maxWidth: 360 }}>
-                  <div className="flex justify-center items-center w-full overflow-x-auto">
-                    <Calendar
-                      mode="single"
-                      selected={formData.deadline}
-                      onSelect={(date) => handleDateChange(date, "deadline")}
-                      initialFocus
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                name="deadline"
+                value={formData.deadline ? format(formData.deadline, "yyyy-MM-dd") : ""}
+                onChange={e => handleDateChange(new Date(e.target.value), "deadline")}
+                required
+              />
             </div>
 
             <div className="grid gap-2">
@@ -563,11 +529,11 @@ export function HolidayManagement() {
               <Label htmlFor="active">Feriado Ativo</Label>
             </div>
 
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4 w-full">
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="w-full sm:w-auto">
                 Cancelar
               </Button>
-              <Button className="bg-[#EE4D2D] hover:bg-[#D23F20]" onClick={() => saveHoliday(false)}>
+              <Button className="bg-[#EE4D2D] hover:bg-[#D23F20] w-full sm:w-auto" onClick={() => saveHoliday(false)}>
                 Adicionar Feriado
               </Button>
             </div>
@@ -596,58 +562,24 @@ export function HolidayManagement() {
 
             <div className="grid gap-2">
               <Label>Data do Feriado</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.date && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.date ? format(formData.date, "dd/MM/yyyy") : "Selecione uma data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 sm:w-auto sm:p-0 max-w-[95vw] sm:max-w-xs" sideOffset={4} align="center" style={{ minWidth: '260px', width: '100%', maxWidth: 360 }}>
-                  <div className="flex justify-center items-center w-full overflow-x-auto">
-                    <Calendar
-                      mode="single"
-                      selected={formData.date}
-                      onSelect={(date) => handleDateChange(date, "date")}
-                      initialFocus
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                name="date"
+                value={formData.date ? format(formData.date, "yyyy-MM-dd") : ""}
+                onChange={e => handleDateChange(new Date(e.target.value), "date")}
+                required
+              />
             </div>
 
             <div className="grid gap-2">
               <Label>Prazo para Cumprimento</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.deadline && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.deadline ? format(formData.deadline, "dd/MM/yyyy") : "Selecione uma data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 sm:w-auto sm:p-0 max-w-[95vw] sm:max-w-xs" sideOffset={4} align="center" style={{ minWidth: '260px', width: '100%', maxWidth: 360 }}>
-                  <div className="flex justify-center items-center w-full overflow-x-auto">
-                    <Calendar
-                      mode="single"
-                      selected={formData.deadline}
-                      onSelect={(date) => handleDateChange(date, "deadline")}
-                      initialFocus
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                name="deadline"
+                value={formData.deadline ? format(formData.deadline, "yyyy-MM-dd") : ""}
+                onChange={e => handleDateChange(new Date(e.target.value), "deadline")}
+                required
+              />
             </div>
 
             <div className="grid gap-2">
@@ -669,11 +601,11 @@ export function HolidayManagement() {
               <Label htmlFor="edit-active">Feriado Ativo</Label>
             </div>
 
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4 w-full">
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full sm:w-auto">
                 Cancelar
               </Button>
-              <Button className="bg-[#EE4D2D] hover:bg-[#D23F20]" onClick={() => saveHoliday(true)}>
+              <Button className="bg-[#EE4D2D] hover:bg-[#D23F20] w-full sm:w-auto" onClick={() => saveHoliday(true)}>
                 Salvar Alterações
               </Button>
             </div>
