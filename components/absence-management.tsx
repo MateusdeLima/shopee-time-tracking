@@ -552,9 +552,20 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       doc.text(`Email: ${user.email}`, 14, 32)
       doc.text(`Data do relatório: ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}`, 14, 39)
 
+      // Helpers seguros
+      const safeParseISO = (value?: string) => {
+        if (!value) return null
+        const ts = Date.parse(value)
+        return Number.isNaN(ts) ? null : new Date(ts)
+      }
+      const formatCreated = (value?: string, pattern = "dd/MM/yyyy") => {
+        const d = safeParseISO(value)
+        try { return d ? format(d, pattern, { locale: ptBR }) : "-" } catch { return "-" }
+      }
+
       // Agrupar ausências por mês
       const groupedAbsences = absences.reduce((acc, absence) => {
-        const date = parseISO(absence.createdAt)
+        const date = safeParseISO(absence.createdAt) || new Date()
         const monthYear = format(date, "MMMM yyyy", { locale: ptBR })
         
         if (!acc[monthYear]) {
@@ -577,7 +588,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         
         // Preparar dados para a tabela
         const tableData = (monthAbsences as typeof absences).map((absence: typeof absences[0]) => [
-          format(parseISO(absence.createdAt), "dd/MM/yyyy"),
+          formatCreated(absence.createdAt, "dd/MM/yyyy"),
           getReasonLabel(absence),
           formatDateRange(absence),
           absence.status === "approved" ? "Aprovado" :
@@ -730,7 +741,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <p className="text-xs text-gray-500 order-2 sm:order-1">
-                      Registrado em: {format(parseISO(absence.createdAt), "dd/MM/yyyy")}
+                      Registrado em: {(() => { try { const ts = Date.parse(absence.createdAt); return Number.isNaN(ts) ? "-" : format(new Date(ts), "dd/MM/yyyy") } catch { return "-" } })()}
                     </p>
 
                     <div className="flex flex-wrap gap-2 order-1 sm:order-2 w-full sm:w-auto">

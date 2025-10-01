@@ -343,11 +343,21 @@ export function AdminAbsences() {
       }
 
       // Formatar dados para exportação
+      const safeParseISO = (value?: string) => {
+        if (!value) return null
+        const ts = Date.parse(value)
+        return Number.isNaN(ts) ? null : new Date(ts)
+      }
+      const formatCreated = (value?: string, pattern = "dd/MM/yyyy") => {
+        const d = safeParseISO(value)
+        try { return d ? format(d, pattern) : "-" } catch { return "-" }
+      }
+
       const data = absencesToExport.map(absence => ({
         funcionario: getEmployeeName(absence.userId).split(' (')[0], // Remove o email
         motivo: getReasonText(absence),
         periodo: formatDateRange(absence),
-        data_registro: format(parseISO(absence.createdAt), "dd/MM/yyyy"),
+        data_registro: formatCreated(absence.createdAt, "dd/MM/yyyy"),
         status: absence.status === "approved" ? "Aprovado" : 
                absence.status === "completed" ? "Comprovante Enviado" : "Pendente",
         comprovante: absence.proofDocument ? "Sim" : "Não"
@@ -620,7 +630,7 @@ export function AdminAbsences() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>{format(parseISO(absence.createdAt), "dd/MM/yyyy")}</TableCell>
+                      <TableCell>{(() => { try { const ts = Date.parse(absence.createdAt); return Number.isNaN(ts) ? "-" : format(new Date(ts), "dd/MM/yyyy") } catch { return "-" } })()}</TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
                           <Button
@@ -695,7 +705,7 @@ export function AdminAbsences() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm text-gray-500">Registrado em</Label>
-                    <p>{format(parseISO(selectedAbsence.createdAt), "dd/MM/yyyy HH:mm")}</p>
+                    <p>{(() => { try { const ts = Date.parse(selectedAbsence.createdAt); return Number.isNaN(ts) ? "-" : format(new Date(ts), "dd/MM/yyyy HH:mm") } catch { return "-" } })()}</p>
                   </div>
                   <div>
                     <Label className="text-sm text-gray-500">Status</Label>
