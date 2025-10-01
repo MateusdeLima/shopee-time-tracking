@@ -905,145 +905,20 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
             {formData.reason !== "vacation" && (
             <div className="space-y-2">
-<<<<<<< HEAD
-              <Label>Datas de Ausência</Label>
-              <p className="text-xs text-gray-500 mb-2">
-                {formData.reason === "energy"
-                  ? (formData.dateRange.start && !formData.dateRange.end
-                      ? "Para Energia/Internet a data final é opcional. Selecione-a apenas quando o serviço voltar."
-                      : "Selecione a data de início; a data de fim é opcional para Energia/Internet.")
-                  : (formData.dateRange.start && !formData.dateRange.end
-                      ? "Selecione a data final para criar um intervalo"
-                      : "Selecione a data inicial e depois a data final para criar um intervalo")}
-              </p>
-              <Popover 
-                open={isCalendarOpen} 
-                onOpenChange={setIsCalendarOpen}
-                modal={isMobile}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal relative",
-                      !formData.dates.length && "text-muted-foreground",
-                    )}
-                    onClick={() => setIsCalendarOpen(true)}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.dateRange.start && formData.dateRange.end
-                      ? `De ${format(formData.dateRange.start, "dd/MM/yyyy")} até ${format(formData.dateRange.end, "dd/MM/yyyy")}`
-                      : formData.dateRange.start
-                        ? `Início: ${format(formData.dateRange.start, "dd/MM/yyyy")} - Selecione o fim`
-                        : "Selecione as datas"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent 
-                  className={cn(
-                    "p-0 absolute z-50",
-                    isMobile ? "w-screen h-screen max-w-none max-h-none fixed top-0 left-0 -translate-x-0 -translate-y-0 rounded-none" : "w-auto"
-                  )}
-                  align={isMobile ? "center" : "start"}
-                  side="bottom"
-                  sideOffset={isMobile ? 0 : 5}
-                  avoidCollisions
-                >
-                  <div className={cn(
-                    "p-3 bg-white rounded-lg shadow-lg",
-                    isMobile && "h-full flex flex-col justify-between rounded-none"
-                  )}>
-                    {isMobile && (
-                      <div className="p-2 border-b flex justify-end sticky top-0 bg-white z-10">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setIsCalendarOpen(false)}
-                          className="w-full bg-[#EE4D2D] hover:bg-[#D23F20] text-white"
-                        >
-                          Fechar
-                        </Button>
-                      </div>
-                    )}
-                    <Calendar
-                      mode="single"
-                      selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
-                      onSelect={(date) => {
-                        handleDateSelect(date)
-                        if (formData.dateRange.start && date) {
-                          setIsCalendarOpen(false)
-                        }
-                      }}
-                      initialFocus
-                      className={cn(
-                        "rounded-md border shadow-md w-full touch-manipulation",
-                        isMobile && "text-base flex-1"
-                      )}
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {formData.dates.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm font-medium">
-                    {formData.dates.length} {formData.dates.length === 1 ? "dia selecionado" : "dias selecionados"}
-                  </p>
-
-                  {formData.dates.length <= 5 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {formData.dates.map((date, index) => (
-                        <Badge key={index} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                          {format(date, "dd/MM/yyyy")}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
-=======
-                <Label>Início da ausência</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="date"
-                    value={formData.startDate || ""}
-                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
-                  />
-                  <Input
-                    type="time"
-                    value={formData.startTime || ""}
-                    onChange={e => setFormData({ ...formData, startTime: e.target.value })}
-                  />
->>>>>>> 5d67d83fbf2d682e455d16acd12364bc8bdbb3c9
-                </div>
-                <Label className="mt-2">Fim da ausência</Label>
-                <div className="flex gap-2">
-                  <Input
-                    type="date"
-                    value={formData.endDate || ""}
-                    onChange={e => setFormData({ ...formData, endDate: e.target.value })}
-                  />
-                  <Input
-                    type="time"
-                    value={formData.endTime || ""}
-                    onChange={e => setFormData({ ...formData, endTime: e.target.value })}
-                  />
-                </div>
-                {/* Mostrar quantidade de dias selecionados */}
-                {formData.startDate && formData.endDate && (
-                  <div className="text-xs text-gray-600 mt-1">
-                    {(() => {
-                      const start = new Date(formData.startDate)
-                      const end = new Date(formData.endDate)
-                      const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
-                      if (diff > 1) {
-                        return `Período selecionado: ${diff} dias`
-                      } else if (diff === 1) {
-                        return `Período selecionado: 1 dia`
-                      } else {
-                        return null
-                      }
-                    })()}
-                  </div>
-                )}
+              <Label>Início da ausência</Label>
+              <div className="flex gap-2">
+                <Input
+                  type="date"
+                  value={formData.startDate || ""}
+                  onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                />
+                <Input
+                  type="time"
+                  value={formData.startTime || ""}
+                  onChange={e => setFormData({ ...formData, startTime: e.target.value })}
+                />
               </div>
+            </div>
             )}
 
             {formData.reason === "vacation" && (
