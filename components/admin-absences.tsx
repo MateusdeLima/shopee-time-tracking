@@ -201,13 +201,10 @@ export function AdminAbsences() {
     URL.revokeObjectURL(url)
   }
 
-  const formatDate = (dateString: string | undefined | null) => {
-    if (!dateString || typeof dateString !== "string" || !dateString.includes("-")) return "-"
-    const parts = dateString.split('-').map(Number)
-    if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return "-"
-    const [year, month, day] = parts
-    const date = new Date(year, (month || 1) - 1, day || 1)
-    if (isNaN(date.getTime())) return "-"
+  const formatDate = (dateString: string) => {
+    // Criar uma nova data considerando que a string está em UTC
+    const [year, month, day] = dateString.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
     return format(date, "dd/MM/yyyy", { locale: ptBR })
   }
 
@@ -218,31 +215,25 @@ export function AdminAbsences() {
 
   const getReasonText = (absence: any) => {
     if (absence.reason === "medical") return "Consulta Médica"
-    if (absence.reason === "energy_internet") return "Energia/Internet"
+    if (absence.reason === "personal") return "Compromisso Pessoal"
     if (absence.reason === "vacation") return "Férias"
     return absence.customReason || "Outro"
   }
 
   const formatDateRange = (absence: any) => {
-    const startStr = absence?.dateRange?.start as string | undefined
-    const endStr = absence?.dateRange?.end as string | undefined
-
-    if (startStr && endStr) {
-      return `De ${formatDate(startStr)} até ${formatDate(endStr)}`
+    if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
+      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
+      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
+      const startDate = new Date(startYear, startMonth - 1, startDay)
+      const endDate = new Date(endYear, endMonth - 1, endDay)
+      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
+    } else if (absence.dates.length > 1) {
+      return `${absence.dates.length} dias`
+    } else {
+      const [year, month, day] = absence.dates[0].split('-').map(Number)
+      const date = new Date(year, month - 1, day)
+      return format(date, "dd/MM/yyyy")
     }
-
-    if (startStr && !endStr) {
-      return `${formatDate(startStr)}`
-    }
-
-    const dates: string[] = Array.isArray(absence?.dates) ? absence.dates : []
-    if (dates.length > 1) {
-      return `${dates.length} dias`
-    }
-    if (dates.length === 1) {
-      return formatDate(dates[0])
-    }
-    return "-"
   }
 
   // Filtrar ausências
@@ -343,21 +334,11 @@ export function AdminAbsences() {
       }
 
       // Formatar dados para exportação
-      const safeParseISO = (value?: string) => {
-        if (!value) return null
-        const ts = Date.parse(value)
-        return Number.isNaN(ts) ? null : new Date(ts)
-      }
-      const formatCreated = (value?: string, pattern = "dd/MM/yyyy") => {
-        const d = safeParseISO(value)
-        try { return d ? format(d, pattern) : "-" } catch { return "-" }
-      }
-
       const data = absencesToExport.map(absence => ({
         funcionario: getEmployeeName(absence.userId).split(' (')[0], // Remove o email
         motivo: getReasonText(absence),
         periodo: formatDateRange(absence),
-        data_registro: formatCreated(absence.createdAt, "dd/MM/yyyy"),
+        data_registro: format(parseISO(absence.createdAt), "dd/MM/yyyy"),
         status: absence.status === "approved" ? "Aprovado" : 
                absence.status === "completed" ? "Comprovante Enviado" : "Pendente",
         comprovante: absence.proofDocument ? "Sim" : "Não"
@@ -630,7 +611,7 @@ export function AdminAbsences() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>{(() => { try { const ts = Date.parse(absence.createdAt); return Number.isNaN(ts) ? "-" : format(new Date(ts), "dd/MM/yyyy") } catch { return "-" } })()}</TableCell>
+                      <TableCell>{format(parseISO(absence.createdAt), "dd/MM/yyyy")}</TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
                           <Button
@@ -705,7 +686,7 @@ export function AdminAbsences() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm text-gray-500">Registrado em</Label>
-                    <p>{(() => { try { const ts = Date.parse(selectedAbsence.createdAt); return Number.isNaN(ts) ? "-" : format(new Date(ts), "dd/MM/yyyy HH:mm") } catch { return "-" } })()}</p>
+                    <p>{format(parseISO(selectedAbsence.createdAt), "dd/MM/yyyy HH:mm")}</p>
                   </div>
                   <div>
                     <Label className="text-sm text-gray-500">Status</Label>
@@ -754,24 +735,20 @@ export function AdminAbsences() {
                       </Button>
                     </div>
                   </div>
-                      ) : selectedAbsence.reason === "vacation" && selectedAbsence.status === "pending" ? (
+                ) : selectedAbsence.reason === "vacation" && selectedAbsence.status === "pending" ? (
                   <Alert className="bg-yellow-50 text-yellow-700 border-yellow-200">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>Esta solicitação de férias está aguardando sua aprovação.</AlertDescription>
                   </Alert>
-                  ) : selectedAbsence.reason === "vacation" && selectedAbsence.status === "approved" ? (
+                ) : selectedAbsence.reason === "vacation" && selectedAbsence.status === "approved" ? (
                   <Alert className="bg-green-50 text-green-700 border-green-200">
                     <Check className="h-4 w-4" />
                     <AlertDescription>Esta solicitação de férias foi aprovada.</AlertDescription>
                   </Alert>
-                  ) : (
+                ) : (
                   <Alert className="bg-yellow-50 text-yellow-700 border-yellow-200">
                     <AlertCircle className="h-4 w-4" />
-                        <AlertDescription>
-                          {selectedAbsence.reason === "energy_internet"
-                            ? "Aguardando envio do protocolo de ausência de energia/internet para conclusão."
-                            : "Nenhum comprovante foi enviado para esta ausência."}
-                        </AlertDescription>
+                    <AlertDescription>Nenhum comprovante foi enviado para esta ausência.</AlertDescription>
                   </Alert>
                 )}
 

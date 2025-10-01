@@ -26,7 +26,7 @@ import autoTable from 'jspdf-autotable'
 
 const ABSENCE_REASONS = [
   { id: "medical", label: "Consulta Médica" },
-  { id: "energy_internet", label: "Energia/Internet" },
+  { id: "personal", label: "Compromisso Pessoal" },
   { id: "vacation", label: "Férias" },
   { id: "other", label: "Outro" },
 ]
@@ -255,14 +255,12 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return
     }
 
-    // Para Energia/Internet permitimos apenas a data inicial (fim opcional)
     if (formData.dates.length === 0) {
-      setError("Selecione pelo menos a data inicial para a ausência")
+      setError("Selecione pelo menos uma data para a ausência")
       return
     }
 
-    // Para Energia/Internet, se houver datas passadas e não tiver comprovante, mantém pendente para posterior anexação
-    if (hasPastDates() && !formData.proofDocument && formData.reason !== "energy_internet") {
+    if (hasPastDates() && !formData.proofDocument) {
       setError("É necessário anexar um comprovante para datas passadas")
       return
     }
@@ -272,11 +270,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       const formattedDates = formData.dates.map((date) => format(date, "yyyy-MM-dd"))
 
       // Determinar o status inicial com base no motivo e se há comprovante
-      const initialStatus = formData.reason === "vacation"
-        ? "pending"
-        : formData.reason === "energy_internet"
-          ? (formData.proofDocument ? "completed" : "pending")
-          : (formData.proofDocument ? "completed" : "pending")
+      const initialStatus = formData.reason === "vacation" ? "pending" : 
+                          formData.proofDocument ? "completed" : "pending"
 
       // Criar novo registro de ausência
       const newAbsence = await createAbsenceRecord({
@@ -285,12 +280,11 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         customReason: formData.reason === "other" ? formData.customReason : undefined,
         dates: formattedDates,
         status: initialStatus,
-        // Para Energia/Internet, a data final é opcional
         dateRange:
-          formData.dateRange.start
+          formData.dateRange.start && formData.dateRange.end
             ? {
                 start: format(formData.dateRange.start, "yyyy-MM-dd"),
-                end: formData.dateRange.end ? format(formData.dateRange.end, "yyyy-MM-dd") : undefined as any,
+                end: format(formData.dateRange.end, "yyyy-MM-dd"),
               }
             : undefined,
         proofDocument: formData.proofDocument || undefined,
@@ -402,13 +396,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
   }
 
-  const formatDate = (dateString: string | undefined | null) => {
-    if (!dateString || typeof dateString !== "string" || !dateString.includes("-")) return "-"
-    const parts = dateString.split('-').map(Number)
-    if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return "-"
-    const [year, month, day] = parts
-    const date = new Date(year, (month || 1) - 1, day || 1)
-    if (isNaN(date.getTime())) return "-"
+  const formatDate = (dateString: string) => {
+    // Criar uma nova data considerando que a string está em UTC
+    const [year, month, day] = dateString.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
     return format(date, "dd/MM/yyyy", { locale: ptBR })
   }
 
@@ -464,25 +455,19 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   }
 
   const formatDateRange = (absence: any) => {
-    const startStr = absence?.dateRange?.start as string | undefined
-    const endStr = absence?.dateRange?.end as string | undefined
-
-    if (startStr && endStr) {
-      return `De ${formatDate(startStr)} até ${formatDate(endStr)}`
+    if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
+      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
+      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
+      const startDate = new Date(startYear, startMonth - 1, startDay)
+      const endDate = new Date(endYear, endMonth - 1, endDay)
+      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
+    } else if (absence.dates.length > 1) {
+      return `${absence.dates.length} dias`
+    } else {
+      const [year, month, day] = absence.dates[0].split('-').map(Number)
+      const date = new Date(year, month - 1, day)
+      return format(date, "dd/MM/yyyy")
     }
-
-    if (startStr && !endStr) {
-      return `${formatDate(startStr)}`
-    }
-
-    const dates: string[] = Array.isArray(absence?.dates) ? absence.dates : []
-    if (dates.length > 1) {
-      return `${dates.length} dias`
-    }
-    if (dates.length === 1) {
-      return formatDate(dates[0])
-    }
-    return "-"
   }
 
   const handleViewProof = (absence: any) => {
@@ -552,20 +537,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       doc.text(`Email: ${user.email}`, 14, 32)
       doc.text(`Data do relatório: ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}`, 14, 39)
 
-      // Helpers seguros
-      const safeParseISO = (value?: string) => {
-        if (!value) return null
-        const ts = Date.parse(value)
-        return Number.isNaN(ts) ? null : new Date(ts)
-      }
-      const formatCreated = (value?: string, pattern = "dd/MM/yyyy") => {
-        const d = safeParseISO(value)
-        try { return d ? format(d, pattern, { locale: ptBR }) : "-" } catch { return "-" }
-      }
-
       // Agrupar ausências por mês
       const groupedAbsences = absences.reduce((acc, absence) => {
-        const date = safeParseISO(absence.createdAt) || new Date()
+        const date = parseISO(absence.createdAt)
         const monthYear = format(date, "MMMM yyyy", { locale: ptBR })
         
         if (!acc[monthYear]) {
@@ -588,7 +562,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         
         // Preparar dados para a tabela
         const tableData = (monthAbsences as typeof absences).map((absence: typeof absences[0]) => [
-          formatCreated(absence.createdAt, "dd/MM/yyyy"),
+          format(parseISO(absence.createdAt), "dd/MM/yyyy"),
           getReasonLabel(absence),
           formatDateRange(absence),
           absence.status === "approved" ? "Aprovado" :
@@ -741,7 +715,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <p className="text-xs text-gray-500 order-2 sm:order-1">
-                      Registrado em: {(() => { try { const ts = Date.parse(absence.createdAt); return Number.isNaN(ts) ? "-" : format(new Date(ts), "dd/MM/yyyy") } catch { return "-" } })()}
+                      Registrado em: {format(parseISO(absence.createdAt), "dd/MM/yyyy")}
                     </p>
 
                     <div className="flex flex-wrap gap-2 order-1 sm:order-2 w-full sm:w-auto">
@@ -767,8 +741,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           </Button>
                         </>
                       )}
-                      {absence.status === "pending" &&
-                      absence.reason !== "vacation" && (
+                    {absence.status === "pending" &&
+                      absence.reason !== "vacation" &&
+                      absence.dates.some(isDateInFuture) && (
                         <Button
                           variant="outline"
                           size="sm"
