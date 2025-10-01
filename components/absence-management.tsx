@@ -5,14 +5,14 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
 import { format, isAfter, isBefore, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, getMonth, getYear } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download, FileDown } from "lucide-react"
+import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download, FileDown, Trash2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
@@ -23,9 +23,11 @@ import { supabase } from "@/lib/supabase"
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import autoTable from 'jspdf-autotable'
+import { Input } from "@/components/ui/input"
 
 const ABSENCE_REASONS = [
   { id: "medical", label: "Consulta Médica" },
+  { id: "medical_certificate", label: "Atestado Médico" },
   { id: "energy", label: "Energia/Internet" },
   { id: "vacation", label: "Férias" },
   { id: "other", label: "Outro" },
@@ -47,15 +49,21 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [error, setError] = useState("")
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [absenceToDelete, setAbsenceToDelete] = useState<number | null>(null)
 
   const [formData, setFormData] = useState({
     reason: "",
     customReason: "",
-    dates: [] as Date[],
+    dates: [] as string[],
     dateRange: {
-      start: null as Date | null,
-      end: null as Date | null,
+      start: "",
+      end: "",
     },
+    startDate: "",
+    startTime: "",
+    endDate: "",
+    endTime: "",
     proofDocument: null as string | null,
   })
 
@@ -128,9 +136,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       customReason: "",
       dates: [],
       dateRange: {
-        start: null,
-        end: null,
+        start: "",
+        end: "",
       },
+      startDate: "",
+      startTime: "",
+      endDate: "",
+      endTime: "",
       proofDocument: null,
     })
     setError("")
@@ -164,10 +176,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       setFormData({
         ...formData,
         dateRange: {
-          start: adjustedDate,
-          end: null,
+          start: format(adjustedDate, 'yyyy-MM-dd'),
+          end: "",
         },
-        dates: [adjustedDate],
+        dates: [format(adjustedDate, 'yyyy-MM-dd')],
       })
       return
     }
@@ -187,19 +199,19 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         }).map(d => {
           const adjusted = new Date(d)
           adjusted.setHours(12, 0, 0, 0)
-          return adjusted
+          return format(adjusted, 'yyyy-MM-dd')
         })
 
         setFormData({
           ...formData,
           dateRange: {
-            start: adjustedDate,
-            end: adjustedStart,
+            start: format(adjustedDate, 'yyyy-MM-dd'),
+            end: format(adjustedStart, 'yyyy-MM-dd'),
           },
           dates: dateRange,
         })
       } else {
-        // Caso contrário, a data selecionada é a data final
+        // Caso contrário, a data selecionada é a data final (ainda opcional para energy)
         // Gerar todas as datas no intervalo
         const dateRange = eachDayOfInterval({
           start: adjustedStart,
@@ -207,14 +219,14 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         }).map(d => {
           const adjusted = new Date(d)
           adjusted.setHours(12, 0, 0, 0)
-          return adjusted
+          return format(adjusted, 'yyyy-MM-dd')
         })
 
         setFormData({
           ...formData,
           dateRange: {
-            start: adjustedStart,
-            end: adjustedDate,
+            start: format(adjustedStart, 'yyyy-MM-dd'),
+            end: format(adjustedDate, 'yyyy-MM-dd'),
           },
           dates: dateRange,
         })
@@ -224,22 +236,29 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       setFormData({
         ...formData,
         dateRange: {
-          start: adjustedDate,
-          end: null,
+          start: format(adjustedDate, 'yyyy-MM-dd'),
+          end: "",
         },
-        dates: [adjustedDate],
+        dates: [format(adjustedDate, 'yyyy-MM-dd')],
       })
     }
   }
 
   const hasPastDates = () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return formData.dates.some((date) => {
-      const dateToCheck = new Date(date)
-      dateToCheck.setHours(0, 0, 0, 0)
-      return dateToCheck < today
-    })
+    if (!formData.startDate) return false
+    // Se for férias, considerar apenas a data de início
+    if (formData.reason === "vacation") {
+      const start = new Date(formData.startDate)
+      const now = new Date()
+      start.setHours(0, 0, 0, 0)
+      now.setHours(0, 0, 0, 0)
+      return start < now
+    } else {
+      // Para outros motivos, considerar data e hora
+      if (!formData.startTime) return false
+      const start = new Date(`${formData.startDate}T${formData.startTime}`)
+      return start < new Date()
+    }
   }
 
   const handleSaveAbsence = async () => {
@@ -255,9 +274,36 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return
     }
 
-    if (formData.dates.length === 0) {
-      setError("Selecione pelo menos uma data para a ausência")
+    // Validação de datas: data final não pode ser anterior à inicial
+    if (formData.reason === "vacation") {
+      if (!formData.startDate || !formData.endDate) {
+        setError("Selecione o período de férias")
       return
+      }
+      const start = new Date(formData.startDate)
+      const end = new Date(formData.endDate)
+      if (end < start) {
+        setError("A data final não pode ser anterior à data inicial.")
+        return
+      }
+      // Validação de limite de 30 dias para férias
+      const diffMs = end.getTime() - start.getTime()
+      const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24)) + 1
+      if (diffDias > 30) {
+        setError("O período de férias não pode exceder 30 dias.")
+        return
+      }
+    } else {
+      if (!formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime) {
+        setError("Preencha as datas e horários de início e fim da ausência")
+        return
+      }
+      const start = new Date(`${formData.startDate}T${formData.startTime}`)
+      const end = new Date(`${formData.endDate}T${formData.endTime}`)
+      if (end < start) {
+        setError("A data e hora final não podem ser anteriores ao início.")
+        return
+      }
     }
 
     // Exigir comprovante para datas passadas, exceto para Energia/Internet (pode concluir depois)
@@ -267,31 +313,48 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
 
     try {
-      // Formatar datas para string ISO mantendo o fuso horário local
-      const formattedDates = formData.dates.map((date) => format(date, "yyyy-MM-dd"))
+      let dates: string[] = []
+      let dateRange: any = undefined
+      if (formData.reason === "vacation") {
+        // Gerar array de datas inteiras
+        const start = formData.startDate
+        const end = formData.endDate
+        if (start && end) {
+          let current = new Date(start)
+          const endDateObj = new Date(end)
+          while (current <= endDateObj) {
+            dates.push(format(current, "yyyy-MM-dd"))
+            current.setDate(current.getDate() + 1)
+          }
+          dateRange = {
+            start,
+            end,
+          }
+        }
+      } else {
+        // Salvar datas com hora
+        const start = `${formData.startDate}T${formData.startTime}`
+        const end = `${formData.endDate}T${formData.endTime}`
+        dates = [start, end]
+        dateRange = {
+          start,
+          end,
+        }
+      }
 
-      // Determinar o status inicial com base no motivo e se há comprovante
       const initialStatus = formData.reason === "vacation" ? "pending" : 
                           formData.proofDocument ? "completed" : "pending"
 
-      // Criar novo registro de ausência
       const newAbsence = await createAbsenceRecord({
         userId: user.id,
         reason: formData.reason,
         customReason: formData.reason === "other" ? formData.customReason : undefined,
-        dates: formattedDates,
+        dates: dates,
         status: initialStatus,
-        dateRange:
-          formData.dateRange.start && formData.dateRange.end
-            ? {
-                start: format(formData.dateRange.start, "yyyy-MM-dd"),
-                end: format(formData.dateRange.end, "yyyy-MM-dd"),
-              }
-            : undefined,
+        dateRange: dateRange,
         proofDocument: formData.proofDocument || undefined,
       })
 
-      // Atualizar o estado local imediatamente
       setAbsences(prevAbsences => [newAbsence, ...prevAbsences])
 
       toast({
@@ -302,7 +365,6 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             : "Sua ausência foi registrada com sucesso",
       })
 
-      // Fechar diálogo
       setIsAddDialogOpen(false)
     } catch (error: any) {
       setError(error.message || "Ocorreu um erro ao registrar a ausência")
@@ -378,96 +440,48 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     reader.readAsDataURL(file)
   }
 
-  const handleDeleteAbsence = async (absenceId: number) => {
-    if (confirm("Tem certeza que deseja excluir este registro de ausência?")) {
+  const handleDeleteAbsence = async () => {
+    if (absenceToDelete === null) return
       try {
-        await deleteAbsenceRecord(absenceId)
-
+      await deleteAbsenceRecord(absenceToDelete)
         toast({
           title: "Ausência excluída",
           description: "O registro de ausência foi excluído com sucesso",
         })
+      setAbsences((prev) => prev.filter((a) => a.id !== absenceToDelete))
       } catch (error: any) {
         toast({
           title: "Erro",
           description: error.message || "Ocorreu um erro ao excluir a ausência",
           variant: "destructive",
         })
-      }
+    } finally {
+      setIsDeleteDialogOpen(false)
+      setAbsenceToDelete(null)
     }
   }
 
-  const formatDate = (dateString: string) => {
-    // Criar uma nova data considerando que a string está em UTC
-    const [year, month, day] = dateString.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
-    return format(date, "dd/MM/yyyy", { locale: ptBR })
-  }
-
-  const isDateInFuture = (dateString: string) => {
-    const date = new Date(dateString)
-    date.setHours(0, 0, 0, 0)
-
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    return date >= today
-  }
-
-  const getReasonLabel = (absence: any) => {
-    if (absence.reason === "other") {
-      return absence.customReason
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return ""
+    if (dateStr.includes("T")) {
+      const [date, time] = dateStr.split("T")
+      const [year, month, day] = date.split("-")
+      return `${day}/${month}/${year} ${time.slice(0,5)}`
+    } else {
+      const [year, month, day] = dateStr.split("-")
+      return `${day}/${month}/${year}`
     }
-
-    const reason = ABSENCE_REASONS.find((r) => r.id === absence.reason)
-    return reason ? reason.label : "Motivo não especificado"
   }
 
-  const isAbsenceActive = (absence: any) => {
-    const expiresAt = new Date(absence.expiresAt)
-    return isAfter(expiresAt, new Date())
-  }
-
-  const getStatusBadge = (absence: any) => {
-    if (absence.status === "approved") {
-      return (
-        <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
-          <Check className="h-3 w-3" />
-          Aprovado! <PartyPopper className="h-3 w-3 ml-1" />
-        </Badge>
-      )
-    } else if (absence.status === "completed") {
-      return (
-        <Badge className="bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1">
-          <FileText className="h-3 w-3" />
-          Comprovante Enviado
-        </Badge>
-      )
-    } else if (absence.reason === "vacation") {
-      return (
-        <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 flex items-center gap-1">
-          <AlertCircle className="h-3 w-3" />
-          Aguardando Aprovação
-        </Badge>
-      )
-    }
-
-    return null
-  }
-
-  const formatDateRange = (absence: any) => {
+  function formatDateRange(absence: any) {
     if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
-      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
-      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
-      const startDate = new Date(startYear, startMonth - 1, startDay)
-      const endDate = new Date(endYear, endMonth - 1, endDay)
-      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
+      return `De ${formatDateTime(absence.dateRange.start)} até ${formatDateTime(absence.dateRange.end)}`
     } else if (absence.dates.length > 1) {
       return `${absence.dates.length} dias`
+    } else if (absence.dates.length === 1) {
+      return formatDateTime(absence.dates[0])
     } else {
-      const [year, month, day] = absence.dates[0].split('-').map(Number)
-      const date = new Date(year, month - 1, day)
-      return format(date, "dd/MM/yyyy")
+      return "-"
     }
   }
 
@@ -630,6 +644,56 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
   }
 
+  const isDateInFuture = (dateString: string) => {
+    const date = new Date(dateString)
+    date.setHours(0, 0, 0, 0)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    return date >= today
+  }
+
+  const getReasonLabel = (absence: any) => {
+    if (absence.reason === "other") {
+      return absence.customReason
+    }
+    if (absence.reason === "medical_certificate") {
+      return "Atestado Médico"
+    }
+    const reason = ABSENCE_REASONS.find((r) => r.id === absence.reason)
+    return reason ? reason.label : "Motivo não especificado"
+  }
+
+  const isAbsenceActive = (absence: any) => {
+    const expiresAt = new Date(absence.expiresAt)
+    return isAfter(expiresAt, new Date())
+  }
+
+  const getStatusBadge = (absence: any) => {
+    if (absence.status === "approved") {
+      return (
+        <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
+          <Check className="h-3 w-3" />
+          Aprovado! <PartyPopper className="h-3 w-3 ml-1" />
+        </Badge>
+      )
+    } else if (absence.status === "completed") {
+      return (
+        <Badge className="bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1">
+          <FileText className="h-3 w-3" />
+          Comprovante Enviado
+        </Badge>
+      )
+    } else if (absence.reason === "vacation") {
+      return (
+        <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 flex items-center gap-1">
+          <AlertCircle className="h-3 w-3" />
+          Aguardando Aprovação
+        </Badge>
+      )
+    }
+    return null
+  }
+
   return (
     <div className="space-y-6">
       <div className={cn(
@@ -669,8 +733,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               isMobile && "w-full"
             )}
           >
-            Registrar Ausência
-          </Button>
+          Registrar Ausência
+        </Button>
         </div>
       </div>
 
@@ -691,8 +755,6 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex flex-col gap-2">
-                    <div className="text-sm font-medium">{formatDateRange(absence)}</div>
-
                     {absence.dates.length <= 5 && (
                       <div className="flex flex-wrap gap-2">
                         {absence.dates.map((date: string, index: number) => (
@@ -707,7 +769,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                             )}
                           >
                             <CalendarIcon className="h-3 w-3 mr-1" />
-                            {formatDate(date)}
+                            {formatDateTime(date)}
                           </Badge>
                         ))}
                       </div>
@@ -715,10 +777,6 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   </div>
 
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <p className="text-xs text-gray-500 order-2 sm:order-1">
-                      Registrado em: {format(parseISO(absence.createdAt), "dd/MM/yyyy")}
-                    </p>
-
                     <div className="flex flex-wrap gap-2 order-1 sm:order-2 w-full sm:w-auto">
                       {absence.status === "completed" && absence.proofDocument && (
                         <>
@@ -758,8 +816,45 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           Enviar Comprovante
                         </Button>
                       )}
-                    </div>
                   </div>
+                  </div>
+
+                  {/* Exibir datas como badges para férias */}
+                  {absence.reason === "vacation" && absence.dateRange && absence.dateRange.start && absence.dateRange.end && (
+                    <div className="flex flex-col items-start gap-1 mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold px-4 py-1 text-xs w-auto min-w-0">
+                          <CalendarIcon className="h-3 w-3 mr-1" />
+                          {(() => {
+                            const start = new Date(absence.dateRange.start)
+                            return `${start.getDate().toString().padStart(2, '0')}/${(start.getMonth()+1).toString().padStart(2, '0')}/${start.getFullYear()}`
+                          })()}
+                        </span>
+                        <span className="flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 text-blue-700 font-semibold px-4 py-1 text-xs w-auto min-w-0">
+                          <CalendarIcon className="h-3 w-3 mr-1" />
+                          {(() => {
+                            const end = new Date(absence.dateRange.end)
+                            return `${end.getDate().toString().padStart(2, '0')}/${(end.getMonth()+1).toString().padStart(2, '0')}/${end.getFullYear()}`
+                          })()}
+                        </span>
+                      </div>
+                      <span className="inline-flex items-center gap-1 rounded-md border border-orange-200 bg-orange-50 text-orange-800 font-semibold px-2 py-0.5 text-xs w-auto min-w-0">
+                        <CalendarIcon className="h-3 w-3 mr-1" />
+                        {(() => {
+                          const start = new Date(absence.dateRange.start)
+                          const end = new Date(absence.dateRange.end)
+                          const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                          return `${diff} ${diff === 1 ? 'dia' : 'dias'}`
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
+                  {absence.createdAt && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-800 text-xs font-semibold mt-2">
+                      <CalendarIcon className="h-3 w-3" /> Registrado em: {formatDateTime(absence.createdAt)}
+                    </span>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -807,7 +902,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               </div>
             )}
 
+            {formData.reason !== "vacation" && (
             <div className="space-y-2">
+<<<<<<< HEAD
               <Label>Datas de Ausência</Label>
               <p className="text-xs text-gray-500 mb-2">
                 {formData.reason === "energy"
@@ -900,9 +997,83 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                       ))}
                     </div>
                   )}
+=======
+                <Label>Início da ausência</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="date"
+                    value={formData.startDate || ""}
+                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                  />
+                  <Input
+                    type="time"
+                    value={formData.startTime || ""}
+                    onChange={e => setFormData({ ...formData, startTime: e.target.value })}
+                  />
+>>>>>>> 5d67d83fbf2d682e455d16acd12364bc8bdbb3c9
                 </div>
-              )}
-            </div>
+                <Label className="mt-2">Fim da ausência</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="date"
+                    value={formData.endDate || ""}
+                    onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                  />
+                  <Input
+                    type="time"
+                    value={formData.endTime || ""}
+                    onChange={e => setFormData({ ...formData, endTime: e.target.value })}
+                  />
+                </div>
+                {/* Mostrar quantidade de dias selecionados */}
+                {formData.startDate && formData.endDate && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    {(() => {
+                      const start = new Date(formData.startDate)
+                      const end = new Date(formData.endDate)
+                      const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                      if (diff > 1) {
+                        return `Período selecionado: ${diff} dias`
+                      } else if (diff === 1) {
+                        return `Período selecionado: 1 dia`
+                      } else {
+                        return null
+                      }
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {formData.reason === "vacation" && (
+              <div className="space-y-2">
+                <Label>Período de férias</Label>
+                <div className="flex gap-2">
+                  <Input
+                    type="date"
+                    value={formData.startDate || ""}
+                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                  />
+                  <span className="self-center">até</span>
+                  <Input
+                    type="date"
+                    value={formData.endDate || ""}
+                    onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                  />
+                </div>
+                {/* Mostrar quantidade de dias de férias */}
+                {formData.startDate && formData.endDate && (
+                  <div className="text-xs text-gray-600 mt-1">
+                    {(() => {
+                      const start = new Date(formData.startDate)
+                      const end = new Date(formData.endDate)
+                      const diff = Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                      return `Dias selecionados: ${diff}`
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
 
             {hasPastDates() && (
               <div className="space-y-2">
@@ -978,10 +1149,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     >
                       <X className="h-4 w-4" />
                     </Button>
-                  </div>
-                )}
-              </div>
-            )}
+                    </div>
+                  )}
+                </div>
+              )}
 
             {formData.reason === "vacation" && (
               <Alert className="bg-blue-50 border-blue-200">
@@ -1104,6 +1275,33 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               )}
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para excluir ausência */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir Ausência</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>Você está prestes a excluir este registro de ausência.</p>
+            <Alert className="mt-4" variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Esta ação não pode ser desfeita. Todos os dados relacionados a esta ausência serão permanentemente excluídos.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteAbsence}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Confirmar Exclusão
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

@@ -5,26 +5,30 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { toast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Edit2, Plus, Pencil } from "lucide-react"
+import { CalendarIcon, Edit2, Plus, Pencil, Trash2 } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { getHolidays, createHoliday, updateHoliday, toggleHolidayStatus } from "@/lib/db"
+import { getHolidays, createHoliday, updateHoliday, toggleHolidayStatus, deleteHoliday } from "@/lib/db"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle } from "lucide-react"
 
 export function HolidayManagement() {
   const [holidays, setHolidays] = useState<any[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedHoliday, setSelectedHoliday] = useState<any>(null)
+  const [holidayToDelete, setHolidayToDelete] = useState<any>(null)
   const [loading, setLoading] = useState(false)
 
   const [formData, setFormData] = useState({
@@ -146,6 +150,26 @@ export function HolidayManagement() {
     }
   }
 
+  const handleDeleteHoliday = async () => {
+    if (!holidayToDelete) return
+    try {
+      await deleteHoliday(holidayToDelete.id)
+      toast({
+        title: "Feriado excluído",
+        description: `${holidayToDelete.name} foi excluído com sucesso`,
+      })
+      await loadHolidays()
+      setIsDeleteDialogOpen(false)
+      setHolidayToDelete(null)
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Ocorreu um erro ao excluir o feriado",
+        variant: "destructive",
+      })
+    }
+  }
+
   const saveHoliday = async (isEdit: boolean) => {
     try {
       // Formatar datas para string ISO
@@ -207,24 +231,25 @@ export function HolidayManagement() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold tracking-tight">Gerenciamento de Feriados</h2>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Adicionar Feriado
+      <h2 className="text-2xl font-bold tracking-tight mb-2 sm:mb-0">Configuração de um Feriado</h2>
+      <Tabs defaultValue="active" className="w-full">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
+          <TabsList className="flex items-center gap-2">
+            <TabsTrigger value="active">Ativos</TabsTrigger>
+            <TabsTrigger value="inactive">Inativos</TabsTrigger>
+            <TabsTrigger value="reports">Relatórios</TabsTrigger>
+          </TabsList>
+          <div className="mt-2 sm:mt-0 sm:ml-0 flex justify-center sm:block">
+            <Button onClick={() => setIsAddDialogOpen(true)} className="w-full sm:w-auto">
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar Feriado
         </Button>
       </div>
-
-      <Tabs defaultValue="active" className="w-full">
-        <TabsList>
-          <TabsTrigger value="active">Ativos</TabsTrigger>
-          <TabsTrigger value="inactive">Inativos</TabsTrigger>
-          <TabsTrigger value="reports">Relatórios</TabsTrigger>
-        </TabsList>
+        </div>
 
         <TabsContent value="active" className="space-y-4">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <h3 className="text-lg font-medium">Lista de Feriados</h3>
+            <h3 className="text-lg font-medium">Configuração de um Feriado</h3>
       </div>
 
       {loading ? (
@@ -236,22 +261,26 @@ export function HolidayManagement() {
               <p className="text-gray-500">Nenhum feriado ativo cadastrado</p>
         </div>
       ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-3 w-full">
               {holidays
                 .filter(holiday => holiday.active)
                 .map((holiday) => (
                   <Card key={holiday.id}>
-                    <CardHeader>
-                      <CardTitle>{holiday.name}</CardTitle>
-                      <CardDescription>
-                        Data: {formatDate(holiday.date)}
-                        <br />
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-[#EE4D2D] text-base sm:text-lg font-medium">{holiday.name}</CardTitle>
+                      <div className="flex items-center text-xs sm:text-sm text-gray-600 mt-1">
+                        <CalendarIcon className="h-3.5 w-3.5 mr-1" />
+                        {formatDate(holiday.date)}
+                      </div>
+                      <div className="flex items-center text-xs text-gray-400 mt-1">
                         Prazo: {formatDate(holiday.deadline)}
-                      </CardDescription>
+                      </div>
                     </CardHeader>
-                    <CardContent>
-                      <p>Máximo: {formatHours(holiday.maxHours)}</p>
-                      <div className="flex items-center gap-2 mt-2">
+                    <CardContent className="pt-0">
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs sm:text-sm w-fit mt-2">
+                        Máximo: {formatHours(holiday.maxHours)}
+                      </Badge>
+                      <div className="flex items-center gap-2 mt-4">
                         <Switch
                           checked={holiday.active}
                           onCheckedChange={() => handleToggleActive(holiday)}
@@ -269,6 +298,19 @@ export function HolidayManagement() {
                       >
                         <Pencil className="h-4 w-4 mr-2" />
                         Editar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => {
+                          setHolidayToDelete(holiday)
+                          setIsDeleteDialogOpen(true)
+                        }}
+                        disabled={loading}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir
                       </Button>
                     </CardFooter>
                   </Card>
@@ -291,22 +333,26 @@ export function HolidayManagement() {
               <p className="text-gray-500">Nenhum feriado inativo</p>
                 </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-3 w-full">
               {holidays
                 .filter(holiday => !holiday.active)
                 .map((holiday) => (
                   <Card key={holiday.id}>
-                    <CardHeader>
-                      <CardTitle>{holiday.name}</CardTitle>
-                      <CardDescription>
-                        Data: {formatDate(holiday.date)}
-                        <br />
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-[#EE4D2D] text-base sm:text-lg font-medium">{holiday.name}</CardTitle>
+                      <div className="flex items-center text-xs sm:text-sm text-gray-600 mt-1">
+                        <CalendarIcon className="h-3.5 w-3.5 mr-1" />
+                        {formatDate(holiday.date)}
+                      </div>
+                      <div className="flex items-center text-xs text-gray-400 mt-1">
                         Prazo: {formatDate(holiday.deadline)}
-                      </CardDescription>
+                      </div>
                     </CardHeader>
-                    <CardContent>
-                      <p>Máximo: {formatHours(holiday.maxHours)}</p>
-                      <div className="flex items-center gap-2 mt-2">
+                    <CardContent className="pt-0">
+                      <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs sm:text-sm w-fit mt-2">
+                        Máximo: {formatHours(holiday.maxHours)}
+                      </Badge>
+                      <div className="flex items-center gap-2 mt-4">
                         <Switch
                           checked={holiday.active}
                           onCheckedChange={() => handleToggleActive(holiday)}
@@ -324,6 +370,19 @@ export function HolidayManagement() {
                   >
                         <Pencil className="h-4 w-4 mr-2" />
                         Editar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                    onClick={() => {
+                      setHolidayToDelete(holiday)
+                      setIsDeleteDialogOpen(true)
+                    }}
+                    disabled={loading}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir
                   </Button>
                     </CardFooter>
             </Card>
@@ -431,54 +490,24 @@ export function HolidayManagement() {
 
             <div className="grid gap-2">
               <Label>Data do Feriado</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.date && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.date ? format(formData.date, "dd/MM/yyyy") : "Selecione uma data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.date}
-                    onSelect={(date) => handleDateChange(date, "date")}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                name="date"
+                value={formData.date ? format(formData.date, "yyyy-MM-dd") : ""}
+                onChange={e => handleDateChange(new Date(e.target.value), "date")}
+                required
+              />
             </div>
 
             <div className="grid gap-2">
               <Label>Prazo para Cumprimento</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.deadline && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.deadline ? format(formData.deadline, "dd/MM/yyyy") : "Selecione uma data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.deadline}
-                    onSelect={(date) => handleDateChange(date, "deadline")}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                name="deadline"
+                value={formData.deadline ? format(formData.deadline, "yyyy-MM-dd") : ""}
+                onChange={e => handleDateChange(new Date(e.target.value), "deadline")}
+                required
+              />
             </div>
 
             <div className="grid gap-2">
@@ -500,11 +529,11 @@ export function HolidayManagement() {
               <Label htmlFor="active">Feriado Ativo</Label>
             </div>
 
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4 w-full">
+              <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} className="w-full sm:w-auto">
                 Cancelar
               </Button>
-              <Button className="bg-[#EE4D2D] hover:bg-[#D23F20]" onClick={() => saveHoliday(false)}>
+              <Button className="bg-[#EE4D2D] hover:bg-[#D23F20] w-full sm:w-auto" onClick={() => saveHoliday(false)}>
                 Adicionar Feriado
               </Button>
             </div>
@@ -533,54 +562,24 @@ export function HolidayManagement() {
 
             <div className="grid gap-2">
               <Label>Data do Feriado</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.date && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.date ? format(formData.date, "dd/MM/yyyy") : "Selecione uma data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.date}
-                    onSelect={(date) => handleDateChange(date, "date")}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                name="date"
+                value={formData.date ? format(formData.date, "yyyy-MM-dd") : ""}
+                onChange={e => handleDateChange(new Date(e.target.value), "date")}
+                required
+              />
             </div>
 
             <div className="grid gap-2">
               <Label>Prazo para Cumprimento</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !formData.deadline && "text-muted-foreground",
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.deadline ? format(formData.deadline, "dd/MM/yyyy") : "Selecione uma data"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={formData.deadline}
-                    onSelect={(date) => handleDateChange(date, "deadline")}
-                    initialFocus
-                  />
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                name="deadline"
+                value={formData.deadline ? format(formData.deadline, "yyyy-MM-dd") : ""}
+                onChange={e => handleDateChange(new Date(e.target.value), "deadline")}
+                required
+              />
             </div>
 
             <div className="grid gap-2">
@@ -602,15 +601,42 @@ export function HolidayManagement() {
               <Label htmlFor="edit-active">Feriado Ativo</Label>
             </div>
 
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+            <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-4 w-full">
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="w-full sm:w-auto">
                 Cancelar
               </Button>
-              <Button className="bg-[#EE4D2D] hover:bg-[#D23F20]" onClick={() => saveHoliday(true)}>
+              <Button className="bg-[#EE4D2D] hover:bg-[#D23F20] w-full sm:w-auto" onClick={() => saveHoliday(true)}>
                 Salvar Alterações
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Holiday Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Excluir Feriado</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p>Você está prestes a excluir o feriado <strong>{holidayToDelete?.name}</strong> ({holidayToDelete && formatDate(holidayToDelete.date)}).</p>
+            <Alert className="mt-4" variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>
+                Esta ação não pode ser desfeita. Todos os dados relacionados a este feriado serão permanentemente excluídos.
+              </AlertDescription>
+            </Alert>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteHoliday}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Confirmar Exclusão
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

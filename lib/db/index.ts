@@ -13,7 +13,8 @@ export interface User {
   cpf?: string
   birthDate?: string
   isFirstAccess?: boolean
-  profilePictureUrl?: string
+  profilePictureUrl?: string // URL da foto de perfil
+  shift?: "8-17" | "9-18" // Turno do funcionário
 }
 
 export interface Holiday {
@@ -40,6 +41,7 @@ export interface OvertimeRecord {
   endTime?: string
   createdAt: string
   updatedAt?: string
+  task?: string // Task da hora extra
 }
 
 export interface TimeClockRecord {
@@ -187,8 +189,14 @@ export async function getUserByEmail(email: string): Promise<User | null> {
   }
 }
 
-export async function createUser(user: Omit<User, "id" | "createdAt" | "username"> & { profilePictureUrl?: string }): Promise<User> {
+export async function createUser(user: Omit<User, "id" | "createdAt" | "username">): Promise<User> {
   try {
+    // Validação básica dos campos obrigatórios
+    if (!user.firstName || !user.lastName || !user.email || !user.role) {
+      console.error("Campos obrigatórios ausentes ao criar usuário:", user)
+      throw new Error("Preencha todos os campos obrigatórios.")
+    }
+
     // Verificar se email já existe
     const { data: existingUser, error: checkError } = await supabase
       .from("users")
@@ -205,10 +213,8 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
       throw new Error("Email já cadastrado")
     }
 
-    // Gerar username único baseado no nome
-    const firstName = user.firstName.toLowerCase().replace(/[^a-z]/g, "")
-    const lastName = user.lastName.toLowerCase().replace(/[^a-z]/g, "")
-    const baseUsername = `${firstName}.${lastName}`
+    // Gerar username único baseado no email (parte antes do @)
+    const baseUsername = user.email.split("@")[0]
     let username = baseUsername
     let counter = 1
 
@@ -225,6 +231,18 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
       counter++
     }
 
+    // Garantir formato correto do birthDate
+    let birthDateFormatted = undefined
+    if (user.birthDate) {
+      // Aceita apenas formato YYYY-MM-DD
+      const match = /^\d{4}-\d{2}-\d{2}$/.test(user.birthDate)
+      if (!match) {
+        console.error("Formato de birthDate inválido:", user.birthDate)
+        throw new Error("Data de nascimento deve estar no formato YYYY-MM-DD")
+        }
+      birthDateFormatted = user.birthDate
+    }
+
     // Criar novo usuário com os campos adicionais
     const { data: newUser, error } = await supabase.from("users").insert([
       {
@@ -234,15 +252,23 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
         role: user.role,
         username,
         cpf: user.cpf,
-        birth_date: user.birthDate,
+        birth_date: birthDateFormatted,
         is_first_access: true,
-        profile_picture_url: user.profilePictureUrl || null,
+        profile_picture_url: user.profilePictureUrl,
+        shift: user.shift || "9-18",
       },
     ]).select().single()
 
     if (error) {
       console.error("Erro ao criar usuário:", error)
-      throw new Error("Erro ao criar usuário. Tente novamente.")
+      if (error.message || error.details || error.hint) {
+        console.error("Detalhes do erro:", {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+        })
+      }
+      throw new Error("Erro ao criar usuário. Tente novamente. " + (error.message || ""))
     }
 
     return convertToCamelCase<User>(newUser)
@@ -260,6 +286,28 @@ export async function deleteUser(id: string): Promise<void> {
     console.error("Erro ao excluir usuário:", error)
     throw new Error("Falha ao excluir usuário")
   }
+}
+
+export async function updateUser(id: string, data: Partial<User>): Promise<User> {
+  // Converter para snake_case para o Supabase
+  const userData = convertToSnakeCase({
+    ...data,
+    updatedAt: new Date().toISOString(),
+  })
+
+  const { data: updatedData, error } = await supabase
+    .from("users")
+    .update(userData)
+    .eq("id", id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error("Erro ao atualizar usuário:", error?.message, error)
+    throw new Error("Falha ao atualizar usuário")
+  }
+
+  return convertToCamelCase<User>(updatedData)
 }
 
 // Funções para feriados
@@ -379,6 +427,14 @@ export async function toggleHolidayStatus(id: number): Promise<Holiday> {
   return await updateHoliday(id, { active: !holiday.active })
 }
 
+export async function deleteHoliday(id: number): Promise<void> {
+  const { error } = await supabase.from("holidays").delete().eq("id", id)
+  if (error) {
+    console.error("Erro ao excluir feriado:", error)
+    throw new Error("Falha ao excluir feriado")
+  }
+}
+
 // Funções para registros de horas extras
 export async function getOvertimeRecords(): Promise<OvertimeRecord[]> {
   try {
@@ -448,6 +504,7 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
       hours: Number(record.hours),
       start_time: record.startTime || null,
       end_time: record.endTime || null,
+      task: record.task || null,
   })
 
     const { data, error } = await supabase
@@ -684,7 +741,12 @@ export async function createAbsenceRecord(
   record: Omit<AbsenceRecord, "id" | "createdAt" | "expiresAt">,
 ): Promise<AbsenceRecord> {
   // Calcular data de expiração (30 dias após a primeira data)
-  const firstDate = new Date(record.dates[0])
+  // Aceitar datas com hora (YYYY-MM-DDTHH:mm) ou só data (YYYY-MM-DD)
+  let firstDateStr = record.dates[0]
+  if (firstDateStr.includes("T")) {
+    firstDateStr = firstDateStr.split("T")[0]
+  }
+  const firstDate = new Date(firstDateStr)
   const expiresAt = new Date(firstDate)
   expiresAt.setDate(expiresAt.getDate() + 30)
 
@@ -1024,15 +1086,6 @@ export async function getSystemSummary() {
       totalAbsences: 0,
       pendingAbsences: 0,
     }
-  }
-}
-
-// Função para atualizar foto de perfil do usuário
-export async function updateUserProfilePicture(userId: string, profilePictureUrl: string): Promise<void> {
-  const { error } = await supabase.from("users").update({ profile_picture_url: profilePictureUrl }).eq("id", userId)
-  if (error) {
-    console.error("Erro ao atualizar foto de perfil:", error)
-    throw new Error("Erro ao atualizar foto de perfil")
   }
 }
 

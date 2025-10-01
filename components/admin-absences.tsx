@@ -201,11 +201,16 @@ export function AdminAbsences() {
     URL.revokeObjectURL(url)
   }
 
-  const formatDate = (dateString: string) => {
-    // Criar uma nova data considerando que a string está em UTC
-    const [year, month, day] = dateString.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
-    return format(date, "dd/MM/yyyy", { locale: ptBR })
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return ""
+    if (dateStr.includes("T")) {
+      const [date, time] = dateStr.split("T")
+      const [year, month, day] = date.split("-")
+      return `${day}/${month}/${year} ${time.slice(0,5)}`
+    } else {
+      const [year, month, day] = dateStr.split("-")
+      return `${day}/${month}/${year}`
+    }
   }
 
   const getEmployeeName = (userId: string) => {
@@ -215,6 +220,7 @@ export function AdminAbsences() {
 
   const getReasonText = (absence: any) => {
     if (absence.reason === "medical") return "Consulta Médica"
+    if (absence.reason === "medical_certificate") return "Atestado Médico"
     if (absence.reason === "energy") return "Energia/Internet"
     if (absence.reason === "vacation") return "Férias"
     if (absence.reason === "personal") return "Compromisso Pessoal"
@@ -223,17 +229,26 @@ export function AdminAbsences() {
 
   const formatDateRange = (absence: any) => {
     if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
-      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
-      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
-      const startDate = new Date(startYear, startMonth - 1, startDay)
-      const endDate = new Date(endYear, endMonth - 1, endDay)
-      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
+      return `De ${formatDateTime(absence.dateRange.start)} até ${formatDateTime(absence.dateRange.end)}`
     } else if (absence.dates.length > 1) {
       return `${absence.dates.length} dias`
+    } else if (absence.dates.length === 1) {
+      return formatDateTime(absence.dates[0])
     } else {
-      const [year, month, day] = absence.dates[0].split('-').map(Number)
-      const date = new Date(year, month - 1, day)
-      return format(date, "dd/MM/yyyy")
+      return "-"
+    }
+  }
+
+  // Função auxiliar para contar dias
+  const getDaysCount = (absence: any) => {
+    if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
+      const start = new Date(absence.dateRange.start)
+      const end = new Date(absence.dateRange.end)
+      return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+    } else if (absence.dates && absence.dates.length > 1) {
+      return absence.dates.length
+    } else {
+      return 1
     }
   }
 
@@ -501,7 +516,7 @@ export function AdminAbsences() {
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {filters.dateRange.from ? (
-                      format(filters.dateRange.from, "dd/MM/yyyy")
+                      formatDateTime(filters.dateRange.from.toISOString())
                     ) : (
                       "Data inicial"
                     )}
@@ -531,7 +546,7 @@ export function AdminAbsences() {
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {filters.dateRange.to ? (
-                      format(filters.dateRange.to, "dd/MM/yyyy")
+                      formatDateTime(filters.dateRange.to.toISOString())
                     ) : (
                       "Data final"
                     )}
@@ -576,6 +591,7 @@ export function AdminAbsences() {
                   <TableHead className="min-w-[180px]">Funcionário</TableHead>
                   <TableHead className="min-w-[120px]">Motivo</TableHead>
                   <TableHead className="min-w-[150px]">Período</TableHead>
+                  <TableHead className="min-w-[80px]">Qtd. Dias</TableHead>
                   <TableHead className="min-w-[100px]">Status</TableHead>
                   <TableHead className="min-w-[140px]">Registrado em</TableHead>
                   <TableHead className="w-[120px]">Ações</TableHead>
@@ -584,7 +600,7 @@ export function AdminAbsences() {
               <TableBody>
                 {filteredAbsences.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-6 text-gray-500">
+                    <TableCell colSpan={7} className="text-center py-6 text-gray-500">
                       Nenhum registro encontrado
                     </TableCell>
                   </TableRow>
@@ -594,6 +610,7 @@ export function AdminAbsences() {
                       <TableCell className="font-medium">{getEmployeeName(absence.userId)}</TableCell>
                       <TableCell>{getReasonText(absence)}</TableCell>
                       <TableCell>{formatDateRange(absence)}</TableCell>
+                      <TableCell>{getDaysCount(absence)} {getDaysCount(absence) === 1 ? 'dia' : 'dias'}</TableCell>
                       <TableCell>
                         {absence.status === "approved" ? (
                           <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
@@ -670,24 +687,25 @@ export function AdminAbsences() {
 
                 <div>
                   <Label className="text-sm text-gray-500">Período</Label>
-                  <p className="font-medium">{formatDateRange(selectedAbsence)}</p>
-
                   {selectedAbsence.dates.length <= 7 && (
                     <div className="flex flex-wrap gap-2 mt-1">
                       {selectedAbsence.dates.map((date: string, index: number) => (
                         <Badge key={index} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                           <Calendar className="h-3 w-3 mr-1" />
-                          {formatDate(date)}
+                          {formatDateTime(date)}
                         </Badge>
                       ))}
                     </div>
                   )}
+                  <div className="text-xs text-gray-600 mt-2">
+                    {getDaysCount(selectedAbsence)} {getDaysCount(selectedAbsence) === 1 ? 'dia selecionado' : 'dias selecionados'}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label className="text-sm text-gray-500">Registrado em</Label>
-                    <p>{format(parseISO(selectedAbsence.createdAt), "dd/MM/yyyy HH:mm")}</p>
+                    <p>{formatDateTime(selectedAbsence.createdAt)}</p>
                   </div>
                   <div>
                     <Label className="text-sm text-gray-500">Status</Label>

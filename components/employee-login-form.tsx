@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { authenticateEmployee, setCurrentUser, isEmailRegistered } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
 import type { User } from "@/lib/db"
+import { uploadProfilePicture } from "@/lib/supabase"
 
 enum LoginStep {
   INITIAL = "initial",
@@ -37,6 +38,8 @@ export function EmployeeLoginForm() {
   const [error, setError] = useState("")
   const [currentStep, setCurrentStep] = useState<LoginStep>(LoginStep.INITIAL)
   const [dbInitialized, setDbInitialized] = useState(false)
+  const [profilePicture, setProfilePicture] = useState<File | null>(null)
+  const [profilePicturePreview, setProfilePicturePreview] = useState<string>("")
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -45,6 +48,7 @@ export function EmployeeLoginForm() {
     username: "",
     cpf: "",
     birthDate: "",
+    shift: "9-18", // valor padrão
   })
 
   useEffect(() => {
@@ -75,7 +79,7 @@ export function EmployeeLoginForm() {
     initialize()
   }, [])
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value,
@@ -132,6 +136,16 @@ export function EmployeeLoginForm() {
     }
   }
 
+  const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    setProfilePicture(file)
+    if (file) {
+      setProfilePicturePreview(URL.createObjectURL(file))
+    } else {
+      setProfilePicturePreview("")
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -165,6 +179,28 @@ export function EmployeeLoginForm() {
           return
         }
 
+        // Validar foto de perfil
+        if (!profilePicture) {
+          setError("Por favor, envie uma foto de perfil 3x4 (obrigatório)")
+          setIsLoading(false)
+          return
+        }
+
+        // Upload da foto de perfil
+        let profilePictureUrl = null
+        try {
+          profilePictureUrl = await uploadProfilePicture(profilePicture, formData.email.replace(/[^a-zA-Z0-9]/g, ""))
+          if (!profilePictureUrl) {
+            setError("Falha ao fazer upload da foto de perfil. Tente novamente.")
+            setIsLoading(false)
+            return
+          }
+        } catch (err) {
+          setError("Erro ao fazer upload da foto de perfil.")
+          setIsLoading(false)
+          return
+        }
+
         // Primeiro acesso - criar novo usuário
         user = await authenticateEmployee(
           formData.firstName, 
@@ -172,7 +208,9 @@ export function EmployeeLoginForm() {
           formData.email, 
           undefined, 
           formData.cpf, 
-          formData.birthDate
+          formData.birthDate,
+          profilePictureUrl, // Passa a URL da foto
+          formData.shift as "8-17" | "9-18" // Cast explícito para o tipo correto
         )
 
         if (!user) {
@@ -408,6 +446,38 @@ export function EmployeeLoginForm() {
                   onChange={handleChange}
                   required
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="shift">Turno</Label>
+                <select
+                  id="shift"
+                  name="shift"
+                  value={formData.shift}
+                  onChange={handleChange}
+                  required
+                  className="border rounded px-2 py-1"
+                >
+                  <option value="8-17">8h às 17h</option>
+                  <option value="9-18">9h às 18h</option>
+                </select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="profilePicture">Foto de Perfil (3x4, obrigatório)</Label>
+                <Input
+                  id="profilePicture"
+                  name="profilePicture"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleProfilePictureChange}
+                  required
+                />
+                {profilePicturePreview && (
+                  <img
+                    src={profilePicturePreview}
+                    alt="Pré-visualização da foto de perfil"
+                    className="w-24 h-32 object-cover rounded-md border mt-2"
+                  />
+                )}
               </div>
             </div>
 

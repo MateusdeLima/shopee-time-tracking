@@ -33,6 +33,8 @@ export async function authenticateEmployee(
   username?: string,
   cpf?: string,
   birthDate?: string,
+  profilePictureUrl?: string,
+  shift?: "8-17" | "9-18",
 ): Promise<User> {
   try {
     // Inicializar o banco de dados primeiro
@@ -88,6 +90,8 @@ export async function authenticateEmployee(
             role: "employee",
             cpf,
             birthDate,
+            profilePictureUrl,
+            shift,
           })
 
           return newUser
@@ -113,22 +117,57 @@ export async function authenticateEmployee(
 }
 
 // Função para autenticar administrador
-export async function authenticateAdmin(username: string, password: string): Promise<User> {
-  // Hard-coded para o exemplo
-  if (username !== "adminshopee" || password !== "adminhora") {
+export async function authenticateAdmin(email: string, password: string): Promise<User> {
+  // Autenticar via Supabase Auth
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  })
+
+  if (error || !data.user) {
     throw new Error("Credenciais inválidas. Tente novamente.")
   }
 
-  // Retornar um objeto de usuário admin sem acessar o banco de dados
-  return {
-    id: "admin",
-    firstName: "Admin",
-    lastName: "Shopee",
-    email: "admin@shopee.com",
-    role: "admin",
-    username: "adminshopee",
-    createdAt: new Date().toISOString(),
+  // Buscar usuário na tabela users
+  const { data: userData, error: userError } = await supabase
+    .from("users")
+    .select("*")
+    .eq("email", email)
+    .maybeSingle()
+
+  if (userError) {
+    throw new Error("Erro ao buscar usuário admin no banco de dados.")
   }
+
+  // Se não existir, criar automaticamente como admin
+  let user = userData
+  if (!user) {
+    const { data: newUser, error: createError } = await supabase
+      .from("users")
+      .insert([
+        {
+          first_name: data.user.user_metadata?.first_name || "Admin",
+          last_name: data.user.user_metadata?.last_name || "",
+          email: email,
+    role: "admin",
+          username: data.user.user_metadata?.username || email.split("@")[0],
+          is_first_access: false,
+        },
+      ])
+      .select()
+      .single()
+    if (createError) {
+      throw new Error("Erro ao criar usuário admin no banco de dados.")
+    }
+    user = newUser
+  }
+
+  // Garantir que é admin
+  if (user.role !== "admin") {
+    throw new Error("Acesso restrito: apenas administradores podem acessar este painel.")
+  }
+
+  return convertToCamelCase<User>(user)
 }
 
 // Função para verificar autenticação atual

@@ -20,7 +20,7 @@ export function AdminLoginForm() {
   const [error, setError] = useState("")
   const [dbInitialized, setDbInitialized] = useState(false)
   const [formData, setFormData] = useState({
-    username: "",
+    email: "",
     password: "",
   })
 
@@ -83,17 +83,10 @@ export function AdminLoginForm() {
     setIsLoading(true)
     setError("")
 
-    // Check admin credentials
-    if (formData.username !== "adminshopee" || formData.password !== "adminhora") {
-      setError("Credenciais inválidas. Tente novamente.")
-      setIsLoading(false)
-      return
-    }
-
     // Simulate authentication
     try {
       // Autenticar usando o serviço de autenticação
-      const user = await authenticateAdmin(formData.username, formData.password)
+      const user = await authenticateAdmin(formData.email, formData.password)
 
       // Salvar usuário autenticado
       setCurrentUser(user)
@@ -130,12 +123,13 @@ export function AdminLoginForm() {
 
       <div className="grid gap-4">
         <div className="grid gap-2">
-          <Label htmlFor="username">Usuário</Label>
+          <Label htmlFor="email">Email Administrativo</Label>
           <Input
-            id="username"
-            name="username"
-            placeholder="Digite o usuário administrativo"
-            value={formData.username}
+            id="email"
+            name="email"
+            type="email"
+            placeholder="admin@seudominio.com"
+            value={formData.email}
             onChange={handleChange}
             required
             disabled={isLoading || !dbInitialized}

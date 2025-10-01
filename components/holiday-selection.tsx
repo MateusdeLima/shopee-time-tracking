@@ -16,6 +16,13 @@ interface HolidaySelectionProps {
   user: any
 }
 
+// Função utilitária para formatar horário (ex: '17:00' ou '17:30')
+function formatTimeString(time: string) {
+  if (!time) return "";
+  const [hour, minute] = time.split(":");
+  return `${hour}:${minute}`;
+}
+
 export function HolidaySelection({ user }: HolidaySelectionProps) {
   const [activeHolidays, setActiveHolidays] = useState<any[]>([])
   const [selectedHoliday, setSelectedHoliday] = useState<any>(null)
@@ -119,6 +126,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
     endTime: string,
     optionId: string,
     optionLabel: string,
+    task: string
   ) => {
     if (!selectedHoliday) return
 
@@ -150,6 +158,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
         hours: hours,
         startTime: startTime,
         endTime: endTime,
+        task: task,
       })
 
       // Atualizar registros locais imediatamente
@@ -162,7 +171,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
 
       toast({
         title: "Horas extras registradas",
-        description: `Foram registradas ${hours}h extras (${startTime} - ${endTime})`,
+        description: `Foram registradas ${hours}h extras (${formatTimeString(startTime)} - ${formatTimeString(endTime)})`,
       })
     } catch (error: any) {
       toast({
