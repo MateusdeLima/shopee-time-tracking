@@ -413,20 +413,40 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   }
 
   const formatDate = (dateString: string) => {
-    // Criar uma nova data considerando que a string está em UTC
-    const [year, month, day] = dateString.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
-    return format(date, "dd/MM/yyyy", { locale: ptBR })
+    if (!dateString) return "Data inválida"
+    
+    try {
+      // Criar uma nova data considerando que a string está em UTC
+      const [year, month, day] = dateString.split('-').map(Number)
+      if (!year || !month || !day) return "Data inválida"
+      
+      const date = new Date(year, month - 1, day)
+      if (isNaN(date.getTime())) return "Data inválida"
+      
+      return format(date, "dd/MM/yyyy", { locale: ptBR })
+    } catch (error) {
+      console.error('Erro ao formatar data:', dateString, error)
+      return "Data inválida"
+    }
   }
 
   const isDateInFuture = (dateString: string) => {
-    const date = new Date(dateString)
-    date.setHours(0, 0, 0, 0)
+    if (!dateString) return false
+    
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) return false
+      
+      date.setHours(0, 0, 0, 0)
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
 
-    return date >= today
+      return date >= today
+    } catch (error) {
+      console.error('Erro ao verificar data futura:', dateString, error)
+      return false
+    }
   }
 
   const getReasonLabel = (absence: any) => {
@@ -439,8 +459,17 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   }
 
   const isAbsenceActive = (absence: any) => {
-    const expiresAt = new Date(absence.expiresAt)
-    return isAfter(expiresAt, new Date())
+    if (!absence.expiresAt) return false
+    
+    try {
+      const expiresAt = parseISO(absence.expiresAt)
+      if (isNaN(expiresAt.getTime())) return false
+      
+      return isAfter(expiresAt, new Date())
+    } catch (error) {
+      console.error('Erro ao verificar ausência ativa:', absence.id, absence.expiresAt, error)
+      return false
+    }
   }
 
   const getStatusBadge = (absence: any) => {
@@ -471,18 +500,45 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   }
 
   const formatDateRange = (absence: any) => {
-    if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
-      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
-      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
-      const startDate = new Date(startYear, startMonth - 1, startDay)
-      const endDate = new Date(endYear, endMonth - 1, endDay)
-      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
-    } else if (absence.dates.length > 1) {
-      return `${absence.dates.length} dias`
-    } else {
-      const [year, month, day] = absence.dates[0].split('-').map(Number)
-      const date = new Date(year, month - 1, day)
-      return format(date, "dd/MM/yyyy")
+    try {
+      if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
+        const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
+        const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
+        
+        if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
+          return "Data inválida"
+        }
+        
+        const startDate = new Date(startYear, startMonth - 1, startDay)
+        const endDate = new Date(endYear, endMonth - 1, endDay)
+        
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          return "Data inválida"
+        }
+        
+        return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
+      } else if (absence.dates && absence.dates.length > 1) {
+        return `${absence.dates.length} dias`
+      } else if (absence.dates && absence.dates.length === 1) {
+        const [year, month, day] = absence.dates[0].split('-').map(Number)
+        
+        if (!year || !month || !day) {
+          return "Data inválida"
+        }
+        
+        const date = new Date(year, month - 1, day)
+        
+        if (isNaN(date.getTime())) {
+          return "Data inválida"
+        }
+        
+        return format(date, "dd/MM/yyyy")
+      }
+      
+      return "Data não especificada"
+    } catch (error) {
+      console.error('Erro ao formatar intervalo de datas:', absence, error)
+      return "Data inválida"
     }
   }
 
@@ -738,7 +794,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   <div className="flex flex-col gap-2">
                     <div className="text-sm font-medium">{formatDateRange(absence)}</div>
 
-                    {absence.dates.length <= 5 && (
+                    {Array.isArray(absence.dates) && absence.dates.length > 0 && absence.dates.length <= 5 && (
                       <div className="flex flex-wrap gap-2">
                         {absence.dates.map((date: string, index: number) => (
                           <Badge
@@ -798,6 +854,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                       )}
                     {absence.status === "pending" &&
                       absence.reason !== "vacation" &&
+                      Array.isArray(absence.dates) &&
                       absence.dates.some(isDateInFuture) && (
                         <Button
                           variant="outline"
