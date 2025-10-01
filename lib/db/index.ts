@@ -68,7 +68,9 @@ export interface AbsenceRecord {
   expiresAt: string
   dateRange?: {
     start: string
-    end: string
+    end?: string
+    startTime?: string
+    endTime?: string
   }
 }
 

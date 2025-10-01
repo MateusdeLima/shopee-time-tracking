@@ -26,7 +26,7 @@ import autoTable from 'jspdf-autotable'
 
 const ABSENCE_REASONS = [
   { id: "medical", label: "Consulta Médica" },
-  { id: "personal", label: "Compromisso Pessoal" },
+  { id: "energy", label: "Energia/Internet" },
   { id: "vacation", label: "Férias" },
   { id: "other", label: "Outro" },
 ]
@@ -57,6 +57,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       end: null as Date | null,
     },
     proofDocument: null as string | null,
+    // Horários opcionais (usado para Energia/Internet)
+    startTime: "",
+    endTime: "",
   })
 
   useEffect(() => {
@@ -132,6 +135,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         end: null,
       },
       proofDocument: null,
+      startTime: "",
+      endTime: "",
     })
     setError("")
     setIsAddDialogOpen(true)
@@ -269,9 +274,15 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       // Formatar datas para string ISO mantendo o fuso horário local
       const formattedDates = formData.dates.map((date) => format(date, "yyyy-MM-dd"))
 
-      // Determinar o status inicial com base no motivo e se há comprovante
-      const initialStatus = formData.reason === "vacation" ? "pending" : 
-                          formData.proofDocument ? "completed" : "pending"
+      // Determinar o status inicial
+      // - Férias: sempre "pending"
+      // - Energia/Internet: "completed" somente se já anexou comprovante; caso contrário "pending"
+      // - Demais: como antes
+      const initialStatus = formData.reason === "vacation"
+        ? "pending"
+        : formData.proofDocument
+          ? "completed"
+          : "pending"
 
       // Criar novo registro de ausência
       const newAbsence = await createAbsenceRecord({
@@ -281,10 +292,12 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         dates: formattedDates,
         status: initialStatus,
         dateRange:
-          formData.dateRange.start && formData.dateRange.end
+          formData.dateRange.start
             ? {
                 start: format(formData.dateRange.start, "yyyy-MM-dd"),
-                end: format(formData.dateRange.end, "yyyy-MM-dd"),
+                ...(formData.dateRange.end ? { end: format(formData.dateRange.end, "yyyy-MM-dd") } : {}),
+                ...(formData.startTime ? { startTime: formData.startTime } : {}),
+                ...(formData.endTime ? { endTime: formData.endTime } : {}),
               }
             : undefined,
         proofDocument: formData.proofDocument || undefined,
@@ -460,6 +473,11 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
       const startDate = new Date(startYear, startMonth - 1, startDay)
       const endDate = new Date(endYear, endMonth - 1, endDay)
+      const startTime = (absence.dateRange as any).startTime
+      const endTime = (absence.dateRange as any).endTime
+      if (absence.reason === "energy" && (startTime || endTime)) {
+        return `De ${format(startDate, "dd/MM/yyyy")}${startTime ? ` ${startTime}` : ''} até ${format(endDate, "dd/MM/yyyy")}${endTime ? ` ${endTime}` : ''}`
+      }
       return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
     } else if (absence.dates.length > 1) {
       return `${absence.dates.length} dias`
@@ -806,9 +824,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             <div className="space-y-2">
               <Label>Datas de Ausência</Label>
               <p className="text-xs text-gray-500 mb-2">
-                {formData.dateRange.start && !formData.dateRange.end
-                  ? "Selecione a data final para criar um intervalo"
-                  : "Selecione a data inicial e depois a data final para criar um intervalo"}
+                {formData.reason === "energy"
+                  ? (formData.dateRange.start && !formData.dateRange.end
+                      ? "Selecione (opcional) a data de retorno para encerrar o período"
+                      : "Selecione a data de início e (opcional) a data de término")
+                  : (formData.dateRange.start && !formData.dateRange.end
+                      ? "Selecione a data final para criar um intervalo"
+                      : "Selecione a data inicial e depois a data final para criar um intervalo")}
               </p>
               <Popover 
                 open={isCalendarOpen} 
@@ -895,6 +917,41 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                 </div>
               )}
             </div>
+
+            {formData.reason === "energy" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="startTime">Horário de início (obrigatório)</Label>
+                  <input
+                    id="startTime"
+                    type="time"
+                    className="border rounded px-3 py-2 w-full"
+                    value={formData.startTime}
+                    onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endTime">Horário de término (opcional)</Label>
+                  <input
+                    id="endTime"
+                    type="time"
+                    className="border rounded px-3 py-2 w-full"
+                    value={formData.endTime}
+                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <Alert className="bg-blue-50 border-blue-200">
+                    <AlertCircle className="h-4 w-4 text-blue-500" />
+                    <AlertDescription className="text-blue-700">
+                      Para Energia/Internet você pode registrar imediatamente. A data/horário de retorno é opcional e
+                      poderá ser informado ao anexar o comprovante do protocolo.
+                    </AlertDescription>
+                  </Alert>
+                </div>
+              </div>
+            )}
 
             {hasPastDates() && (
               <div className="space-y-2">
@@ -991,7 +1048,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               <Button 
                 className="bg-[#EE4D2D] hover:bg-[#D23F20]" 
                 onClick={handleSaveAbsence}
-                disabled={hasPastDates() && !formData.proofDocument}
+                disabled={(hasPastDates() && !formData.proofDocument) || (formData.reason === "energy" && (!formData.dateRange.start || !formData.startTime))}
               >
                 Registrar Ausência
               </Button>
@@ -1012,6 +1069,45 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               Envie um comprovante para a ausência registrada em {selectedAbsence && formatDateRange(selectedAbsence)}
             </p>
 
+            {selectedAbsence?.reason === "energy" && (
+              <div className="space-y-3">
+                <Alert className="bg-blue-50 border-blue-200">
+                  <AlertCircle className="h-4 w-4 text-blue-500" />
+                  <AlertDescription className="text-blue-700">
+                    Informe a data e horário de retorno (se ainda não informado) para concluir a ausência.
+                  </AlertDescription>
+                </Alert>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="endDateUpload">Data de retorno (opcional)</Label>
+                    <input
+                      id="endDateUpload"
+                      type="date"
+                      className="border rounded px-3 py-2 w-full"
+                      defaultValue={selectedAbsence?.dateRange?.end || ""}
+                      onChange={(e) => {
+                        const end = e.target.value
+                        setSelectedAbsence((prev: any) => prev ? { ...prev, dateRange: { ...(prev.dateRange || {}), end } } : prev)
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="endTimeUpload">Horário de término (opcional)</Label>
+                    <input
+                      id="endTimeUpload"
+                      type="time"
+                      className="border rounded px-3 py-2 w-full"
+                      defaultValue={(selectedAbsence?.dateRange as any)?.endTime || ""}
+                      onChange={(e) => {
+                        const endTime = e.target.value
+                        setSelectedAbsence((prev: any) => prev ? { ...prev, dateRange: { ...(prev.dateRange || {}), endTime } } : prev)
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div
               className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-lg p-6 cursor-pointer hover:bg-gray-50 transition-colors"
               onClick={() => fileInputRef.current?.click()}
@@ -1027,7 +1123,46 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                 ref={fileInputRef}
                 className="hidden"
                 accept="image/jpeg,image/png,image/gif,application/pdf"
-                onChange={handleFileChange}
+                onChange={async (e) => {
+                  // Reusar validação do handleFileChange, porém se for Energia/Internet, atualizar dateRange junto
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  if (file.size > 5 * 1024 * 1024) {
+                    toast({ title: "Arquivo muito grande", description: "O tamanho máximo permitido é 5MB", variant: "destructive" })
+                    return
+                  }
+                  const allowedTypes = ["image/jpeg", "image/png", "image/gif", "application/pdf"]
+                  if (!allowedTypes.includes(file.type)) {
+                    toast({ title: "Tipo de arquivo não suportado", description: "Apenas imagens (JPEG, PNG, GIF) e PDF são permitidos", variant: "destructive" })
+                    return
+                  }
+                  const reader = new FileReader()
+                  reader.onload = async (event) => {
+                    if (!selectedAbsence) return
+                    try {
+                      const updatePayload: any = {
+                        proofDocument: event.target?.result as string,
+                        status: "completed",
+                      }
+                      if (selectedAbsence.reason === "energy") {
+                        const dr = selectedAbsence.dateRange || {}
+                        updatePayload.dateRange = {
+                          ...(dr.start ? { start: dr.start } : {}),
+                          ...(dr.end ? { end: dr.end } : {}),
+                          ...(dr.startTime ? { startTime: dr.startTime } : {}),
+                          ...(dr.endTime ? { endTime: dr.endTime } : {}),
+                        }
+                      }
+                      await updateAbsenceRecord(selectedAbsence.id, updatePayload)
+                      setAbsences(prev => prev.map(a => a.id === selectedAbsence.id ? { ...a, ...updatePayload } : a))
+                      toast({ title: "Comprovante enviado", description: "Seu comprovante foi enviado com sucesso" })
+                      setIsUploadDialogOpen(false)
+                    } catch (err: any) {
+                      toast({ title: "Erro", description: err.message || "Ocorreu um erro ao enviar o comprovante", variant: "destructive" })
+                    }
+                  }
+                  reader.readAsDataURL(file)
+                }}
               />
             </div>
 

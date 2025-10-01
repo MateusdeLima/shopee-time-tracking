@@ -215,7 +215,7 @@ export function AdminAbsences() {
 
   const getReasonText = (absence: any) => {
     if (absence.reason === "medical") return "Consulta Médica"
-    if (absence.reason === "personal") return "Compromisso Pessoal"
+    if (absence.reason === "energy") return "Energia/Internet"
     if (absence.reason === "vacation") return "Férias"
     return absence.customReason || "Outro"
   }
@@ -226,6 +226,11 @@ export function AdminAbsences() {
       const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
       const startDate = new Date(startYear, startMonth - 1, startDay)
       const endDate = new Date(endYear, endMonth - 1, endDay)
+      const st = (absence.dateRange as any).startTime
+      const et = (absence.dateRange as any).endTime
+      if (absence.reason === "energy" && (st || et)) {
+        return `De ${format(startDate, "dd/MM/yyyy")}${st ? ` ${st}` : ''} até ${format(endDate, "dd/MM/yyyy")}${et ? ` ${et}` : ''}`
+      }
       return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
     } else if (absence.dates.length > 1) {
       return `${absence.dates.length} dias`
