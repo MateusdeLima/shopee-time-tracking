@@ -26,7 +26,7 @@ import autoTable from 'jspdf-autotable'
 
 const ABSENCE_REASONS = [
   { id: "medical", label: "Consulta Médica" },
-  { id: "personal", label: "Compromisso Pessoal" },
+  { id: "energy", label: "Energia/Internet" },
   { id: "vacation", label: "Férias" },
   { id: "other", label: "Outro" },
 ]
@@ -260,7 +260,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return
     }
 
-    if (hasPastDates() && !formData.proofDocument) {
+    // Exigir comprovante para datas passadas, exceto para Energia/Internet (pode concluir depois)
+    if (formData.reason !== "energy" && hasPastDates() && !formData.proofDocument) {
       setError("É necessário anexar um comprovante para datas passadas")
       return
     }
@@ -741,9 +742,12 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           </Button>
                         </>
                       )}
-                    {absence.status === "pending" &&
-                      absence.reason !== "vacation" &&
-                      absence.dates.some(isDateInFuture) && (
+                    {(
+                      (absence.reason === "energy" && absence.status === "pending") ||
+                      (absence.status === "pending" &&
+                        absence.reason !== "vacation" &&
+                        absence.dates.some(isDateInFuture))
+                    ) && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -806,9 +810,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             <div className="space-y-2">
               <Label>Datas de Ausência</Label>
               <p className="text-xs text-gray-500 mb-2">
-                {formData.dateRange.start && !formData.dateRange.end
-                  ? "Selecione a data final para criar um intervalo"
-                  : "Selecione a data inicial e depois a data final para criar um intervalo"}
+                {formData.reason === "energy"
+                  ? (formData.dateRange.start && !formData.dateRange.end
+                      ? "Para Energia/Internet a data final é opcional. Selecione-a apenas quando o serviço voltar."
+                      : "Selecione a data de início; a data de fim é opcional para Energia/Internet.")
+                  : (formData.dateRange.start && !formData.dateRange.end
+                      ? "Selecione a data final para criar um intervalo"
+                      : "Selecione a data inicial e depois a data final para criar um intervalo")}
               </p>
               <Popover 
                 open={isCalendarOpen} 

@@ -215,8 +215,9 @@ export function AdminAbsences() {
 
   const getReasonText = (absence: any) => {
     if (absence.reason === "medical") return "Consulta Médica"
-    if (absence.reason === "personal") return "Compromisso Pessoal"
+    if (absence.reason === "energy") return "Energia/Internet"
     if (absence.reason === "vacation") return "Férias"
+    if (absence.reason === "personal") return "Compromisso Pessoal"
     return absence.customReason || "Outro"
   }
 
@@ -460,7 +461,7 @@ export function AdminAbsences() {
             <SelectContent>
               <SelectItem value="all">Todos os motivos</SelectItem>
               <SelectItem value="medical">Consulta Médica</SelectItem>
-              <SelectItem value="personal">Compromisso Pessoal</SelectItem>
+              <SelectItem value="energy">Energia/Internet</SelectItem>
               <SelectItem value="vacation">Férias</SelectItem>
               <SelectItem value="other">Outro</SelectItem>
             </SelectContent>
