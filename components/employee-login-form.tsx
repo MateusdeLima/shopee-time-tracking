@@ -189,7 +189,10 @@ export function EmployeeLoginForm() {
         // Upload da foto de perfil
         let profilePictureUrl = null
         try {
-          profilePictureUrl = await uploadProfilePicture(profilePicture, formData.email.replace(/[^a-zA-Z0-9]/g, ""))
+          profilePictureUrl = await uploadProfilePicture(
+            formData.email.replace(/[^a-zA-Z0-9]/g, ""),
+            profilePicture
+          )
           if (!profilePictureUrl) {
             setError("Falha ao fazer upload da foto de perfil. Tente novamente.")
             setIsLoading(false)
