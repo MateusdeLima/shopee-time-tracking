@@ -9,7 +9,7 @@ import { HolidaySelection } from "@/components/holiday-selection"
 import { EmployeeHistory } from "@/components/employee-history"
 import { AbsenceManagement } from "@/components/absence-management"
 import { Clock, History, LogOut, Calendar, User } from "lucide-react"
-import { getCurrentUser, logout } from "@/lib/auth"
+import { getCurrentUser, logout, setCurrentUser } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
 import Image from "next/image"
 import { getProfilePictureUrl } from "@/lib/supabase"
@@ -39,8 +39,8 @@ export default function EmployeeDashboard() {
       return
     }
 
-    // Se for o primeiro acesso ou não tiver foto de perfil, redireciona para upload obrigatório
-    if (user.isFirstAccess || !user.profilePictureUrl) {
+    // Se for o primeiro acesso E não tiver foto de perfil, redireciona para upload obrigatório
+    if (user.isFirstAccess && !user.profilePictureUrl) {
       router.push("/employee/primeiro-acesso")
       return
     }
@@ -75,20 +75,70 @@ export default function EmployeeDashboard() {
               <LogOut className="mr-2 h-4 w-4" /> Sair
             </Button>
             <div className="flex items-center mt-1 text-sm text-white/80">
-              {/* Foto de perfil */}
-              {user.profilePictureUrl ? (
-                <Image
-                  src={user.profilePictureUrl}
-                  alt="Foto de perfil"
-                  width={32}
-                  height={32}
-                  className="rounded-full mr-2 border border-white"
+              {/* Foto de perfil com overlay para edição */}
+              <div className="relative group">
+                {user.profilePictureUrl ? (
+                  <>
+                    <Image
+                      src={user.profilePictureUrl}
+                      alt="Foto de perfil"
+                      width={32}
+                      height={32}
+                      className="rounded-full mr-2 border-2 border-white cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => document.getElementById('profile-picture-upload')?.click()}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                         onClick={() => document.getElementById('profile-picture-upload')?.click()}>
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                      </svg>
+                    </div>
+                  </>
+                ) : (
+                  <div 
+                    className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center mr-2 border-2 border-white cursor-pointer hover:bg-gray-400 transition-colors"
+                    onClick={() => document.getElementById('profile-picture-upload')?.click()}
+                  >
+                    <User className="h-5 w-5 text-gray-600" />
+                  </div>
+                )}
+                <input
+                  id="profile-picture-upload"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    
+                    try {
+                      setLoading(true);
+                      const { uploadProfilePicture } = await import('@/lib/supabase');
+                      const { updateUserProfilePicture } = await import('@/lib/db');
+                      
+                      const url = await uploadProfilePicture(user.id, file);
+                      if (!url) throw new Error('Falha ao fazer upload da nova foto.');
+                      
+                      await updateUserProfilePicture(user.id, url);
+                      
+                      // Atualizar o estado do usuário
+                      const updatedUser = { ...user, profilePictureUrl: url };
+                      setUser(updatedUser);
+                      setCurrentUser(updatedUser);
+                      
+                      // Mostrar notificação de sucesso
+                      alert('Foto de perfil atualizada com sucesso!');
+                    } catch (err) {
+                      console.error('Erro ao atualizar foto de perfil:', err);
+                      alert('Erro ao atualizar a foto de perfil. Tente novamente.');
+                    } finally {
+                      setLoading(false);
+                      // Resetar o input para permitir selecionar o mesmo arquivo novamente
+                      e.target.value = '';
+                    }
+                  }}
                 />
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center mr-2 border border-white">
-                  <User className="h-5 w-5 text-gray-500" />
-                </div>
-              )}
+              </div>
               <span>
                 User: <strong>{user.username}</strong>
               </span>

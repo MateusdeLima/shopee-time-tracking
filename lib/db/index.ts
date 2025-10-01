@@ -697,6 +697,7 @@ export async function createAbsenceRecord(
     status: record.status,
     proofDocument: record.proofDocument,
     expiresAt: expiresAt.toISOString(),
+    createdAt: new Date().toISOString(),
     dateRange: record.dateRange,
   })
 

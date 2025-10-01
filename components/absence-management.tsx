@@ -109,9 +109,25 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     try {
       const userAbsences = await getAbsenceRecordsByUserId(user.id)
       if (Array.isArray(userAbsences)) {
-    // Ordenar por data (mais recentes primeiro)
-    userAbsences.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    setAbsences(userAbsences)
+        // Filtrar ausências com createdAt válido e ordenar por data (mais recentes primeiro)
+        const validAbsences = userAbsences.filter(absence => {
+          if (!absence.createdAt) return false
+          try {
+            const date = parseISO(absence.createdAt)
+            return !isNaN(date.getTime())
+          } catch (error) {
+            console.error('Ausência com createdAt inválido:', absence.id, absence.createdAt)
+            return false
+          }
+        })
+        
+        validAbsences.sort((a, b) => {
+          const dateA = parseISO(a.createdAt)
+          const dateB = parseISO(b.createdAt)
+          return dateB.getTime() - dateA.getTime()
+        })
+        
+        setAbsences(validAbsences)
       } else {
         console.error("loadAbsences: getAbsenceRecordsByUserId não retornou um array:", userAbsences)
         setAbsences([])
@@ -539,7 +555,23 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
       // Agrupar ausências por mês
       const groupedAbsences = absences.reduce((acc, absence) => {
-        const date = parseISO(absence.createdAt)
+        // Validar se createdAt existe e é válido
+        if (!absence.createdAt) {
+          return acc
+        }
+        
+        let date: Date
+        try {
+          date = parseISO(absence.createdAt)
+          // Verificar se a data é válida
+          if (isNaN(date.getTime())) {
+            return acc
+          }
+        } catch (error) {
+          console.error('Erro ao parsear data:', absence.createdAt, error)
+          return acc
+        }
+        
         const monthYear = format(date, "MMMM yyyy", { locale: ptBR })
         
         if (!acc[monthYear]) {
@@ -561,14 +593,28 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         doc.setFont("helvetica", "normal")
         
         // Preparar dados para a tabela
-        const tableData = (monthAbsences as typeof absences).map((absence: typeof absences[0]) => [
-          format(parseISO(absence.createdAt), "dd/MM/yyyy"),
-          getReasonLabel(absence),
-          formatDateRange(absence),
-          absence.status === "approved" ? "Aprovado" :
-          absence.status === "completed" ? "Comprovante Enviado" :
-          absence.reason === "vacation" ? "Aguardando Aprovação" : "Pendente"
-        ])
+        const tableData = (monthAbsences as typeof absences).map((absence: typeof absences[0]) => {
+          let createdAtFormatted = "Data inválida"
+          if (absence.createdAt) {
+            try {
+              const date = parseISO(absence.createdAt)
+              if (!isNaN(date.getTime())) {
+                createdAtFormatted = format(date, "dd/MM/yyyy")
+              }
+            } catch (error) {
+              console.error('Erro ao formatar data:', absence.createdAt, error)
+            }
+          }
+          
+          return [
+            createdAtFormatted,
+            getReasonLabel(absence),
+            formatDateRange(absence),
+            absence.status === "approved" ? "Aprovado" :
+            absence.status === "completed" ? "Comprovante Enviado" :
+            absence.reason === "vacation" ? "Aguardando Aprovação" : "Pendente"
+          ]
+        })
 
         // Adicionar tabela
         autoTable(doc, {
@@ -715,7 +761,16 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                     <p className="text-xs text-gray-500 order-2 sm:order-1">
-                      Registrado em: {format(parseISO(absence.createdAt), "dd/MM/yyyy")}
+                      Registrado em: {(() => {
+                        if (!absence.createdAt) return "Data inválida"
+                        try {
+                          const date = parseISO(absence.createdAt)
+                          return !isNaN(date.getTime()) ? format(date, "dd/MM/yyyy") : "Data inválida"
+                        } catch (error) {
+                          console.error('Erro ao formatar data:', absence.createdAt, error)
+                          return "Data inválida"
+                        }
+                      })()}
                     </p>
 
                     <div className="flex flex-wrap gap-2 order-1 sm:order-2 w-full sm:w-auto">
