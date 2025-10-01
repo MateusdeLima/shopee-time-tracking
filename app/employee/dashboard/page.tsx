@@ -10,13 +10,9 @@ import { EmployeeHistory } from "@/components/employee-history"
 import { AbsenceManagement } from "@/components/absence-management"
 import { Clock, History, LogOut, Calendar, User } from "lucide-react"
 import { getCurrentUser, logout } from "@/lib/auth"
-import { initializeDb, updateUser, getUserById } from "@/lib/db"
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { uploadProfilePicture } from "@/lib/supabase"
-import { toast } from "@/components/ui/use-toast"
+import { initializeDb } from "@/lib/db"
+import Image from "next/image"
+import { getProfilePictureUrl } from "@/lib/supabase"
 
 export const dynamic = "force-dynamic"
 
@@ -26,11 +22,6 @@ export default function EmployeeDashboard() {
   const [loading, setLoading] = useState(true)
   const [activeMainTab, setActiveMainTab] = useState("holidays")
   const [activeHolidayTab, setActiveHolidayTab] = useState("register")
-  const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false)
-  const [isEditPhoto, setIsEditPhoto] = useState(false)
-  const [newPhoto, setNewPhoto] = useState<File | null>(null)
-  const [previewPhoto, setPreviewPhoto] = useState<string>("")
-  const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false)
 
   useEffect(() => {
     // Inicializar banco de dados
@@ -48,6 +39,12 @@ export default function EmployeeDashboard() {
       return
     }
 
+    // Se for o primeiro acesso ou não tiver foto de perfil, redireciona para upload obrigatório
+    if (user.isFirstAccess || !user.profilePictureUrl) {
+      router.push("/employee/primeiro-acesso")
+      return
+    }
+
     setUser(user)
     setLoading(false)
   }, [router])
@@ -55,55 +52,6 @@ export default function EmployeeDashboard() {
   const handleLogout = () => {
     logout()
     router.push("/")
-  }
-
-  const handleOpenPhotoModal = () => {
-    setIsPhotoModalOpen(true)
-    setIsEditPhoto(false)
-    setNewPhoto(null)
-    setPreviewPhoto("")
-  }
-
-  const handleEditPhoto = () => {
-    setIsEditPhoto(true)
-    setNewPhoto(null)
-    setPreviewPhoto("")
-  }
-
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null
-    setNewPhoto(file)
-    if (file) {
-      setPreviewPhoto(URL.createObjectURL(file))
-    } else {
-      setPreviewPhoto("")
-    }
-  }
-
-  const handleSavePhoto = async () => {
-    if (!user || !newPhoto) return
-    setIsUpdatingPhoto(true)
-    try {
-      const url = await uploadProfilePicture(newPhoto, user.email.replace(/[^a-zA-Z0-9]/g, ""))
-      if (!url) throw new Error("Falha ao fazer upload da foto.")
-      await updateUser(user.id, { profilePictureUrl: url })
-      // Atualizar usuário localmente
-      const updatedUser = await getUserById(user.id)
-      setUser(updatedUser)
-      setIsEditPhoto(false)
-      setIsPhotoModalOpen(false)
-      toast({ title: "Foto atualizada com sucesso!" })
-    } catch (err: any) {
-      toast({ title: "Erro ao atualizar foto", description: err.message, variant: "destructive" })
-    } finally {
-      setIsUpdatingPhoto(false)
-    }
-  }
-
-  // Adiciona um parâmetro de cache busting na URL da foto
-  const getProfilePictureUrl = () => {
-    if (!user?.profilePictureUrl) return ""
-    return user.profilePictureUrl + '?t=' + (user.updated_at ? new Date(user.updated_at).getTime() : Date.now())
   }
 
   if (loading) {
@@ -126,16 +74,21 @@ export default function EmployeeDashboard() {
             <Button variant="ghost" onClick={handleLogout} className="text-white hover:bg-[#D23F20]">
               <LogOut className="mr-2 h-4 w-4" /> Sair
             </Button>
-            <div className="flex items-center mt-1 text-sm text-white/80 gap-2">
-              <Avatar className="w-8 h-10 border border-white cursor-pointer" onClick={handleOpenPhotoModal}>
-                <AvatarImage
-                  src={getProfilePictureUrl()}
-                  alt={user.firstName}
-                  className="object-cover w-8 h-10 rounded-md"
+            <div className="flex items-center mt-1 text-sm text-white/80">
+              {/* Foto de perfil */}
+              {user.profilePictureUrl ? (
+                <Image
+                  src={user.profilePictureUrl}
+                  alt="Foto de perfil"
+                  width={32}
+                  height={32}
+                  className="rounded-full mr-2 border border-white"
                 />
-                <AvatarFallback>{user.firstName?.[0]}</AvatarFallback>
-              </Avatar>
-              <User className="h-3 w-3 mr-1" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center mr-2 border border-white">
+                  <User className="h-5 w-5 text-gray-500" />
+                </div>
+              )}
               <span>
                 User: <strong>{user.username}</strong>
               </span>
@@ -199,51 +152,6 @@ export default function EmployeeDashboard() {
           </TabsContent>
         </Tabs>
       </main>
-
-      {/* Modal de visualização/edição da foto de perfil */}
-      <Dialog open={isPhotoModalOpen} onOpenChange={setIsPhotoModalOpen}>
-        <DialogContent className="max-w-xs">
-          <DialogHeader>
-            <DialogTitle>Foto de Perfil</DialogTitle>
-          </DialogHeader>
-          {!isEditPhoto ? (
-            <div className="flex flex-col items-center gap-4">
-              <img
-                src={getProfilePictureUrl()}
-                alt="Foto de perfil"
-                className="w-32 h-40 object-cover rounded-md border"
-              />
-              <Button onClick={handleEditPhoto} className="w-full">Editar Foto</Button>
-            </div>
-          ) : (
-            <form className="flex flex-col gap-4" onSubmit={e => { e.preventDefault(); handleSavePhoto(); }}>
-              <Label htmlFor="newProfilePhoto">Nova Foto de Perfil</Label>
-              <Input
-                id="newProfilePhoto"
-                type="file"
-                accept="image/*"
-                onChange={handlePhotoChange}
-                required
-              />
-              {previewPhoto && (
-                <img
-                  src={previewPhoto}
-                  alt="Pré-visualização"
-                  className="w-32 h-40 object-cover rounded-md border"
-                />
-              )}
-              <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setIsEditPhoto(false)} disabled={isUpdatingPhoto}>
-                  Cancelar
-                </Button>
-                <Button type="submit" className="bg-[#EE4D2D] hover:bg-[#D23F20]" disabled={isUpdatingPhoto}>
-                  {isUpdatingPhoto ? "Salvando..." : "Salvar"}
-                </Button>
-              </div>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
