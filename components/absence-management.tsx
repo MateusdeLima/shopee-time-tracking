@@ -402,10 +402,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
   }
 
-  const formatDate = (dateString: string) => {
-    // Criar uma nova data considerando que a string está em UTC
-    const [year, month, day] = dateString.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
+  const formatDate = (dateString: string | undefined | null) => {
+    if (!dateString || typeof dateString !== "string" || !dateString.includes("-")) return "-"
+    const parts = dateString.split('-').map(Number)
+    if (parts.length < 3 || parts.some((n) => Number.isNaN(n))) return "-"
+    const [year, month, day] = parts
+    const date = new Date(year, (month || 1) - 1, day || 1)
+    if (isNaN(date.getTime())) return "-"
     return format(date, "dd/MM/yyyy", { locale: ptBR })
   }
 
@@ -461,19 +464,25 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   }
 
   const formatDateRange = (absence: any) => {
-    if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
-      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
-      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
-      const startDate = new Date(startYear, startMonth - 1, startDay)
-      const endDate = new Date(endYear, endMonth - 1, endDay)
-      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
-    } else if (absence.dates.length > 1) {
-      return `${absence.dates.length} dias`
-    } else {
-      const [year, month, day] = absence.dates[0].split('-').map(Number)
-      const date = new Date(year, month - 1, day)
-      return format(date, "dd/MM/yyyy")
+    const startStr = absence?.dateRange?.start as string | undefined
+    const endStr = absence?.dateRange?.end as string | undefined
+
+    if (startStr && endStr) {
+      return `De ${formatDate(startStr)} até ${formatDate(endStr)}`
     }
+
+    if (startStr && !endStr) {
+      return `${formatDate(startStr)}`
+    }
+
+    const dates: string[] = Array.isArray(absence?.dates) ? absence.dates : []
+    if (dates.length > 1) {
+      return `${dates.length} dias`
+    }
+    if (dates.length === 1) {
+      return formatDate(dates[0])
+    }
+    return "-"
   }
 
   const handleViewProof = (absence: any) => {
