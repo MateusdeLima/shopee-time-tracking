@@ -246,19 +246,34 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
   const hasPastDates = () => {
     if (!formData.startDate) return false
-    // Se for férias, considerar apenas a data de início
     if (formData.reason === "vacation") {
       const start = new Date(formData.startDate)
       const now = new Date()
       start.setHours(0, 0, 0, 0)
       now.setHours(0, 0, 0, 0)
       return start < now
-    } else {
-      // Para outros motivos, considerar data e hora
-      if (!formData.startTime) return false
-      const start = new Date(`${formData.startDate}T${formData.startTime}`)
-      return start < new Date()
     }
+    if (!formData.startTime) return false
+    const start = new Date(`${formData.startDate}T${formData.startTime}`)
+    if (start < new Date()) return true
+    if (formData.endDate && formData.endTime) {
+      const end = new Date(`${formData.endDate}T${formData.endTime}`)
+      if (end < new Date()) return true
+    }
+    return false
+  }
+
+  // Para exigir comprovante: para energy apenas quando fim informado (retorno) e já no passado
+  const needsProofNow = () => {
+    if (formData.reason === "vacation") return false
+    if (formData.reason === "energy") {
+      if (formData.endDate && formData.endTime) {
+        const end = new Date(`${formData.endDate}T${formData.endTime}`)
+        return end < new Date()
+      }
+      return false
+    }
+    return hasPastDates()
   }
 
   const handleSaveAbsence = async () => {
@@ -294,21 +309,39 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         return
       }
     } else {
-      if (!formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime) {
-        setError("Preencha as datas e horários de início e fim da ausência")
-        return
-      }
-      const start = new Date(`${formData.startDate}T${formData.startTime}`)
-      const end = new Date(`${formData.endDate}T${formData.endTime}`)
-      if (end < start) {
-        setError("A data e hora final não podem ser anteriores ao início.")
-        return
+      if (formData.reason === "energy") {
+        // Início obrigatório
+        if (!formData.startDate || !formData.startTime) {
+          setError("Informe a data e hora de início da ausência")
+          return
+        }
+        // Fim opcional. Se informado, deve ser posterior ao início
+        if (formData.endDate && formData.endTime) {
+          const start = new Date(`${formData.startDate}T${formData.startTime}`)
+          const end = new Date(`${formData.endDate}T${formData.endTime}`)
+          if (end < start) {
+            setError("A data e hora final não podem ser anteriores ao início.")
+            return
+          }
+        }
+      } else {
+        // Demais motivos mantêm a regra antiga: início e fim obrigatórios
+        if (!formData.startDate || !formData.startTime || !formData.endDate || !formData.endTime) {
+          setError("Preencha as datas e horários de início e fim da ausência")
+          return
+        }
+        const start = new Date(`${formData.startDate}T${formData.startTime}`)
+        const end = new Date(`${formData.endDate}T${formData.endTime}`)
+        if (end < start) {
+          setError("A data e hora final não podem ser anteriores ao início.")
+          return
+        }
       }
     }
 
-    // Exigir comprovante para datas passadas, exceto para Energia/Internet (pode concluir depois)
-    if (formData.reason !== "energy" && hasPastDates() && !formData.proofDocument) {
-      setError("É necessário anexar um comprovante para datas passadas")
+    // Exigir comprovante conforme regra: energy só quando fim informado e passado; demais seguem regra de datas passadas
+    if (needsProofNow() && !formData.proofDocument) {
+      setError("É necessário anexar um comprovante para registrar esta ausência")
       return
     }
 
@@ -332,13 +365,21 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           }
         }
       } else {
-        // Salvar datas com hora
         const start = `${formData.startDate}T${formData.startTime}`
-        const end = `${formData.endDate}T${formData.endTime}`
-        dates = [start, end]
-        dateRange = {
-          start,
-          end,
+        if (formData.reason === "energy") {
+          // fim opcional
+          if (formData.endDate && formData.endTime) {
+            const end = `${formData.endDate}T${formData.endTime}`
+            dates = [start, end]
+            dateRange = { start, end }
+          } else {
+            dates = [start]
+            dateRange = { start }
+          }
+        } else {
+          const end = `${formData.endDate}T${formData.endTime}`
+          dates = [start, end]
+          dateRange = { start, end }
         }
       }
 
