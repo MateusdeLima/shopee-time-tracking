@@ -644,56 +644,6 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
   }
 
-  const isDateInFuture = (dateString: string) => {
-    const date = new Date(dateString)
-    date.setHours(0, 0, 0, 0)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    return date >= today
-  }
-
-  const getReasonLabel = (absence: any) => {
-    if (absence.reason === "other") {
-      return absence.customReason
-    }
-    if (absence.reason === "medical_certificate") {
-      return "Atestado Médico"
-    }
-    const reason = ABSENCE_REASONS.find((r) => r.id === absence.reason)
-    return reason ? reason.label : "Motivo não especificado"
-  }
-
-  const isAbsenceActive = (absence: any) => {
-    const expiresAt = new Date(absence.expiresAt)
-    return isAfter(expiresAt, new Date())
-  }
-
-  const getStatusBadge = (absence: any) => {
-    if (absence.status === "approved") {
-      return (
-        <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
-          <Check className="h-3 w-3" />
-          Aprovado! <PartyPopper className="h-3 w-3 ml-1" />
-        </Badge>
-      )
-    } else if (absence.status === "completed") {
-      return (
-        <Badge className="bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1">
-          <FileText className="h-3 w-3" />
-          Comprovante Enviado
-        </Badge>
-      )
-    } else if (absence.reason === "vacation") {
-      return (
-        <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 flex items-center gap-1">
-          <AlertCircle className="h-3 w-3" />
-          Aguardando Aprovação
-        </Badge>
-      )
-    }
-    return null
-  }
-
   return (
     <div className="space-y-6">
       <div className={cn(
