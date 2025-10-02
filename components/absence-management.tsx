@@ -27,7 +27,7 @@ import autoTable from 'jspdf-autotable'
 
 const ABSENCE_REASONS = [
   { id: "medical", label: "Consulta Médica" },
-  { id: "personal", label: "Compromisso Pessoal" },
+  { id: "personal", label: "Energia/Internet" },
   { id: "vacation", label: "Férias" },
   { id: "certificate", label: "Atestado" },
   { id: "other", label: "Outro" },
@@ -281,9 +281,18 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return
     }
 
-    if (!formData.departureDate || !formData.returnDate) {
-      setError("Selecione as datas de saída e volta")
-      return
+    // Para Energia/Internet, apenas data de saída é obrigatória
+    if (formData.reason === "personal") {
+      if (!formData.departureDate) {
+        setError("Selecione a data e hora de início da ausência")
+        return
+      }
+      // Data de retorno é opcional para Energia/Internet
+    } else {
+      if (!formData.departureDate || !formData.returnDate) {
+        setError("Selecione as datas de saída e volta")
+        return
+      }
     }
 
     // Validação específica para Atestado
@@ -304,15 +313,34 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
 
     try {
-      // Calcular todas as datas entre saída e volta
-      const start = new Date(formData.departureDate)
-      const end = new Date(formData.returnDate)
-      const dates = eachDayOfInterval({ start, end })
-      const formattedDates = dates.map((date) => format(date, "yyyy-MM-dd"))
+      // Para Energia/Internet sem data de retorno, usar apenas a data de saída
+      let formattedDates: string[]
+      let endDate: string
+      
+      if (formData.reason === "personal" && !formData.returnDate) {
+        // Apenas data de saída
+        formattedDates = [format(new Date(formData.departureDate), "yyyy-MM-dd")]
+        endDate = formData.departureDate
+      } else {
+        // Calcular todas as datas entre saída e volta
+        const start = new Date(formData.departureDate)
+        const end = new Date(formData.returnDate)
+        const dates = eachDayOfInterval({ start, end })
+        formattedDates = dates.map((date) => format(date, "yyyy-MM-dd"))
+        endDate = formData.returnDate
+      }
 
-      // Determinar o status inicial com base no motivo e se há comprovante
-      const initialStatus = formData.reason === "vacation" ? "pending" : 
-                          formData.proofDocument ? "completed" : "pending"
+      // Determinar o status inicial
+      let initialStatus: "pending" | "completed" | "approved"
+      if (formData.reason === "vacation") {
+        initialStatus = "pending" // Férias aguardam aprovação
+      } else if (formData.reason === "personal" && !formData.returnDate) {
+        initialStatus = "pending" // Energia/Internet sem retorno aguarda protocolo
+      } else if (formData.proofDocument) {
+        initialStatus = "completed" // Com comprovante
+      } else {
+        initialStatus = "pending" // Sem comprovante
+      }
 
       // Criar novo registro de ausência
       const newAbsence = await createAbsenceRecord({
@@ -323,11 +351,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         status: initialStatus,
         dateRange: {
           start: formData.departureDate,
-          end: formData.returnDate,
+          end: endDate,
         },
-        // TODO: Adicionar departureTime e returnTime ao banco de dados
-        // departureTime: (formData.reason !== "vacation" && formData.reason !== "certificate") ? formData.departureTime : undefined,
-        // returnTime: (formData.reason !== "vacation" && formData.reason !== "certificate") ? formData.returnTime : undefined,
+        departureTime: formData.reason !== "vacation" ? formData.departureTime : undefined,
+        returnTime: (formData.reason !== "vacation" && formData.returnTime && formData.returnDate) ? formData.returnTime : undefined,
         proofDocument: formData.proofDocument || undefined,
       })
 
@@ -341,6 +368,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             ? "Sua solicitação de férias foi registrada e está aguardando aprovação"
             : formData.reason === "certificate"
             ? "Seu atestado foi registrado com sucesso"
+            : formData.reason === "personal" && !formData.returnDate
+            ? "Ausência registrada. Envie o protocolo para registrar o horário de retorno automaticamente"
             : "Sua ausência foi registrada com sucesso",
       })
 
@@ -387,24 +416,52 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       if (!selectedAbsence) return
 
       try {
-        // Atualizar registro com o documento
-        const updatedAbsence = await updateAbsenceRecord(selectedAbsence.id, {
+        const now = new Date()
+        const currentDate = format(now, "yyyy-MM-dd")
+        const currentTime = format(now, "HH:mm")
+        
+        // Preparar dados de atualização
+        const updateData: any = {
           proofDocument: event.target?.result as string,
           status: "completed",
-        })
+        }
+
+        // Para Energia/Internet sem data de retorno, registrar horário atual
+        if (selectedAbsence.reason === "personal" && !selectedAbsence.returnTime) {
+          updateData.returnTime = currentTime
+          
+          // Se a data de retorno não foi definida, usar a data atual
+          if (!selectedAbsence.dateRange?.end || selectedAbsence.dateRange.end === selectedAbsence.dateRange.start) {
+            updateData.dateRange = {
+              start: selectedAbsence.dateRange.start,
+              end: currentDate
+            }
+            
+            // Atualizar datas se necessário
+            const start = new Date(selectedAbsence.dateRange.start)
+            const end = new Date(currentDate)
+            const dates = eachDayOfInterval({ start, end })
+            updateData.dates = dates.map((date) => format(date, "yyyy-MM-dd"))
+          }
+        }
+
+        // Atualizar registro com o documento
+        await updateAbsenceRecord(selectedAbsence.id, updateData)
 
         // Atualizar o estado local imediatamente
         setAbsences(prevAbsences => 
           prevAbsences.map(absence => 
             absence.id === selectedAbsence.id 
-              ? { ...absence, proofDocument: event.target?.result as string, status: "completed" }
+              ? { ...absence, ...updateData }
               : absence
           )
         )
 
         toast({
-          title: "Comprovante enviado",
-          description: "Seu comprovante foi enviado com sucesso",
+          title: "Protocolo enviado",
+          description: selectedAbsence.reason === "personal" && !selectedAbsence.returnTime
+            ? `Protocolo enviado e horário de retorno registrado: ${currentTime}`
+            : "Seu comprovante foi enviado com sucesso",
         })
 
         // Fechar diálogo
@@ -511,7 +568,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return (
         <Badge className="bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1">
           <FileText className="h-3 w-3" />
-          Comprovante Enviado
+          {absence.reason === "personal" ? "Protocolo Enviado" : "Comprovante Enviado"}
         </Badge>
       )
     } else if (absence.reason === "vacation") {
@@ -521,6 +578,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           Aguardando Aprovação
         </Badge>
       )
+    } else if (absence.reason === "personal" && absence.status === "pending") {
+      return (
+        <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1">
+          <Upload className="h-3 w-3" />
+          Aguardando Protocolo
+        </Badge>
+      )
     }
 
     return null
@@ -528,6 +592,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
   const formatDateRange = (absence: any) => {
     try {
+      // Verificar se tem horários (não é férias)
+      const hasTime = absence.departureTime && absence.returnTime && 
+                      absence.reason !== "vacation"
+      
       if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
         const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
         const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
@@ -543,7 +611,14 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           return "Data inválida"
         }
         
-        return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
+        const startFormatted = format(startDate, "dd/MM/yyyy")
+        const endFormatted = format(endDate, "dd/MM/yyyy")
+        
+        if (hasTime) {
+          return `De ${startFormatted} ${absence.departureTime} até ${endFormatted} ${absence.returnTime}`
+        }
+        
+        return `De ${startFormatted} até ${endFormatted}`
       } else if (absence.dates && absence.dates.length > 1) {
         return `${absence.dates.length} dias`
       } else if (absence.dates && absence.dates.length === 1) {
@@ -559,7 +634,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           return "Data inválida"
         }
         
-        return format(date, "dd/MM/yyyy")
+        const dateFormatted = format(date, "dd/MM/yyyy")
+        
+        if (hasTime) {
+          return `${dateFormatted} ${absence.departureTime} - ${absence.returnTime}`
+        }
+        
+        return dateFormatted
       }
       
       return "Data não especificada"
@@ -880,17 +961,15 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                         </>
                       )}
                     {absence.status === "pending" &&
-                      absence.reason !== "vacation" &&
-                      Array.isArray(absence.dates) &&
-                      absence.dates.some(isDateInFuture) && (
+                      absence.reason !== "vacation" && (
                         <Button
                           variant="outline"
                           size="sm"
-                            className="h-8 text-xs sm:text-sm flex-1 sm:flex-none"
+                          className="h-8 text-xs sm:text-sm flex-1 sm:flex-none"
                           onClick={() => handleUploadProof(absence.id)}
                         >
                           <Upload className="h-3.5 w-3.5 mr-1.5" />
-                          Enviar Comprovante
+                          {absence.reason === "personal" ? "Enviar Protocolo" : "Enviar Comprovante"}
                         </Button>
                       )}
                     </div>
@@ -945,67 +1024,74 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             {/* Data e Hora de Saída */}
             <div className="space-y-2">
               <Label className="text-base font-semibold">Data e Hora de Saída</Label>
-              <div className="grid grid-cols-2 gap-3">
+              <div className={cn("grid gap-3", formData.reason === "vacation" ? "grid-cols-1" : "grid-cols-2")}>
                 <div>
                   <Label htmlFor="departureDate" className="text-sm">Data Saída</Label>
                   <Input
                     id="departureDate"
                     type="date"
                     value={formData.departureDate}
-                    onChange={(e) => setFormData({...formData, departureDate: e.target.value})}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, departureDate: e.target.value})}
                     max={formData.reason === "certificate" ? format(new Date(), "yyyy-MM-dd") : undefined}
                     required
                     className="mt-1"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="departureTime" className="text-sm">Hora</Label>
-                  <Input
-                    id="departureTime"
-                    type="time"
-                    value={formData.departureTime}
-                    onChange={(e) => setFormData({...formData, departureTime: e.target.value})}
-                    disabled={formData.reason === "vacation" || formData.reason === "certificate"}
-                    className="mt-1"
-                  />
-                </div>
+                {formData.reason !== "vacation" && (
+                  <div>
+                    <Label htmlFor="departureTime" className="text-sm">Hora</Label>
+                    <Input
+                      id="departureTime"
+                      type="time"
+                      value={formData.departureTime}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, departureTime: e.target.value})}
+                      className="mt-1"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Data e Hora de Volta */}
             <div className="space-y-2">
-              <Label className="text-base font-semibold">Data e Hora de Volta</Label>
-              <div className="grid grid-cols-2 gap-3">
+              <Label className="text-base font-semibold">
+                Data e Hora de Volta
+                {formData.reason === "personal" && (
+                  <span className="text-sm font-normal text-gray-500 ml-2">(Opcional - será registrada ao enviar protocolo)</span>
+                )}
+              </Label>
+              <div className={cn("grid gap-3", formData.reason === "vacation" ? "grid-cols-1" : "grid-cols-2")}>
                 <div>
                   <Label htmlFor="returnDate" className="text-sm">Data Volta</Label>
                   <Input
                     id="returnDate"
                     type="date"
                     value={formData.returnDate}
-                    onChange={(e) => setFormData({...formData, returnDate: e.target.value})}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, returnDate: e.target.value})}
                     min={formData.departureDate}
                     max={formData.reason === "certificate" ? format(new Date(), "yyyy-MM-dd") : undefined}
-                    required
+                    required={formData.reason !== "personal"}
                     className="mt-1"
                   />
                 </div>
-                <div>
-                  <Label htmlFor="returnTime" className="text-sm">Hora</Label>
-                  <Input
-                    id="returnTime"
-                    type="time"
-                    value={formData.returnTime}
-                    onChange={(e) => setFormData({...formData, returnTime: e.target.value})}
-                    disabled={formData.reason === "vacation" || formData.reason === "certificate"}
-                    className="mt-1"
-                  />
-                </div>
+                {formData.reason !== "vacation" && (
+                  <div>
+                    <Label htmlFor="returnTime" className="text-sm">Hora</Label>
+                    <Input
+                      id="returnTime"
+                      type="time"
+                      value={formData.returnTime}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, returnTime: e.target.value})}
+                      className="mt-1"
+                    />
+                  </div>
+                )}
               </div>
-              {formData.reason === "vacation" || formData.reason === "certificate" ? (
-                <p className="text-xs text-gray-500 mt-1">
-                  Horário não é necessário para {formData.reason === "vacation" ? "férias" : "atestado"}
+              {formData.reason === "personal" && (
+                <p className="text-xs text-blue-600 mt-1">
+                  💡 Se não informar a data/hora de volta, será registrada automaticamente quando você enviar o protocolo
                 </p>
-              ) : null}
+              )}
             </div>
 
             {(formData.reason === "certificate" || (formData.departureDate && startOfDay(new Date(formData.departureDate)) < startOfDay(new Date()))) && (

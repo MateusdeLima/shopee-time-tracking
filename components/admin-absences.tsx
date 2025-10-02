@@ -215,24 +215,53 @@ export function AdminAbsences() {
 
   const getReasonText = (absence: any) => {
     if (absence.reason === "medical") return "Consulta Médica"
-    if (absence.reason === "personal") return "Compromisso Pessoal"
+    if (absence.reason === "personal") return "Energia/Internet"
     if (absence.reason === "vacation") return "Férias"
+    if (absence.reason === "certificate") return "Atestado"
+    if (absence.reason === "other") return absence.customReason || "Outro"
     return absence.customReason || "Outro"
   }
 
   const formatDateRange = (absence: any) => {
-    if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
-      const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
-      const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
-      const startDate = new Date(startYear, startMonth - 1, startDay)
-      const endDate = new Date(endYear, endMonth - 1, endDay)
-      return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
-    } else if (absence.dates.length > 1) {
-      return `${absence.dates.length} dias`
-    } else {
-      const [year, month, day] = absence.dates[0].split('-').map(Number)
-      const date = new Date(year, month - 1, day)
-      return format(date, "dd/MM/yyyy")
+    try {
+      if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
+        const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
+        const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
+        
+        if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
+          return "Data inválida"
+        }
+        
+        const startDate = new Date(startYear, startMonth - 1, startDay)
+        const endDate = new Date(endYear, endMonth - 1, endDay)
+        
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+          return "Data inválida"
+        }
+        
+        return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
+      } else if (absence.dates && absence.dates.length > 1) {
+        return `${absence.dates.length} dias`
+      } else if (absence.dates && absence.dates.length === 1) {
+        const [year, month, day] = absence.dates[0].split('-').map(Number)
+        
+        if (!year || !month || !day) {
+          return "Data inválida"
+        }
+        
+        const date = new Date(year, month - 1, day)
+        
+        if (isNaN(date.getTime())) {
+          return "Data inválida"
+        }
+        
+        return format(date, "dd/MM/yyyy")
+      }
+      
+      return "Data não especificada"
+    } catch (error) {
+      console.error('Erro ao formatar intervalo de datas:', absence, error)
+      return "Data inválida"
     }
   }
 

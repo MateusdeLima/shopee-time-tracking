@@ -70,6 +70,8 @@ export interface AbsenceRecord {
     start: string
     end: string
   }
+  departureTime?: string
+  returnTime?: string
 }
 
 // Função para converter nomes de campos do Supabase para o formato camelCase usado na aplicação

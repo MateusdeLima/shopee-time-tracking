@@ -3,14 +3,10 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
   try {
-    const { data, userEmail } = await request.json()
+    const { data, month, stats } = await request.json()
 
     if (!data || !Array.isArray(data)) {
       return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
-    }
-
-    if (!userEmail) {
-      return NextResponse.json({ error: 'Email do usuário é necessário' }, { status: 400 })
     }
 
     // Configurar autenticação do Google Sheets
@@ -29,11 +25,11 @@ export async function POST(request: Request) {
     const sheets = google.sheets({ version: 'v4', auth })
     const drive = google.drive({ version: 'v3', auth })
 
-    // Criar nova planilha com duas abas
+    // Criar nova planilha
     const spreadsheet = await sheets.spreadsheets.create({
       requestBody: {
         properties: {
-          title: `Relatório de Ausências - ${new Date().toLocaleDateString('pt-BR')}`,
+          title: `Dashboard - ${month} - ${new Date().toLocaleDateString('pt-BR')}`,
         },
         sheets: [
           {
@@ -46,7 +42,7 @@ export async function POST(request: Request) {
           },
           {
             properties: {
-              title: 'Ausências Detalhadas',
+              title: 'Dados Completos',
               gridProperties: {
                 frozenRowCount: 1,
               },
@@ -58,60 +54,37 @@ export async function POST(request: Request) {
 
     const spreadsheetId = spreadsheet.data.spreadsheetId
     const summarySheetId = spreadsheet.data.sheets?.[0].properties?.sheetId
-    const detailsSheetId = spreadsheet.data.sheets?.[1].properties?.sheetId
+    const dataSheetId = spreadsheet.data.sheets?.[1].properties?.sheetId
 
-    if (!spreadsheetId || !summarySheetId || !detailsSheetId) {
+    if (!spreadsheetId || !summarySheetId || !dataSheetId) {
       throw new Error('Erro ao criar planilha')
     }
 
-    // Compartilhar planilha
+    // Compartilhar com qualquer pessoa com o link
     try {
       await drive.permissions.create({
         fileId: spreadsheetId,
         requestBody: {
-          role: 'owner',
-          type: 'user',
-          emailAddress: userEmail,
+          role: 'writer',
+          type: 'anyone',
         },
       })
     } catch (shareError) {
       console.error('Erro ao compartilhar:', shareError)
-      try {
-        await drive.permissions.create({
-          fileId: spreadsheetId,
-          requestBody: {
-            role: 'writer',
-            type: 'anyone',
-          },
-        })
-      } catch (secondError) {
-        console.error('Erro na segunda tentativa:', secondError)
-      }
     }
-
-    // Calcular estatísticas
-    const totalAusencias = data.length
-    const porMotivo: { [key: string]: number } = {}
-    const porStatus: { [key: string]: number } = {}
-    
-    data.forEach((row: any) => {
-      porMotivo[row.motivo] = (porMotivo[row.motivo] || 0) + 1
-      porStatus[row.status] = (porStatus[row.status] || 0) + 1
-    })
 
     // Aba de Resumo
     const summaryValues = [
-      ['RELATÓRIO DE AUSÊNCIAS - ADMIN'],
+      ['DASHBOARD - SHOPEE PAGE CONTROL'],
+      [`Período: ${month}`],
       [`Exportado em: ${new Date().toLocaleString('pt-BR')}`],
-      [`Total de registros: ${totalAusencias}`],
       [],
-      ['ESTATÍSTICAS POR MOTIVO'],
-      ['Motivo', 'Quantidade'],
-      ...Object.entries(porMotivo).map(([motivo, qtd]) => [motivo, qtd]),
-      [],
-      ['ESTATÍSTICAS POR STATUS'],
-      ['Status', 'Quantidade'],
-      ...Object.entries(porStatus).map(([status, qtd]) => [status, qtd]),
+      ['ESTATÍSTICAS'],
+      ['Métrica', 'Valor'],
+      ['Total de Ausências', stats.totalAbsences],
+      ['Total de Horas Extras', `${stats.totalOvertime}h`],
+      ['Total de Funcionários', stats.totalUsers],
+      ['Total de Feriados', stats.totalHolidays],
     ]
 
     await sheets.spreadsheets.values.update({
@@ -123,34 +96,36 @@ export async function POST(request: Request) {
       },
     })
 
-    // Aba de Ausências Detalhadas
+    // Aba de Dados Completos
     const headers = [
+      'Tipo',
       'Funcionário',
-      'Motivo',
+      'Descrição',
       'Período',
-      'Data do Registro',
+      'Horas',
       'Status',
-      'Comprovante'
+      'Data do Registro'
     ]
 
-    const detailsValues = [
+    const dataValues = [
       headers,
       ...data.map((row: any) => [
+        row.tipo,
         row.funcionario,
-        row.motivo,
+        row.descricao,
         row.periodo,
-        row.data_registro,
+        row.horas,
         row.status,
-        row.comprovante
+        row.data_registro
       ])
     ]
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
-      range: 'Ausências Detalhadas!A1',
+      range: 'Dados Completos!A1',
       valueInputOption: 'RAW',
       requestBody: {
-        values: detailsValues,
+        values: dataValues,
       },
     })
 
@@ -159,6 +134,7 @@ export async function POST(request: Request) {
       spreadsheetId,
       requestBody: {
         requests: [
+          // Formatar título
           {
             repeatCell: {
               range: {
@@ -176,12 +152,13 @@ export async function POST(request: Request) {
               fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
             },
           },
+          // Formatar cabeçalho de estatísticas
           {
             repeatCell: {
               range: {
                 sheetId: summarySheetId,
-                startRowIndex: 4,
-                endRowIndex: 5,
+                startRowIndex: 5,
+                endRowIndex: 6,
               },
               cell: {
                 userEnteredFormat: {
@@ -193,6 +170,7 @@ export async function POST(request: Request) {
               fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
             },
           },
+          // Auto-resize colunas
           {
             autoResizeDimensions: {
               dimensions: {
@@ -207,15 +185,16 @@ export async function POST(request: Request) {
       },
     })
 
-    // Formatar Aba de Ausências Detalhadas
+    // Formatar Aba de Dados Completos
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId,
       requestBody: {
         requests: [
+          // Formatar cabeçalho
           {
             repeatCell: {
               range: {
-                sheetId: detailsSheetId,
+                sheetId: dataSheetId,
                 startRowIndex: 0,
                 endRowIndex: 1,
               },
@@ -229,13 +208,14 @@ export async function POST(request: Request) {
               fields: 'userEnteredFormat(backgroundColor,textFormat,horizontalAlignment)',
             },
           },
+          // Auto-resize colunas
           {
             autoResizeDimensions: {
               dimensions: {
-                sheetId: detailsSheetId,
+                sheetId: dataSheetId,
                 dimension: 'COLUMNS',
                 startIndex: 0,
-                endIndex: 6,
+                endIndex: 7,
               },
             },
           },
@@ -247,7 +227,7 @@ export async function POST(request: Request) {
       spreadsheetUrl: `https://docs.google.com/spreadsheets/d/${spreadsheetId}`,
     })
   } catch (error: any) {
-    console.error('Erro ao exportar:', {
+    console.error('Erro ao exportar dashboard:', {
       message: error.message,
       stack: error.stack,
       name: error.name
