@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
-import { format, isAfter, isBefore, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, getMonth, getYear, isFuture, isPast, startOfDay } from "date-fns"
+import { format, isAfter, isBefore, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, getMonth, getYear, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download, FileDown } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -26,11 +26,11 @@ import 'jspdf-autotable'
 import autoTable from 'jspdf-autotable'
 
 const ABSENCE_REASONS = [
-  { id: "medical", label: "Consulta Médica", requiresTime: true },
-  { id: "personal", label: "Compromisso Pessoal", requiresTime: true },
-  { id: "vacation", label: "Férias", requiresTime: false },
-  { id: "certificate", label: "Atestado", requiresTime: false, requiresProof: true, pastOnly: true },
-  { id: "other", label: "Outro", requiresTime: true },
+  { id: "medical", label: "Consulta Médica" },
+  { id: "personal", label: "Compromisso Pessoal" },
+  { id: "vacation", label: "Férias" },
+  { id: "certificate", label: "Atestado" },
+  { id: "other", label: "Outro" },
 ]
 
 interface AbsenceManagementProps {
@@ -53,10 +53,15 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [formData, setFormData] = useState({
     reason: "",
     customReason: "",
-    departureDate: null as Date | null,
+    departureDate: "",
     departureTime: "09:00",
-    returnDate: null as Date | null,
+    returnDate: "",
     returnTime: "18:00",
+    dates: [] as Date[],
+    dateRange: {
+      start: null as Date | null,
+      end: null as Date | null,
+    },
     proofDocument: null as string | null,
   })
 
@@ -143,6 +148,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     setFormData({
       reason: "",
       customReason: "",
+      departureDate: "",
+      departureTime: "09:00",
+      returnDate: "",
+      returnTime: "18:00",
       dates: [],
       dateRange: {
         start: null,
@@ -272,19 +281,34 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return
     }
 
-    if (formData.dates.length === 0) {
-      setError("Selecione pelo menos uma data para a ausência")
+    if (!formData.departureDate || !formData.returnDate) {
+      setError("Selecione as datas de saída e volta")
       return
     }
 
-    if (hasPastDates() && !formData.proofDocument) {
-      setError("É necessário anexar um comprovante para datas passadas")
-      return
+    // Validação específica para Atestado
+    if (formData.reason === "certificate") {
+      const today = startOfDay(new Date())
+      const departure = startOfDay(new Date(formData.departureDate))
+      const returnDay = startOfDay(new Date(formData.returnDate))
+      
+      if (departure >= today || returnDay >= today) {
+        setError("Atestado só pode ser registrado para datas passadas")
+        return
+      }
+
+      if (!formData.proofDocument) {
+        setError("É obrigatório anexar o atestado")
+        return
+      }
     }
 
     try {
-      // Formatar datas para string ISO mantendo o fuso horário local
-      const formattedDates = formData.dates.map((date) => format(date, "yyyy-MM-dd"))
+      // Calcular todas as datas entre saída e volta
+      const start = new Date(formData.departureDate)
+      const end = new Date(formData.returnDate)
+      const dates = eachDayOfInterval({ start, end })
+      const formattedDates = dates.map((date) => format(date, "yyyy-MM-dd"))
 
       // Determinar o status inicial com base no motivo e se há comprovante
       const initialStatus = formData.reason === "vacation" ? "pending" : 
@@ -297,13 +321,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         customReason: formData.reason === "other" ? formData.customReason : undefined,
         dates: formattedDates,
         status: initialStatus,
-        dateRange:
-          formData.dateRange.start && formData.dateRange.end
-            ? {
-                start: format(formData.dateRange.start, "yyyy-MM-dd"),
-                end: format(formData.dateRange.end, "yyyy-MM-dd"),
-              }
-            : undefined,
+        dateRange: {
+          start: formData.departureDate,
+          end: formData.returnDate,
+        },
+        // TODO: Adicionar departureTime e returnTime ao banco de dados
+        // departureTime: (formData.reason !== "vacation" && formData.reason !== "certificate") ? formData.departureTime : undefined,
+        // returnTime: (formData.reason !== "vacation" && formData.reason !== "certificate") ? formData.returnTime : undefined,
         proofDocument: formData.proofDocument || undefined,
       })
 
@@ -315,6 +339,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         description:
           formData.reason === "vacation"
             ? "Sua solicitação de férias foi registrada e está aguardando aprovação"
+            : formData.reason === "certificate"
+            ? "Seu atestado foi registrado com sucesso"
             : "Sua ausência foi registrada com sucesso",
       })
 
@@ -916,105 +942,80 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               </div>
             )}
 
+            {/* Data e Hora de Saída */}
             <div className="space-y-2">
-              <Label>Datas de Ausência</Label>
-              <p className="text-xs text-gray-500 mb-2">
-                {formData.dateRange.start && !formData.dateRange.end
-                  ? "Selecione a data final para criar um intervalo"
-                  : "Selecione a data inicial e depois a data final para criar um intervalo"}
-              </p>
-              <Popover 
-                open={isCalendarOpen} 
-                onOpenChange={setIsCalendarOpen}
-                modal={isMobile}
-              >
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal relative",
-                      !formData.dates.length && "text-muted-foreground",
-                    )}
-                    onClick={() => setIsCalendarOpen(true)}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {formData.dateRange.start && formData.dateRange.end
-                      ? `De ${format(formData.dateRange.start, "dd/MM/yyyy")} até ${format(formData.dateRange.end, "dd/MM/yyyy")}`
-                      : formData.dateRange.start
-                        ? `Início: ${format(formData.dateRange.start, "dd/MM/yyyy")} - Selecione o fim`
-                        : "Selecione as datas"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent 
-                  className={cn(
-                    "p-0 absolute z-50",
-                    isMobile ? "w-screen h-screen max-w-none max-h-none fixed top-0 left-0 -translate-x-0 -translate-y-0 rounded-none" : "w-auto"
-                  )}
-                  align={isMobile ? "center" : "start"}
-                  side="bottom"
-                  sideOffset={isMobile ? 0 : 5}
-                  avoidCollisions
-                >
-                  <div className={cn(
-                    "p-3 bg-white rounded-lg shadow-lg",
-                    isMobile && "h-full flex flex-col justify-between rounded-none"
-                  )}>
-                    {isMobile && (
-                      <div className="p-2 border-b flex justify-end sticky top-0 bg-white z-10">
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setIsCalendarOpen(false)}
-                          className="w-full bg-[#EE4D2D] hover:bg-[#D23F20] text-white"
-                        >
-                          Fechar
-                        </Button>
-                      </div>
-                    )}
-                    <Calendar
-                      mode="single"
-                      selected={formData.dateRange.end ?? formData.dateRange.start ?? undefined}
-                      onSelect={(date) => {
-                        handleDateSelect(date)
-                        if (formData.dateRange.start && date) {
-                          setIsCalendarOpen(false)
-                        }
-                      }}
-                      initialFocus
-                      className={cn(
-                        "rounded-md border shadow-md w-full touch-manipulation",
-                        isMobile && "text-base flex-1"
-                      )}
-                    />
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {formData.dates.length > 0 && (
-                <div className="mt-2">
-                  <p className="text-sm font-medium">
-                    {formData.dates.length} {formData.dates.length === 1 ? "dia selecionado" : "dias selecionados"}
-                  </p>
-
-                  {formData.dates.length <= 5 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {formData.dates.map((date, index) => (
-                        <Badge key={index} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
-                          {format(date, "dd/MM/yyyy")}
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+              <Label className="text-base font-semibold">Data e Hora de Saída</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="departureDate" className="text-sm">Data Saída</Label>
+                  <Input
+                    id="departureDate"
+                    type="date"
+                    value={formData.departureDate}
+                    onChange={(e) => setFormData({...formData, departureDate: e.target.value})}
+                    max={formData.reason === "certificate" ? format(new Date(), "yyyy-MM-dd") : undefined}
+                    required
+                    className="mt-1"
+                  />
                 </div>
-              )}
+                <div>
+                  <Label htmlFor="departureTime" className="text-sm">Hora</Label>
+                  <Input
+                    id="departureTime"
+                    type="time"
+                    value={formData.departureTime}
+                    onChange={(e) => setFormData({...formData, departureTime: e.target.value})}
+                    disabled={formData.reason === "vacation" || formData.reason === "certificate"}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
             </div>
 
-            {hasPastDates() && (
+            {/* Data e Hora de Volta */}
+            <div className="space-y-2">
+              <Label className="text-base font-semibold">Data e Hora de Volta</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label htmlFor="returnDate" className="text-sm">Data Volta</Label>
+                  <Input
+                    id="returnDate"
+                    type="date"
+                    value={formData.returnDate}
+                    onChange={(e) => setFormData({...formData, returnDate: e.target.value})}
+                    min={formData.departureDate}
+                    max={formData.reason === "certificate" ? format(new Date(), "yyyy-MM-dd") : undefined}
+                    required
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="returnTime" className="text-sm">Hora</Label>
+                  <Input
+                    id="returnTime"
+                    type="time"
+                    value={formData.returnTime}
+                    onChange={(e) => setFormData({...formData, returnTime: e.target.value})}
+                    disabled={formData.reason === "vacation" || formData.reason === "certificate"}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              {formData.reason === "vacation" || formData.reason === "certificate" ? (
+                <p className="text-xs text-gray-500 mt-1">
+                  Horário não é necessário para {formData.reason === "vacation" ? "férias" : "atestado"}
+                </p>
+              ) : null}
+            </div>
+
+            {(formData.reason === "certificate" || (formData.departureDate && startOfDay(new Date(formData.departureDate)) < startOfDay(new Date()))) && (
               <div className="space-y-2">
-                <Alert className="bg-yellow-50 border-yellow-200">
-                  <AlertCircle className="h-4 w-4 text-yellow-500" />
-                  <AlertDescription className="text-yellow-700">
-                    Você selecionou datas passadas. É necessário anexar um comprovante para registrar a ausência.
+                <Alert className={formData.reason === "certificate" ? "bg-red-50 border-red-200" : "bg-yellow-50 border-yellow-200"}>
+                  <AlertCircle className={formData.reason === "certificate" ? "h-4 w-4 text-red-500" : "h-4 w-4 text-yellow-500"} />
+                  <AlertDescription className={formData.reason === "certificate" ? "text-red-700" : "text-yellow-700"}>
+                    {formData.reason === "certificate" 
+                      ? "É obrigatório anexar o atestado médico."
+                      : "Você selecionou datas passadas. É necessário anexar um comprovante para registrar a ausência."}
                   </AlertDescription>
                 </Alert>
 
