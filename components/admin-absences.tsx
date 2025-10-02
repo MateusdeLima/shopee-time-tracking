@@ -202,10 +202,27 @@ export function AdminAbsences() {
   }
 
   const formatDate = (dateString: string) => {
-    // Criar uma nova data considerando que a string está em UTC
-    const [year, month, day] = dateString.split('-').map(Number)
-    const date = new Date(year, month - 1, day)
-    return format(date, "dd/MM/yyyy", { locale: ptBR })
+    try {
+      if (!dateString) return "Data não especificada"
+      
+      // Criar uma nova data considerando que a string está em UTC
+      const [year, month, day] = dateString.split('-').map(Number)
+      
+      if (!year || !month || !day) {
+        return "Data inválida"
+      }
+      
+      const date = new Date(year, month - 1, day)
+      
+      if (isNaN(date.getTime())) {
+        return "Data inválida"
+      }
+      
+      return format(date, "dd/MM/yyyy", { locale: ptBR })
+    } catch (error) {
+      console.error('Erro ao formatar data:', dateString, error)
+      return "Data inválida"
+    }
   }
 
   const getEmployeeName = (userId: string) => {
