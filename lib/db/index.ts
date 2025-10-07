@@ -38,6 +38,7 @@ export interface OvertimeRecord {
   hours: number
   startTime?: string
   endTime?: string
+  task?: string
   createdAt: string
   updatedAt?: string
 }
@@ -381,6 +382,49 @@ export async function toggleHolidayStatus(id: number): Promise<Holiday> {
   return await updateHoliday(id, { active: !holiday.active })
 }
 
+export async function deleteHoliday(id: number): Promise<void> {
+  try {
+    // Verificar se o banco de dados está inicializado
+    await initializeDb()
+
+    // Verificar se o feriado existe
+    const holiday = await getHolidayById(id)
+    if (!holiday) {
+      throw new Error("Feriado não encontrado")
+    }
+
+    // Verificar se há registros de horas extras associados a este feriado
+    const { data: overtimeRecords, error: overtimeError } = await supabase
+      .from("overtime_records")
+      .select("id")
+      .eq("holiday_id", id)
+      .limit(1)
+
+    if (overtimeError) {
+      console.error("Erro ao verificar registros de horas extras:", overtimeError)
+      throw new Error("Erro ao verificar dependências do feriado")
+    }
+
+    if (overtimeRecords && overtimeRecords.length > 0) {
+      throw new Error("Não é possível excluir este feriado pois há registros de horas extras associados a ele")
+    }
+
+    // Excluir o feriado
+    const { error } = await supabase
+      .from("holidays")
+      .delete()
+      .eq("id", id)
+
+    if (error) {
+      console.error("Erro ao excluir feriado:", error)
+      throw new Error(`Falha ao excluir feriado: ${error.message || "Erro desconhecido"}`)
+    }
+  } catch (error: any) {
+    console.error("Erro em deleteHoliday:", error)
+    throw new Error(error.message || "Falha ao excluir feriado")
+  }
+}
+
 // Funções para registros de horas extras
 export async function getOvertimeRecords(): Promise<OvertimeRecord[]> {
   try {
@@ -450,6 +494,7 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
       hours: Number(record.hours),
       start_time: record.startTime || null,
       end_time: record.endTime || null,
+      task: record.task || null,
   })
 
     const { data, error } = await supabase

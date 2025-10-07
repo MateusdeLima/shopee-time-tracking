@@ -13,11 +13,13 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
 import { format, isAfter, isBefore, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, getMonth, getYear, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download, FileDown } from "lucide-react"
+import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download, FileDown, Filter } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { getAbsenceRecordsByUserId, createAbsenceRecord, updateAbsenceRecord, deleteAbsenceRecord } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
@@ -48,6 +50,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [selectedProof, setSelectedProof] = useState<string | null>(null)
   const [error, setError] = useState("")
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false)
+  const [selectedMonthForReport, setSelectedMonthForReport] = useState<string>("all")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [formData, setFormData] = useState({
@@ -701,6 +705,31 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     try {
       setIsGeneratingReport(true)
 
+      // Filtrar ausências baseado na seleção de mês
+      let filteredAbsences = absences
+      if (selectedMonthForReport !== "all") {
+        const [year, month] = selectedMonthForReport.split("-")
+        filteredAbsences = absences.filter(absence => {
+          if (!absence.createdAt) return false
+          try {
+            const date = parseISO(absence.createdAt)
+            return getYear(date) === parseInt(year) && getMonth(date) === parseInt(month)
+          } catch (error) {
+            return false
+          }
+        })
+      }
+
+      if (filteredAbsences.length === 0) {
+        toast({
+          title: "Nenhum registro encontrado",
+          description: "Não há ausências para o mês selecionado",
+          variant: "destructive",
+        })
+        setIsGeneratingReport(false)
+        return
+      }
+
       // Criar novo documento PDF
       const doc = new jsPDF()
       
@@ -709,7 +738,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       
       // Adicionar cabeçalho
       doc.setFontSize(16)
-      doc.text("Relatório de Ausências", 105, 15, { align: "center" })
+      const reportTitle = selectedMonthForReport === "all" 
+        ? "Relatório de Ausências - Todos os Meses"
+        : `Relatório de Ausências - ${format(new Date(parseInt(selectedMonthForReport.split("-")[0]), parseInt(selectedMonthForReport.split("-")[1]), 1), "MMMM yyyy", { locale: ptBR })}`
+      doc.text(reportTitle, 105, 15, { align: "center" })
       
       // Adicionar informações do funcionário
       doc.setFontSize(12)
@@ -718,7 +750,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       doc.text(`Data do relatório: ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}`, 14, 39)
 
       // Agrupar ausências por mês
-      const groupedAbsences = absences.reduce((acc, absence) => {
+      const groupedAbsences = filteredAbsences.reduce((acc, absence) => {
         // Validar se createdAt existe e é válido
         if (!absence.createdAt) {
           return acc
@@ -820,7 +852,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       }
 
       // Salvar o PDF
-      const fileName = `relatorio_ausencias_${format(new Date(), "yyyy-MM-dd")}.pdf`
+      const monthName = selectedMonthForReport === "all" 
+        ? "todos_meses" 
+        : format(new Date(parseInt(selectedMonthForReport.split("-")[0]), parseInt(selectedMonthForReport.split("-")[1]), 1), "yyyy-MM", { locale: ptBR })
+      const fileName = `relatorio_ausencias_${monthName}_${format(new Date(), "yyyy-MM-dd")}.pdf`
       doc.save(fileName)
 
       toast({
@@ -836,7 +871,35 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       })
     } finally {
       setIsGeneratingReport(false)
+      setIsReportDialogOpen(false)
     }
+  }
+
+  // Gerar lista de meses disponíveis baseado nas ausências
+  const getAvailableMonths = () => {
+    const months = new Set<string>()
+    absences.forEach(absence => {
+      if (absence.createdAt) {
+        try {
+          const date = parseISO(absence.createdAt)
+          if (!isNaN(date.getTime())) {
+            const monthKey = `${getYear(date)}-${getMonth(date)}`
+            months.add(monthKey)
+          }
+        } catch (error) {
+          // Ignorar datas inválidas
+        }
+      }
+    })
+    
+    return Array.from(months).sort().map(monthKey => {
+      const [year, month] = monthKey.split("-")
+      const date = new Date(parseInt(year), parseInt(month), 1)
+      return {
+        value: monthKey,
+        label: format(date, "MMMM yyyy", { locale: ptBR })
+      }
+    })
   }
 
   return (
@@ -850,27 +913,69 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           "flex gap-2",
           isMobile && "flex-col gap-2 w-full"
         )}>
-          <Button
-            onClick={generateReport}
-            variant="outline"
-            className={cn(
-              "flex items-center gap-2",
-              isMobile && "w-full"
-            )}
-            disabled={isGeneratingReport || absences.length === 0}
-          >
-            {isGeneratingReport ? (
-              <>
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                Gerando...
-              </>
-            ) : (
-              <>
+          <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                className={cn(
+                  "flex items-center gap-2",
+                  isMobile && "w-full"
+                )}
+                disabled={absences.length === 0}
+              >
                 <FileDown className="h-4 w-4" />
                 Gerar Relatório
-              </>
-            )}
-          </Button>
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Filter className="h-5 w-5" />
+                  Filtrar Relatório de Ausências
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <Label htmlFor="month-filter">Selecionar Mês</Label>
+                  <Select value={selectedMonthForReport} onValueChange={setSelectedMonthForReport}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione um mês" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos os Meses</SelectItem>
+                      {getAvailableMonths().map((month) => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsReportDialogOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={generateReport}
+                  disabled={isGeneratingReport}
+                  className="bg-[#EE4D2D] hover:bg-[#D23F20]"
+                >
+                  {isGeneratingReport ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                      Gerando...
+                    </>
+                  ) : (
+                    <>
+                      <FileDown className="h-4 w-4 mr-2" />
+                      Gerar Relatório
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
           <Button 
             onClick={handleAddAbsence} 
             className={cn(

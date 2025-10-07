@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Edit2, Trash2, AlertCircle, Calendar, Clock, FileDown, ClipboardCheck } from "lucide-react"
+import { Edit2, Trash2, AlertCircle, Calendar, Clock, FileDown, ClipboardCheck, Filter } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   getHolidays,
   getOvertimeRecordsByUserId,
@@ -47,6 +48,8 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [recordToDelete, setRecordToDelete] = useState<number | null>(null)
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false)
+  const [selectedHolidayForReport, setSelectedHolidayForReport] = useState<string>("all")
 
   useEffect(() => {
     // Carregar feriados
@@ -237,8 +240,29 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return format(date, "dd/MM/yyyy", { locale: ptBR })
+    try {
+      if (!dateString) return 'Data não disponível'
+      
+      // Verificar se é uma data simples (YYYY-MM-DD) ou timestamp completo
+      if (dateString.includes('T') || dateString.includes(' ')) {
+        // É um timestamp completo, usar parseISO
+        const date = parseISO(dateString)
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após parseISO')
+        }
+        return format(date, "dd/MM/yyyy", { locale: ptBR })
+      } else {
+        // É uma data simples, adicionar T12:00:00 para corrigir timezone
+        const date = new Date(dateString + 'T12:00:00')
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após new Date')
+        }
+        return format(date, "dd/MM/yyyy", { locale: ptBR })
+      }
+    } catch (error) {
+      console.error('Erro ao formatar data:', dateString, error)
+      return 'Data inválida'
+    }
   }
 
   const formatTime = (timeString: string | undefined) => {
@@ -267,6 +291,22 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
     try {
       setIsGeneratingReport(true)
 
+      // Filtrar registros baseado na seleção
+      let filteredRecords = records
+      if (selectedHolidayForReport !== "all") {
+        filteredRecords = records.filter(record => record.holidayId.toString() === selectedHolidayForReport)
+      }
+
+      if (filteredRecords.length === 0) {
+        toast({
+          title: "Nenhum registro encontrado",
+          description: "Não há registros para o filtro selecionado",
+          variant: "destructive",
+        })
+        setIsGeneratingReport(false)
+        return
+      }
+
       // Criar novo documento PDF
       const doc = new jsPDF()
       
@@ -275,7 +315,10 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
       
       // Adicionar cabeçalho
       doc.setFontSize(16)
-      doc.text("Relatório de Horas Extras", 105, 15, { align: "center" })
+      const reportTitle = selectedHolidayForReport === "all" 
+        ? "Relatório de Horas Extras - Todos os Feriados"
+        : `Relatório de Horas Extras - ${holidays.find(h => h.id.toString() === selectedHolidayForReport)?.name || "Feriado Específico"}`
+      doc.text(reportTitle, 105, 15, { align: "center" })
       
       // Adicionar informações do funcionário
       doc.setFontSize(12)
@@ -284,7 +327,7 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
       doc.text(`Data do relatório: ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}`, 14, 39)
 
       // Agrupar registros por feriado
-      const groupedRecords = records.reduce((acc, record) => {
+      const groupedRecords = filteredRecords.reduce((acc, record) => {
         if (!acc[record.holidayId]) {
           acc[record.holidayId] = {
             holidayName: record.holidayName,
@@ -293,7 +336,7 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
         }
         acc[record.holidayId].records.push(record)
         return acc
-      }, {} as Record<number, { holidayName: string; records: typeof records }>)
+      }, {} as Record<number, { holidayName: string; records: typeof filteredRecords }>)
 
       // Posição inicial para a tabela
       let yPos = 50
@@ -364,7 +407,10 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
       }
 
       // Salvar o PDF
-      const fileName = `relatorio_horas_extras_${format(new Date(), "yyyy-MM-dd")}.pdf`
+      const holidayName = selectedHolidayForReport === "all" 
+        ? "todos_feriados" 
+        : holidays.find(h => h.id.toString() === selectedHolidayForReport)?.name.replace(/\s+/g, '_').toLowerCase() || "feriado"
+      const fileName = `relatorio_horas_extras_${holidayName}_${format(new Date(), "yyyy-MM-dd")}.pdf`
       doc.save(fileName)
 
       toast({
@@ -380,6 +426,7 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
       })
     } finally {
       setIsGeneratingReport(false)
+      setIsReportDialogOpen(false)
     }
   }
 
@@ -395,24 +442,68 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-medium">Histórico de Horas Extras</h3>
-        <Button
-          onClick={generateReport}
-          variant="outline"
-          className="flex items-center gap-2"
-          disabled={isGeneratingReport || records.length === 0}
-        >
-          {isGeneratingReport ? (
-            <>
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-              Gerando...
-            </>
-          ) : (
-            <>
+        <Dialog open={isReportDialogOpen} onOpenChange={setIsReportDialogOpen}>
+          <DialogTrigger asChild>
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              disabled={records.length === 0}
+            >
               <FileDown className="h-4 w-4" />
               Exportar PDF
-            </>
-          )}
-        </Button>
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Filter className="h-5 w-5" />
+                Filtrar Relatório de Horas Extras
+              </DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="holiday-filter">Selecionar Feriado</Label>
+                <Select value={selectedHolidayForReport} onValueChange={setSelectedHolidayForReport}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um feriado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os Feriados</SelectItem>
+                    {holidays
+                      .filter(holiday => records.some(record => record.holidayId === holiday.id))
+                      .map((holiday) => (
+                        <SelectItem key={holiday.id} value={holiday.id.toString()}>
+                          {holiday.name}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsReportDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={generateReport}
+                disabled={isGeneratingReport}
+                className="bg-[#EE4D2D] hover:bg-[#D23F20]"
+              >
+                {isGeneratingReport ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                    Gerando...
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="h-4 w-4 mr-2" />
+                    Gerar Relatório
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
       {records.map((record) => {
         const holiday = holidays.find((h) => h.id === record.holidayId)

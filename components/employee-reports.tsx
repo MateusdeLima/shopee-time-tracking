@@ -10,12 +10,13 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { format } from "date-fns"
+import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Search, Clock, Eye, AlertCircle, Calendar, Trash2, ClipboardCheck } from "lucide-react"
+import { Search, Clock, Eye, AlertCircle, Calendar, Trash2, ClipboardCheck, Filter } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Switch } from "@/components/ui/switch"
 import { getOvertimeRecords, getHolidays, getUserById, getOvertimeRecordsByUserId, deleteOvertimeRecord } from "@/lib/db"
 import { toast } from "@/components/ui/use-toast"
 
@@ -34,6 +35,7 @@ export function EmployeeReports() {
     employee: "",
     holiday: "",
     searchTerm: "",
+    onlyWithHours: false,
   })
 
   useEffect(() => {
@@ -168,6 +170,11 @@ export function EmployeeReports() {
         )
       }
 
+      // Filtrar apenas feriados com horas feitas
+      if (filters.onlyWithHours) {
+        filtered = filtered.filter((item) => item.hoursCompleted > 0)
+      }
+
       // Ordenar por funcionário e feriado
       filtered.sort((a, b) => {
         if (a.employeeEmail !== b.employeeEmail) {
@@ -180,10 +187,10 @@ export function EmployeeReports() {
     }
   }, [records, holidays, employees, filters])
 
-  const handleFilterChange = (field: string, value: string) => {
+  const handleFilterChange = (field: string, value: string | boolean) => {
     setFilters({
       ...filters,
-      [field]: value,
+      [field]: field === "onlyWithHours" ? value === "true" || value === true : value,
     })
   }
 
@@ -252,11 +259,33 @@ export function EmployeeReports() {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return format(date, "dd/MM/yyyy", { locale: ptBR })
+    try {
+      if (!dateString) return 'Data não disponível'
+      
+      // Verificar se é uma data simples (YYYY-MM-DD) ou timestamp completo
+      if (dateString.includes('T') || dateString.includes(' ')) {
+        // É um timestamp completo, usar parseISO
+        const date = parseISO(dateString)
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após parseISO')
+        }
+        return format(date, "dd/MM/yyyy", { locale: ptBR })
+      } else {
+        // É uma data simples, adicionar T12:00:00 para corrigir timezone
+        const date = new Date(dateString + 'T12:00:00')
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após new Date')
+        }
+        return format(date, "dd/MM/yyyy", { locale: ptBR })
+      }
+    } catch (error) {
+      console.error('Erro ao formatar data:', dateString, error)
+      return 'Data inválida'
+    }
   }
 
   const formatDateTime = (dateString: string) => {
+    // Para datetime, não adicionar T12:00:00 pois já tem horário
     const date = new Date(dateString)
     return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })
   }
@@ -281,6 +310,20 @@ export function EmployeeReports() {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Filtro de apenas feriados com horas */}
+        <div className="md:col-span-3 mb-4">
+          <div className="flex items-center space-x-2">
+            <Switch
+              id="only-with-hours"
+              checked={filters.onlyWithHours}
+              onCheckedChange={(checked) => handleFilterChange("onlyWithHours", checked)}
+            />
+            <Label htmlFor="only-with-hours" className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Mostrar apenas feriados com horas registradas
+            </Label>
+          </div>
+        </div>
         <div>
           <Label htmlFor="employee-filter">Filtrar por Funcionário</Label>
           <Select value={filters.employee} onValueChange={(value) => handleFilterChange("employee", value)}>

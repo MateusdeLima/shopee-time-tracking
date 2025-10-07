@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { HolidaySelection } from "@/components/holiday-selection"
 import { EmployeeHistory } from "@/components/employee-history"
 import { AbsenceManagement } from "@/components/absence-management"
-import { Clock, History, LogOut, Calendar, User, Edit2, X } from "lucide-react"
+import { Sidebar } from "@/components/sidebar"
+import { User, Edit2, X } from "lucide-react"
 import { getCurrentUser, logout, setCurrentUser } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
 import Image from "next/image"
@@ -65,105 +65,79 @@ export default function EmployeeDashboard() {
     return <div className="flex items-center justify-center min-h-screen">Redirecionando...</div>
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-[#EE4D2D] text-white p-4">
-        <div className="container mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold">Shopee Page Control</h1>
-            <p className="text-sm">O controle da shopee external</p>
-          </div>
-          <div className="flex flex-col items-end">
-            <Button variant="ghost" onClick={handleLogout} className="text-white hover:bg-[#D23F20]">
-              <LogOut className="mr-2 h-4 w-4" /> Sair
-            </Button>
-            <div className="flex items-center mt-1 text-sm text-white/80">
-              {/* Foto de perfil clicável */}
-              <div className="relative group">
-                {user.profilePictureUrl ? (
-                  <div 
-                    className="w-8 h-8 rounded-full overflow-hidden mr-2 border-2 border-white cursor-pointer hover:opacity-80 transition-opacity"
-                    onClick={() => setIsProfileDialogOpen(true)}
+  const renderContent = () => {
+    switch (activeMainTab) {
+      case "holidays":
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Gerenciamento de Feriados</CardTitle>
+              <CardDescription>Registre horas extras e visualize seu histórico</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {activeHolidayTab === "register" ? (
+                <HolidaySelection user={user} />
+              ) : (
+                <EmployeeHistory user={user} />
+              )}
+              <div className="flex justify-center mt-6">
+                <div className="flex bg-gray-100 rounded-lg p-1">
+                  <button
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      activeHolidayTab === "register"
+                        ? "bg-[#EE4D2D] text-white"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                    onClick={() => setActiveHolidayTab("register")}
                   >
-                    <Image
-                      src={user.profilePictureUrl}
-                      alt="Foto de perfil"
-                      width={32}
-                      height={42}
-                      className="object-cover w-full h-full"
-                    />
-                  </div>
-                ) : (
-                  <div 
-                    className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center mr-2 border-2 border-white cursor-pointer hover:bg-gray-400 transition-colors"
-                    onClick={() => setIsProfileDialogOpen(true)}
+                    Registrar Horas
+                  </button>
+                  <button
+                    className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                      activeHolidayTab === "history"
+                        ? "bg-[#EE4D2D] text-white"
+                        : "text-gray-600 hover:text-gray-900"
+                    }`}
+                    onClick={() => setActiveHolidayTab("history")}
                   >
-                    <User className="h-5 w-5 text-gray-600" />
-                  </div>
-                )}
+                    Histórico
+                  </button>
+                </div>
               </div>
-              <span>
-                User: <strong>{user.username}</strong>
-              </span>
-            </div>
-          </div>
-        </div>
-      </header>
+            </CardContent>
+          </Card>
+        )
+      case "absences":
+        return (
+          <Card>
+            <CardHeader>
+              <CardTitle>Gerenciamento de Ausências</CardTitle>
+              <CardDescription>Registre e gerencie suas ausências futuras</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <AbsenceManagement user={user} />
+            </CardContent>
+          </Card>
+        )
+      default:
+        return null
+    }
+  }
 
-      <main className="container mx-auto p-4 md:p-6">
-        <Tabs value={activeMainTab} onValueChange={setActiveMainTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="holidays" className="flex items-center">
-              <Clock className="mr-2 h-4 w-4" /> Feriados
-            </TabsTrigger>
-            <TabsTrigger value="absences" className="flex items-center">
-              <Calendar className="mr-2 h-4 w-4" /> Ausências
-            </TabsTrigger>
-          </TabsList>
-
-          {/* Conteúdo da aba Feriados */}
-          <TabsContent value="holidays">
-            <Card>
-              <CardHeader>
-                <CardTitle>Gerenciamento de Feriados</CardTitle>
-                <CardDescription>Registre horas extras e visualize seu histórico</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Tabs value={activeHolidayTab} onValueChange={setActiveHolidayTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2 mb-6">
-                    <TabsTrigger value="register" className="flex items-center">
-                      <Clock className="mr-2 h-4 w-4" /> Registrar Horas
-                    </TabsTrigger>
-                    <TabsTrigger value="history" className="flex items-center">
-                      <History className="mr-2 h-4 w-4" /> Histórico
-                    </TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="register">
-                    <HolidaySelection user={user} />
-                  </TabsContent>
-
-                  <TabsContent value="history">
-                    <EmployeeHistory user={user} />
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          {/* Conteúdo da aba Ausências */}
-          <TabsContent value="absences">
-            <Card>
-              <CardHeader>
-                <CardTitle>Gerenciamento de Ausências</CardTitle>
-                <CardDescription>Registre e gerencie suas ausências futuras</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <AbsenceManagement user={user} />
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      <Sidebar
+        activeTab={activeMainTab}
+        onTabChange={setActiveMainTab}
+        userRole="employee"
+        onLogout={handleLogout}
+        userName={user ? `${user.firstName} ${user.lastName}` : undefined}
+        userEmail={user?.email}
+        profilePictureUrl={user?.profilePictureUrl}
+      />
+      
+      <main className="flex-1 md:ml-64 pt-20 md:pt-0 p-6">
+        {renderContent()}
       </main>
 
       {/* Dialog de visualização e edição da foto de perfil */}

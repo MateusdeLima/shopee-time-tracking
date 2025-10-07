@@ -108,7 +108,9 @@
     "funcionario",
     "periodo",
     "descricao",
-    "AUSENCIA"
+    "AUSENCIA",
+    "Maximas",
+    "horario"
   ],
   "ignorePaths": [
     "node_modules",

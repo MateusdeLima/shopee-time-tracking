@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
-import { format } from "date-fns"
+import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { AlertCircle, Calendar, Clock } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -183,8 +183,29 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+    try {
+      if (!dateString) return 'Data não disponível'
+      
+      // Verificar se é uma data simples (YYYY-MM-DD) ou timestamp completo
+      if (dateString.includes('T') || dateString.includes(' ')) {
+        // É um timestamp completo, usar parseISO
+        const date = parseISO(dateString)
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após parseISO')
+        }
+        return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+      } else {
+        // É uma data simples, adicionar T12:00:00 para corrigir timezone
+        const date = new Date(dateString + 'T12:00:00')
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após new Date')
+        }
+        return format(date, "dd 'de' MMMM 'de' yyyy", { locale: ptBR })
+      }
+    } catch (error) {
+      console.error('Erro ao formatar data:', dateString, error)
+      return 'Data inválida'
+    }
   }
 
   const formatHours = (hours: number) => {

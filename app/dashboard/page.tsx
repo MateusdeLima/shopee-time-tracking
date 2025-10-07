@@ -191,9 +191,9 @@ export default function DashboardPage() {
         let periodo = ""
         if (absence.dates && absence.dates.length > 0) {
           if (absence.dates.length === 1) {
-            periodo = format(new Date(absence.dates[0]), "dd/MM/yyyy", { locale: ptBR })
+            periodo = format(new Date(absence.dates[0] + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })
           } else {
-            periodo = `${format(new Date(absence.dates[0]), "dd/MM/yyyy", { locale: ptBR })} até ${format(new Date(absence.dates[absence.dates.length - 1]), "dd/MM/yyyy", { locale: ptBR })}`
+            periodo = `${format(new Date(absence.dates[0] + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })} até ${format(new Date(absence.dates[absence.dates.length - 1] + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}`
           }
         }
         
@@ -217,7 +217,7 @@ export default function DashboardPage() {
           tipo: "Hora Extra",
           funcionario: userName,
           descricao: record.holiday_name,
-          periodo: format(new Date(record.date), "dd/MM/yyyy", { locale: ptBR }),
+          periodo: format(new Date(record.date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR }),
           horas: `${record.hours}h`,
           status: "Registrado",
           data_registro: format(new Date(record.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
@@ -475,7 +475,7 @@ export default function DashboardPage() {
                             <TableCell>{motivo}</TableCell>
                             <TableCell className="text-sm">
                               {absence.dates.slice(0, 2).map((date: string) => 
-                                format(new Date(date), "dd/MM/yyyy", { locale: ptBR })
+                                format(new Date(date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })
                               ).join(", ")}
                               {absence.dates.length > 2 && ` +${absence.dates.length - 2} dia(s)`}
                             </TableCell>
@@ -538,11 +538,11 @@ export default function DashboardPage() {
                             <TableCell>{record.holiday_name}</TableCell>
                             <TableCell>
                               <span className="font-medium">
-                                {format(new Date(record.date), "dd/MM/yyyy", { locale: ptBR })}
+                                {format(new Date(record.date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
                               </span>
                               <br />
                               <span className="text-xs text-gray-500">
-                                {format(new Date(record.date), "EEEE", { locale: ptBR })}
+                                {format(new Date(record.date + 'T12:00:00'), "EEEE", { locale: ptBR })}
                               </span>
                             </TableCell>
                             <TableCell className="font-bold text-[#EE4D2D]">{record.hours}h</TableCell>

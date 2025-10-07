@@ -120,9 +120,9 @@ export function HolidayManagement() {
     setSelectedHoliday(holiday)
     setFormData({
       name: holiday.name,
-      date: new Date(holiday.date),
+      date: new Date(holiday.date + 'T12:00:00'),
       active: holiday.active,
-      deadline: new Date(holiday.deadline),
+      deadline: new Date(holiday.deadline + 'T12:00:00'),
       maxHours: holiday.maxHours,
     })
     setIsEditDialogOpen(true)
@@ -153,17 +153,24 @@ export function HolidayManagement() {
   const handleDeleteHoliday = async () => {
     if (!holidayToDelete) return
     try {
+      // Excluir o feriado do banco de dados
       await deleteHoliday(holidayToDelete.id)
+      
+      // Atualizar a lista local removendo o feriado excluído
+      setHolidays(prevHolidays => 
+        prevHolidays.filter(holiday => holiday.id !== holidayToDelete.id)
+      )
+      
       toast({
         title: "Feriado excluído",
-        description: `${holidayToDelete.name} foi excluído com sucesso`,
+        description: "O feriado foi excluído com sucesso",
       })
-      await loadHolidays()
+      
       setIsDeleteDialogOpen(false)
       setHolidayToDelete(null)
     } catch (error: any) {
       toast({
-        title: "Erro",
+        title: "Erro ao excluir feriado",
         description: error.message || "Ocorreu um erro ao excluir o feriado",
         variant: "destructive",
       })
@@ -221,7 +228,8 @@ export function HolidayManagement() {
   }
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
+    // Corrigir problema de timezone na exibição das datas
+    const date = new Date(dateString + 'T12:00:00')
     return format(date, "dd/MM/yyyy", { locale: ptBR })
   }
 
@@ -494,7 +502,11 @@ export function HolidayManagement() {
                 type="date"
                 name="date"
                 value={formData.date ? format(formData.date, "yyyy-MM-dd") : ""}
-                onChange={e => handleDateChange(new Date(e.target.value), "date")}
+                onChange={e => {
+                  // Corrigir problema de timezone que causava data -1 dia
+                  const selectedDate = new Date(e.target.value + 'T12:00:00')
+                  handleDateChange(selectedDate, "date")
+                }}
                 required
               />
             </div>
@@ -505,7 +517,11 @@ export function HolidayManagement() {
                 type="date"
                 name="deadline"
                 value={formData.deadline ? format(formData.deadline, "yyyy-MM-dd") : ""}
-                onChange={e => handleDateChange(new Date(e.target.value), "deadline")}
+                onChange={e => {
+                  // Corrigir problema de timezone que causava data -1 dia
+                  const selectedDate = new Date(e.target.value + 'T12:00:00')
+                  handleDateChange(selectedDate, "deadline")
+                }}
                 required
               />
             </div>
@@ -566,7 +582,11 @@ export function HolidayManagement() {
                 type="date"
                 name="date"
                 value={formData.date ? format(formData.date, "yyyy-MM-dd") : ""}
-                onChange={e => handleDateChange(new Date(e.target.value), "date")}
+                onChange={e => {
+                  // Corrigir problema de timezone que causava data -1 dia
+                  const selectedDate = new Date(e.target.value + 'T12:00:00')
+                  handleDateChange(selectedDate, "date")
+                }}
                 required
               />
             </div>
@@ -577,7 +597,11 @@ export function HolidayManagement() {
                 type="date"
                 name="deadline"
                 value={formData.deadline ? format(formData.deadline, "yyyy-MM-dd") : ""}
-                onChange={e => handleDateChange(new Date(e.target.value), "deadline")}
+                onChange={e => {
+                  // Corrigir problema de timezone que causava data -1 dia
+                  const selectedDate = new Date(e.target.value + 'T12:00:00')
+                  handleDateChange(selectedDate, "deadline")
+                }}
                 required
               />
             </div>

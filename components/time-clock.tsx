@@ -18,8 +18,8 @@ interface OvertimeOption {
 }
 
 interface OvertimeOptions {
-  horario9h: OvertimeOption[]
-  horario8h: OvertimeOption[]
+  schedule9h: OvertimeOption[]
+  schedule8h: OvertimeOption[]
 }
 
 // Função para obter todas as opções de horário conforme briefing
@@ -173,7 +173,12 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     }
 
     if (!task.trim()) {
-      setError("Por favor, preencha a task que está atuando.")
+      setError("Por favor, preencha o projeto/task que está atuando.")
+      return
+    }
+
+    if (task.trim().length < 10) {
+      setError("Por favor, forneça uma descrição mais detalhada do projeto/task (mínimo 10 caracteres).")
       return
     }
 
@@ -318,17 +323,20 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
 
           <div className="space-y-6">
             <div className="mb-6">
-              <Label htmlFor="task" className="font-medium">Qual task está atuando?</Label>
+              <Label htmlFor="task" className="font-medium">Qual projeto/task está atuando?</Label>
               <input
                 id="task"
                 name="task"
                 type="text"
                 className="w-full border rounded px-3 py-2 mt-1"
-                placeholder="Descreva a task..."
+                placeholder="Descreva o nome completo do projeto/task (ex: Projeto E-commerce - Implementação do carrinho de compras)"
                 value={task}
                 onChange={e => setTask(e.target.value)}
                 required
               />
+              <p className="text-xs text-gray-500 mt-1">
+                Por favor, informe o nome completo do projeto e uma breve descrição da task
+              </p>
             </div>
             <div>
               <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
