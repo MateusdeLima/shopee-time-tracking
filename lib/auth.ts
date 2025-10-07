@@ -63,7 +63,9 @@ export async function authenticateEmployee(
 
     // Verificar se é um primeiro acesso ou criação de conta
     if (firstName && lastName && email) {
+      // cspell:disable-next-line
       if (!email.endsWith("@shopeemobile-external.com")) {
+        // cspell:disable-next-line
         throw new Error("Por favor, utilize seu email corporativo (@shopeemobile-external.com)")
       }
 
@@ -233,6 +235,35 @@ export async function getUsernameByEmail(email: string): Promise<string | null> 
   } catch (error) {
     console.error("Erro em getUsernameByEmail:", error)
     return null
+  }
+}
+
+// Função para recarregar dados do usuário do banco de dados
+export async function refreshCurrentUser(): Promise<User | null> {
+  try {
+    const currentUser = getCurrentUser()
+    if (!currentUser) return null
+
+    // Buscar dados atualizados do banco
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", currentUser.id)
+      .single()
+
+    if (error) {
+      console.error("Erro ao recarregar dados do usuário:", error)
+      return currentUser // Retorna o usuário atual se houver erro
+    }
+
+    // Converter para camelCase e atualizar localStorage
+    const updatedUser = convertToCamelCase<User>(data)
+    setCurrentUser(updatedUser)
+    
+    return updatedUser
+  } catch (error) {
+    console.error("Erro em refreshCurrentUser:", error)
+    return getCurrentUser() // Retorna o usuário atual se houver erro
   }
 }
 

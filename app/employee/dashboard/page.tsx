@@ -10,7 +10,7 @@ import { EmployeeHistory } from "@/components/employee-history"
 import { AbsenceManagement } from "@/components/absence-management"
 import { Sidebar } from "@/components/sidebar"
 import { User, Edit2, X } from "lucide-react"
-import { getCurrentUser, logout, setCurrentUser } from "@/lib/auth"
+import { getCurrentUser, logout, setCurrentUser, refreshCurrentUser } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
 import Image from "next/image"
 import { getProfilePictureUrl } from "@/lib/supabase"
@@ -55,6 +55,14 @@ export default function EmployeeDashboard() {
   const handleLogout = () => {
     logout()
     router.push("/")
+  }
+
+  const handleProfileUpdate = async () => {
+    // Recarregar dados do usuário do banco de dados
+    const updatedUser = await refreshCurrentUser()
+    if (updatedUser) {
+      setUser(updatedUser)
+    }
   }
 
   if (loading) {
@@ -134,6 +142,8 @@ export default function EmployeeDashboard() {
         userName={user ? `${user.firstName} ${user.lastName}` : undefined}
         userEmail={user?.email}
         profilePictureUrl={user?.profilePictureUrl}
+        userId={user?.id}
+        onProfileUpdate={handleProfileUpdate}
       />
       
       <main className="flex-1 md:ml-64 pt-20 md:pt-0 p-6">

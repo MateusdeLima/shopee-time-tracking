@@ -9,7 +9,7 @@ import { EmployeeManagement } from "@/components/employee-management"
 import { AdminSummary } from "@/components/admin-summary"
 import { AdminAbsences } from "@/components/admin-absences"
 import { Sidebar } from "@/components/sidebar"
-import { getCurrentUser, logout } from "@/lib/auth"
+import { getCurrentUser, logout, refreshCurrentUser } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
@@ -44,6 +44,14 @@ export default function AdminDashboard() {
   const handleLogout = () => {
     logout()
     router.push("/")
+  }
+
+  const handleProfileUpdate = async () => {
+    // Recarregar dados do usuário do banco de dados
+    const updatedUser = await refreshCurrentUser()
+    if (updatedUser) {
+      setUser(updatedUser)
+    }
   }
 
   if (loading) {
@@ -139,6 +147,9 @@ export default function AdminDashboard() {
         onLogout={handleLogout}
         userName={user ? `${user.firstName} ${user.lastName}` : undefined}
         userEmail={user?.email}
+        profilePictureUrl={user?.profilePictureUrl}
+        userId={user?.id}
+        onProfileUpdate={handleProfileUpdate}
       />
       
       <main className="flex-1 md:ml-64 pt-20 md:pt-0 p-6">

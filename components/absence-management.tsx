@@ -404,11 +404,11 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
 
     // Verificar tipo do arquivo
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "application/pdf"]
+    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"]
     if (!allowedTypes.includes(file.type)) {
       toast({
         title: "Tipo de arquivo não suportado",
-        description: "Apenas imagens (JPEG, PNG, GIF) e PDF são permitidos",
+        description: "Apenas imagens (JPEG, PNG, GIF, WEBP) são permitidas",
         variant: "destructive",
       })
       return
@@ -501,20 +501,28 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   }
 
   const formatDate = (dateString: string) => {
-    if (!dateString) return "Data inválida"
-    
     try {
-      // Criar uma nova data considerando que a string está em UTC
-      const [year, month, day] = dateString.split('-').map(Number)
-      if (!year || !month || !day) return "Data inválida"
+      if (!dateString) return 'Data não disponível'
       
-      const date = new Date(year, month - 1, day)
-      if (isNaN(date.getTime())) return "Data inválida"
-      
-      return format(date, "dd/MM/yyyy", { locale: ptBR })
+      // Verificar se é uma data simples (YYYY-MM-DD) ou timestamp completo
+      if (dateString.includes('T') || dateString.includes(' ')) {
+        // É um timestamp completo, usar parseISO
+        const date = parseISO(dateString)
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após parseISO')
+        }
+        return format(date, "dd/MM/yyyy", { locale: ptBR })
+      } else {
+        // É uma data simples, adicionar T12:00:00 para corrigir timezone
+        const date = new Date(dateString + 'T12:00:00')
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após new Date')
+        }
+        return format(date, "dd/MM/yyyy", { locale: ptBR })
+      }
     } catch (error) {
       console.error('Erro ao formatar data:', dateString, error)
-      return "Data inválida"
+      return 'Data inválida'
     }
   }
 
@@ -563,28 +571,28 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const getStatusBadge = (absence: any) => {
     if (absence.status === "approved") {
       return (
-        <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1">
+        <Badge className="bg-green-100 text-green-700 border-green-200 flex items-center gap-1 w-fit">
           <Check className="h-3 w-3" />
           Aprovado! <PartyPopper className="h-3 w-3 ml-1" />
         </Badge>
       )
     } else if (absence.status === "completed") {
       return (
-        <Badge className="bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1">
+        <Badge className="bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1 w-fit">
           <FileText className="h-3 w-3" />
           {absence.reason === "personal" ? "Protocolo Enviado" : "Comprovante Enviado"}
         </Badge>
       )
     } else if (absence.reason === "vacation") {
       return (
-        <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 flex items-center gap-1">
+        <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 flex items-center gap-1 w-fit">
           <AlertCircle className="h-3 w-3" />
           Aguardando Aprovação
         </Badge>
       )
     } else if (absence.reason === "personal" && absence.status === "pending") {
       return (
-        <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1">
+        <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1 w-fit">
           <Upload className="h-3 w-3" />
           Aguardando Protocolo
         </Badge>
@@ -608,8 +616,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           return "Data inválida"
         }
         
-        const startDate = new Date(startYear, startMonth - 1, startDay)
-        const endDate = new Date(endYear, endMonth - 1, endDay)
+        const startDate = new Date(startYear, startMonth - 1, startDay, 12, 0, 0)
+        const endDate = new Date(endYear, endMonth - 1, endDay, 12, 0, 0)
         
         if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
           return "Data inválida"
@@ -632,7 +640,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           return "Data inválida"
         }
         
-        const date = new Date(year, month - 1, day)
+        const date = new Date(year, month - 1, day, 12, 0, 0)
         
         if (isNaN(date.getTime())) {
           return "Data inválida"
@@ -927,7 +935,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                 Gerar Relatório
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-md w-[95vw] sm:w-full">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Filter className="h-5 w-5" />
@@ -995,92 +1003,62 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       ) : (
         <div className="space-y-4">
           {absences.filter(isAbsenceActive).map((absence) => (
-            <Card key={absence.id} className="hover:shadow-md transition-shadow">
-              <CardHeader className="pb-2">
-                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
-                  <CardTitle className="text-lg font-medium">{getReasonLabel(absence)}</CardTitle>
-                  {getStatusBadge(absence)}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex flex-col gap-2">
-                    <div className="text-sm font-medium">{formatDateRange(absence)}</div>
-
-                    {Array.isArray(absence.dates) && absence.dates.length > 0 && absence.dates.length <= 5 && (
-                      <div className="flex flex-wrap gap-2">
-                        {absence.dates.map((date: string, index: number) => (
-                          <Badge
-                            key={index}
-                            variant={isDateInFuture(date) ? "outline" : "default"}
-                            className={cn(
-                              isDateInFuture(date)
-                                ? "bg-blue-50 text-blue-700 border-blue-200"
-                                : "bg-gray-100 text-gray-700 border-gray-200",
-                              "text-xs sm:text-sm"
-                            )}
-                          >
-                            <CalendarIcon className="h-3 w-3 mr-1" />
-                            {formatDate(date)}
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
+            <Card key={absence.id} className="p-4 hover:shadow-md transition-shadow">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-medium text-[#EE4D2D] text-base sm:text-lg break-words">{getReasonLabel(absence)}</h4>
+                  <div className="flex items-center text-xs sm:text-sm text-gray-600 mt-1">
+                    <CalendarIcon className="h-3.5 w-3.5 mr-1" />
+                    {formatDateRange(absence)}
                   </div>
-
-                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                    <p className="text-xs text-gray-500 order-2 sm:order-1">
-                      Registrado em: {(() => {
-                        if (!absence.createdAt) return "Data inválida"
-                        try {
-                          const date = parseISO(absence.createdAt)
-                          return !isNaN(date.getTime()) ? format(date, "dd/MM/yyyy") : "Data inválida"
-                        } catch (error) {
-                          console.error('Erro ao formatar data:', absence.createdAt, error)
-                          return "Data inválida"
-                        }
-                      })()}
-                    </p>
-
-                    <div className="flex flex-wrap gap-2 order-1 sm:order-2 w-full sm:w-auto">
-                      {absence.status === "completed" && absence.proofDocument && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-xs sm:text-sm flex-1 sm:flex-none"
-                            onClick={() => handleViewProof(absence)}
-                          >
-                            <Eye className="h-3.5 w-3.5 mr-1.5" />
-                            Visualizar
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-8 text-xs sm:text-sm flex-1 sm:flex-none"
-                            onClick={() => handleDownloadProof(absence.proofDocument)}
-                          >
-                            <Download className="h-3.5 w-3.5 mr-1.5" />
-                            Baixar
-                          </Button>
-                        </>
-                      )}
-                    {absence.status === "pending" &&
-                      absence.reason !== "vacation" && (
+                  
+                  <div className="mt-2 flex flex-col gap-2">
+                    {getStatusBadge(absence)}
+                  </div>
+                </div>
+                
+                <div className="flex flex-row sm:flex-col justify-between items-end sm:items-end gap-3 sm:gap-2 mt-2 sm:mt-0">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-800 text-xs font-semibold">
+                    <CalendarIcon className="h-3 w-3" /> Registrado em: {formatDate(absence.createdAt)}
+                  </span>
+                  
+                  <div className="flex flex-wrap gap-2">
+                    {absence.status === "completed" && absence.proofDocument && (
+                      <>
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-8 text-xs sm:text-sm flex-1 sm:flex-none"
-                          onClick={() => handleUploadProof(absence.id)}
+                          className="h-8 text-xs sm:text-sm"
+                          onClick={() => handleViewProof(absence)}
                         >
-                          <Upload className="h-3.5 w-3.5 mr-1.5" />
-                          {absence.reason === "personal" ? "Enviar Protocolo" : "Enviar Comprovante"}
+                          <Eye className="h-3.5 w-3.5 mr-1.5" />
+                          Visualizar
                         </Button>
-                      )}
-                    </div>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs sm:text-sm"
+                          onClick={() => handleDownloadProof(absence.proofDocument)}
+                        >
+                          <Download className="h-3.5 w-3.5 mr-1.5" />
+                          Baixar
+                        </Button>
+                      </>
+                    )}
+                    {absence.status === "pending" && absence.reason !== "vacation" && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 text-xs sm:text-sm"
+                        onClick={() => handleUploadProof(absence.id)}
+                      >
+                        <Upload className="h-3.5 w-3.5 mr-1.5" />
+                        {absence.reason === "personal" ? "Enviar Protocolo" : "Enviar Comprovante"}
+                      </Button>
+                    )}
                   </div>
                 </div>
-              </CardContent>
+              </div>
             </Card>
           ))}
         </div>
@@ -1088,7 +1066,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
       {/* Dialog para adicionar ausência */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto sm:max-w-lg w-[95vw] sm:w-full">
           <DialogHeader>
             <DialogTitle>Registrar Ausência</DialogTitle>
           </DialogHeader>
@@ -1217,14 +1195,14 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   <Upload className="h-10 w-10 text-gray-400 mb-2" />
                   <p className="text-sm font-medium">Clique para selecionar um comprovante</p>
                   <p className="text-xs text-gray-500 mt-1">Ou arraste e solte aqui</p>
-                  <p className="text-xs text-gray-500 mt-2">Formatos aceitos: JPEG, PNG, GIF, PDF</p>
+                  <p className="text-xs text-gray-500 mt-2">Formatos aceitos: JPEG, PNG, GIF, WEBP</p>
                   <p className="text-xs text-gray-500">Tamanho máximo: 5MB</p>
 
                   <input
                     type="file"
                     ref={fileInputRef}
                     className="hidden"
-                    accept="image/jpeg,image/png,image/gif,application/pdf"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
                     onChange={(e) => {
                       const file = e.target.files?.[0]
                       if (!file) return
@@ -1240,11 +1218,11 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                       }
 
                       // Verificar tipo do arquivo
-                      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "application/pdf"]
+                      const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"]
                       if (!allowedTypes.includes(file.type)) {
                         toast({
                           title: "Tipo de arquivo não suportado",
-                          description: "Apenas imagens (JPEG, PNG, GIF) e PDF são permitidos",
+                          description: "Apenas imagens (JPEG, PNG, GIF, WEBP) são permitidas",
                           variant: "destructive",
                         })
                         return
@@ -1307,7 +1285,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
       {/* Dialog para upload de comprovante */}
       <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md w-[95vw] sm:w-full">
           <DialogHeader>
             <DialogTitle>Enviar Comprovante</DialogTitle>
           </DialogHeader>
@@ -1324,14 +1302,14 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               <Upload className="h-10 w-10 text-gray-400 mb-2" />
               <p className="text-sm font-medium">Clique para selecionar um arquivo</p>
               <p className="text-xs text-gray-500 mt-1">Ou arraste e solte aqui</p>
-              <p className="text-xs text-gray-500 mt-2">Formatos aceitos: JPEG, PNG, GIF, PDF</p>
+              <p className="text-xs text-gray-500 mt-2">Formatos aceitos: JPEG, PNG, GIF, WEBP</p>
               <p className="text-xs text-gray-500">Tamanho máximo: 5MB</p>
 
               <input
                 type="file"
                 ref={fileInputRef}
                 className="hidden"
-                accept="image/jpeg,image/png,image/gif,application/pdf"
+                accept="image/jpeg,image/png,image/gif,image/webp"
                 onChange={handleFileChange}
               />
             </div>
@@ -1350,7 +1328,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
       {/* Dialog para visualizar comprovante */}
       <Dialog open={isViewProofDialogOpen} onOpenChange={setIsViewProofDialogOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Visualizar Comprovante</DialogTitle>
           </DialogHeader>
@@ -1364,19 +1342,6 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     alt="Comprovante"
                     className="max-h-[70vh] object-contain rounded-lg"
                   />
-                ) : selectedProof.includes("pdf") ? (
-                  <div className="flex flex-col items-center gap-4">
-                    <AlertCircle className="h-16 w-16 text-gray-400" />
-                    <p className="text-gray-500">Este é um arquivo PDF</p>
-                    <Button 
-                      variant="outline" 
-                      onClick={() => handleDownloadProof(selectedProof)}
-                      className="flex items-center gap-2"
-                    >
-                      <Download className="h-4 w-4" />
-                      Baixar PDF
-                    </Button>
-                  </div>
                 ) : (
                   <div className="flex flex-col items-center">
                     <AlertCircle className="h-12 w-12 text-gray-400 mb-2" />

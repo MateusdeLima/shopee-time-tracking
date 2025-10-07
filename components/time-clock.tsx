@@ -285,7 +285,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     <>
       {isDeadlineDialogOpen && (
         <Dialog open={isDeadlineDialogOpen} onOpenChange={setIsDeadlineDialogOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md w-[95vw] sm:w-full">
             <DialogHeader>
               <DialogTitle>Prazo Expirado</DialogTitle>
             </DialogHeader>
@@ -340,7 +340,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
             </div>
             <div>
               <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {/* Coluna Antecipado */}
           <div>
                   <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Antecipado</h4>

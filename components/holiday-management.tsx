@@ -479,7 +479,7 @@ export function HolidayManagement() {
 
       {/* Add Holiday Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
           <DialogHeader>
             <DialogTitle>Adicionar Novo Feriado</DialogTitle>
           </DialogHeader>
@@ -559,7 +559,7 @@ export function HolidayManagement() {
 
       {/* Edit Holiday Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
           <DialogHeader>
             <DialogTitle>Editar Feriado</DialogTitle>
           </DialogHeader>
@@ -639,7 +639,7 @@ export function HolidayManagement() {
 
       {/* Delete Holiday Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md w-[95vw] sm:w-full">
           <DialogHeader>
             <DialogTitle>Excluir Feriado</DialogTitle>
           </DialogHeader>

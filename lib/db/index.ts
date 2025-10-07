@@ -14,6 +14,7 @@ export interface User {
   birthDate?: string
   isFirstAccess?: boolean
   profilePictureUrl?: string
+  shift?: "8-17" | "9-18"
 }
 
 export interface Holiday {

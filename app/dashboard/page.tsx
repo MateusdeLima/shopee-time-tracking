@@ -30,8 +30,35 @@ import {
 } from "@/components/ui/select"
 import { LogOut, Search, FileSpreadsheet, PieChart, BarChart3, Users, Calendar, Eye } from "lucide-react"
 import { supabase } from "@/lib/supabase"
-import { format, getMonth, getYear } from "date-fns"
+import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, getMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
+
+// Função auxiliar para formatação segura de datas
+const formatDateSafe = (dateInput: string | null | undefined, formatString: string = "dd/MM/yyyy"): string => {
+  try {
+    if (!dateInput) return "Data inválida"
+    
+    // Verificar se é uma data simples (YYYY-MM-DD) ou timestamp completo
+    if (dateInput.includes('T') || dateInput.includes(' ')) {
+      // É um timestamp completo, usar parseISO
+      const date = parseISO(dateInput)
+      if (isNaN(date.getTime())) {
+        throw new Error('Data inválida após parseISO')
+      }
+      return format(date, formatString, { locale: ptBR })
+    } else {
+      // É uma data simples, adicionar T12:00:00 para corrigir timezone
+      const date = new Date(dateInput + 'T12:00:00')
+      if (isNaN(date.getTime())) {
+        throw new Error('Data inválida após new Date')
+      }
+      return format(date, formatString, { locale: ptBR })
+    }
+  } catch (error) {
+    console.error('Erro ao formatar data:', dateInput, error)
+    return 'Data inválida'
+  }
+}
 
 export const dynamic = "force-dynamic"
 
@@ -191,9 +218,9 @@ export default function DashboardPage() {
         let periodo = ""
         if (absence.dates && absence.dates.length > 0) {
           if (absence.dates.length === 1) {
-            periodo = format(new Date(absence.dates[0] + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })
+            periodo = formatDateSafe(absence.dates[0])
           } else {
-            periodo = `${format(new Date(absence.dates[0] + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })} até ${format(new Date(absence.dates[absence.dates.length - 1] + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}`
+            periodo = `${formatDateSafe(absence.dates[0])} até ${formatDateSafe(absence.dates[absence.dates.length - 1])}`
           }
         }
         
@@ -204,7 +231,7 @@ export default function DashboardPage() {
           periodo: periodo,
           horas: "N/A",
           status: absence.status === "approved" ? "Aprovado" : absence.status === "completed" ? "Completo" : "Pendente",
-          data_registro: format(new Date(absence.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+          data_registro: formatDateSafe(absence.created_at, "dd/MM/yyyy HH:mm")
         }
       })
 
@@ -217,10 +244,10 @@ export default function DashboardPage() {
           tipo: "Hora Extra",
           funcionario: userName,
           descricao: record.holiday_name,
-          periodo: format(new Date(record.date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR }),
+          periodo: formatDateSafe(record.date),
           horas: `${record.hours}h`,
           status: "Registrado",
-          data_registro: format(new Date(record.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })
+          data_registro: formatDateSafe(record.created_at, "dd/MM/yyyy HH:mm")
         }
       })
 
@@ -475,7 +502,7 @@ export default function DashboardPage() {
                             <TableCell>{motivo}</TableCell>
                             <TableCell className="text-sm">
                               {absence.dates.slice(0, 2).map((date: string) => 
-                                format(new Date(date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })
+                                formatDateSafe(date)
                               ).join(", ")}
                               {absence.dates.length > 2 && ` +${absence.dates.length - 2} dia(s)`}
                             </TableCell>
@@ -493,7 +520,7 @@ export default function DashboardPage() {
                               </span>
                             </TableCell>
                             <TableCell className="text-sm">
-                              {format(new Date(absence.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                              {formatDateSafe(absence.created_at, "dd/MM/yyyy HH:mm")}
                             </TableCell>
                           </TableRow>
                         )
@@ -538,11 +565,11 @@ export default function DashboardPage() {
                             <TableCell>{record.holiday_name}</TableCell>
                             <TableCell>
                               <span className="font-medium">
-                                {format(new Date(record.date + 'T12:00:00'), "dd/MM/yyyy", { locale: ptBR })}
+                                {formatDateSafe(record.date)}
                               </span>
                               <br />
                               <span className="text-xs text-gray-500">
-                                {format(new Date(record.date + 'T12:00:00'), "EEEE", { locale: ptBR })}
+                                {formatDateSafe(record.date, "EEEE")}
                               </span>
                             </TableCell>
                             <TableCell className="font-bold text-[#EE4D2D]">{record.hours}h</TableCell>
@@ -552,7 +579,7 @@ export default function DashboardPage() {
                                 : "Não informado"}
                             </TableCell>
                             <TableCell className="text-sm">
-                              {format(new Date(record.created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                              {formatDateSafe(record.created_at, "dd/MM/yyyy HH:mm")}
                             </TableCell>
                           </TableRow>
                         )
@@ -753,7 +780,7 @@ export default function DashboardPage() {
                     </TableCell>
                     <TableCell>{user.shift || "9-18"}</TableCell>
                     <TableCell className="text-sm">
-                      {format(new Date(user.created_at), "dd/MM/yyyy", { locale: ptBR })}
+                      {formatDateSafe(user.created_at)}
                     </TableCell>
                   </TableRow>
                 ))}
