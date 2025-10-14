@@ -1,20 +1,34 @@
 // Banco de dados usando Supabase
-import { supabase, setupDatabase } from "../supabase"
+import { supabase, supabaseAdmin } from "@/lib/supabase"
 
-// Interfaces para compatibilidade com o código existente
 export interface User {
   id: string
   firstName: string
   lastName: string
   email: string
-  role: "employee" | "admin"
   username: string
+  cpf: string
+  role: "admin" | "employee"
+  profilePictureUrl?: string
   createdAt: string
-  cpf?: string
+  shift?: "8-17" | "9-18"
   birthDate?: string
   isFirstAccess?: boolean
-  profilePictureUrl?: string
-  shift?: "8-17" | "9-18"
+}
+
+export interface HourBankCompensation {
+  id: number
+  userId: string
+  holidayId: number
+  declaredHours: number
+  detectedHours: number
+  confidence: number
+  proofImage: string
+  status: "approved" | "rejected"
+  reason: string
+  analyzedAt: string
+  createdAt: string
+  updatedAt?: string
 }
 
 export interface Holiday {
@@ -40,6 +54,7 @@ export interface OvertimeRecord {
   startTime?: string
   endTime?: string
   task?: string
+  status?: "approved" | "pending_admin" | "rejected_admin"
   createdAt: string
   updatedAt?: string
 }
@@ -74,6 +89,21 @@ export interface AbsenceRecord {
   }
   departureTime?: string
   returnTime?: string
+}
+
+export interface HourBankCompensation {
+  id: number
+  userId: string
+  holidayId: number
+  declaredHours: number
+  detectedHours: number
+  confidence: number
+  proofImage: string
+  status: "approved" | "rejected"
+  reason: string
+  analyzedAt: string
+  createdAt: string
+  updatedAt?: string
 }
 
 // Função para converter nomes de campos do Supabase para o formato camelCase usado na aplicação
@@ -126,6 +156,9 @@ function convertToSnakeCase(data: any): any {
 export async function initializeDb() {
   console.log("Inicializando banco de dados...")
   try {
+    // Importar a função de setup
+    const { setupDatabase } = await import("@/lib/supabase")
+    
     // Tentar configurar o banco de dados
     const success = await setupDatabase()
 
@@ -496,6 +529,7 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
       start_time: record.startTime || null,
       end_time: record.endTime || null,
       task: record.task || null,
+      status: record.status || 'approved', // Adicionar status
   })
 
     const { data, error } = await supabase
@@ -918,7 +952,7 @@ export async function getHolidayStats(holidayId: number): Promise<{ used: number
     return { used: 0, max: holiday.maxHours }
   }
 
-  const hoursUsed = data.reduce((total, record) => total + record.hours, 0)
+  const hoursUsed = data.reduce((total: number, record: any) => total + record.hours, 0)
 
   return {
     used: hoursUsed,
@@ -926,36 +960,58 @@ export async function getHolidayStats(holidayId: number): Promise<{ used: number
   }
 }
 
-export async function getUserHolidayStats(userId: string, holidayId: number): Promise<{ used: number; max: number }> {
+export async function getUserHolidayStats(userId: string, holidayId: number): Promise<{ used: number; max: number; compensated: number }> {
   try {
     // Buscar informações do feriado
-  const holiday = await getHolidayById(holidayId)
-  if (!holiday) {
-    return { used: 0, max: 0 }
-  }
+    const holiday = await getHolidayById(holidayId)
+    if (!holiday) {
+      return { used: 0, max: 0, compensated: 0 }
+    }
 
     // Buscar registros de horas extras do usuário para este feriado
-  const { data, error } = await supabase
-    .from("overtime_records")
-    .select("hours")
-    .eq("user_id", userId)
-    .eq("holiday_id", holidayId)
+    // Incluir apenas registros aprovados ou sem status (registros manuais antigos)
+    const { data, error } = await supabase
+      .from("overtime_records")
+      .select("hours, status")
+      .eq("user_id", userId)
+      .eq("holiday_id", holidayId)
+      .or("status.is.null,status.eq.approved")
 
-  if (error) {
-    console.error("Erro ao buscar estatísticas de usuário para feriado:", error)
-    return { used: 0, max: holiday.maxHours }
-  }
+    if (error) {
+      console.error("Erro ao buscar estatísticas de usuário para feriado:", error)
+      return { used: 0, max: holiday.maxHours, compensated: 0 }
+    }
 
     // Calcular total de horas usadas
-  const hoursUsed = data.reduce((total, record) => total + record.hours, 0)
+    const hoursUsed = data.reduce((total: number, record: any) => total + record.hours, 0)
 
-  return {
-    used: hoursUsed,
-      max: holiday.maxHours
+    // Buscar horas compensadas do banco de horas para este usuário e feriado
+    const { data: compensationsData, error: compensationsError } = await supabase
+      .from("hour_bank_compensations")
+      .select("detected_hours")
+      .eq("user_id", userId)
+      .eq("holiday_id", holidayId)
+      .eq("status", "approved")
+
+    let compensatedHours = 0
+    if (!compensationsError && compensationsData) {
+      compensatedHours = compensationsData.reduce((total: number, comp: any) => total + (comp.detected_hours || 0), 0)
+      console.log(`Horas compensadas encontradas para usuário ${userId} no feriado ${holidayId}:`, compensatedHours)
+    } else if (compensationsError) {
+      console.error("Erro ao buscar compensações:", compensationsError)
+    }
+
+    // O máximo efetivo é o máximo original menos as horas compensadas
+    const effectiveMax = Math.max(0, holiday.maxHours - compensatedHours)
+
+    return {
+      used: hoursUsed,
+      max: effectiveMax,
+      compensated: compensatedHours
     }
   } catch (error) {
     console.error("Erro ao buscar estatísticas de usuário para feriado:", error)
-    return { used: 0, max: 0 }
+    return { used: 0, max: 0, compensated: 0 }
   }
 }
 
@@ -1082,6 +1138,162 @@ export async function updateUserProfilePicture(userId: string, profilePictureUrl
   if (error) {
     console.error("Erro ao atualizar foto de perfil:", error)
     throw new Error("Erro ao atualizar foto de perfil")
+  }
+}
+
+// Funções para compensação de banco de horas
+export async function createHourBankCompensation(
+  compensation: Omit<HourBankCompensation, "id" | "createdAt" | "updatedAt">
+): Promise<HourBankCompensation> {
+  try {
+    // Mapear campos manualmente para snake_case
+    const compensationData = {
+      user_id: compensation.userId,
+      holiday_id: compensation.holidayId,
+      declared_hours: compensation.declaredHours,
+      detected_hours: compensation.detectedHours,
+      confidence: compensation.confidence,
+      proof_image: compensation.proofImage,
+      status: compensation.status,
+      reason: compensation.reason,
+      analyzed_at: compensation.analyzedAt,
+      created_at: new Date().toISOString(),
+    }
+
+    console.log("=== INSERÇÃO NO SUPABASE ===")
+    console.log("URL do Supabase:", process.env.NEXT_PUBLIC_SUPABASE_URL)
+    console.log("Chave anônima existe:", !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY)
+    console.log("Service key existe:", !!process.env.SUPABASE_SERVICE_ROLE_KEY)
+    console.log("Dados para inserir:", compensationData)
+
+    // Tentar com cliente regular primeiro
+    let { data, error } = await supabase
+      .from("hour_bank_compensations")
+      .insert(compensationData)
+      .select()
+      .single()
+
+    // Se falhar e tivermos service key, tentar com cliente admin
+    if (error && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      console.log("Tentando com cliente admin...")
+      const result = await supabaseAdmin
+        .from("hour_bank_compensations")
+        .insert(compensationData)
+        .select()
+        .single()
+      
+      data = result.data
+      error = result.error
+    }
+
+    if (error) {
+      console.error("Erro detalhado do Supabase:", error)
+      console.error("Código do erro:", error.code)
+      console.error("Mensagem do erro:", error.message)
+      console.error("Detalhes do erro:", error.details)
+      throw new Error(`Erro do Supabase: ${error.message}`)
+    }
+
+    console.log("Dados retornados do Supabase:", data)
+    return convertToCamelCase<HourBankCompensation>(data)
+  } catch (error) {
+    console.error("Erro completo em createHourBankCompensation:", error)
+    if (error instanceof Error) {
+      throw new Error(`Falha ao criar compensação: ${error.message}`)
+    }
+    throw new Error("Falha ao criar compensação de banco de horas")
+  }
+}
+
+export async function getHourBankCompensationsByUserId(userId: string): Promise<HourBankCompensation[]> {
+  try {
+    const { data, error } = await supabase
+      .from("hour_bank_compensations")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Erro ao buscar compensações de banco de horas:", error)
+      return []
+    }
+
+    return convertToCamelCase<HourBankCompensation[]>(data || [])
+  } catch (error) {
+    console.error("Erro em getHourBankCompensationsByUserId:", error)
+    return []
+  }
+}
+
+export async function getHourBankCompensationsByHolidayId(holidayId: number): Promise<HourBankCompensation[]> {
+  try {
+    const { data, error } = await supabase
+      .from("hour_bank_compensations")
+      .select("*")
+      .eq("holiday_id", holidayId)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Erro ao buscar compensações por feriado:", error)
+      return []
+    }
+
+    return convertToCamelCase<HourBankCompensation[]>(data || [])
+  } catch (error) {
+    console.error("Erro em getHourBankCompensationsByHolidayId:", error)
+    return []
+  }
+}
+
+export async function getAllHourBankCompensations(): Promise<HourBankCompensation[]> {
+  try {
+    const { data, error } = await supabase
+      .from("hour_bank_compensations")
+      .select(`
+        *,
+        users!inner(first_name, last_name, email),
+        holidays!inner(name, date)
+      `)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Erro ao buscar todas as compensações:", error)
+      return []
+    }
+
+    return convertToCamelCase<HourBankCompensation[]>(data || [])
+  } catch (error) {
+    console.error("Erro em getAllHourBankCompensations:", error)
+    return []
+  }
+}
+
+export async function updateHourBankCompensation(
+  id: number, 
+  data: Partial<HourBankCompensation>
+): Promise<HourBankCompensation> {
+  try {
+    const compensationData = convertToSnakeCase({
+      ...data,
+      updatedAt: new Date().toISOString(),
+    })
+
+    const { data: updatedData, error } = await supabase
+      .from("hour_bank_compensations")
+      .update(compensationData)
+      .eq("id", id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Erro ao atualizar compensação:", error)
+      throw new Error("Falha ao atualizar compensação")
+    }
+
+    return convertToCamelCase<HourBankCompensation>(updatedData)
+  } catch (error: any) {
+    console.error("Erro em updateHourBankCompensation:", error)
+    throw new Error(error.message || "Falha ao atualizar compensação")
   }
 }
 

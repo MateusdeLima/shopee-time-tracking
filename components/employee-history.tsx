@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Edit2, Trash2, AlertCircle, Calendar, Clock, FileDown, ClipboardCheck, Filter } from "lucide-react"
+import { Edit2, Trash2, AlertCircle, Calendar, Clock, FileDown, ClipboardCheck, Filter, Bot, Sparkles } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -509,24 +509,71 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
         const holiday = holidays.find((h) => h.id === record.holidayId)
         const hoursInfo = holidayHoursMap[record.holidayId]
         const availableOptions = getAvailableOptions(record)
+        const isAIGenerated = record.optionId === "ai_bank_hours"
+        const isPendingAdmin = record.status === "pending_admin"
+        const isRejectedAdmin = record.status === "rejected_admin"
 
         return (
-          <Card key={record.id} className="p-4 hover:shadow-md transition-shadow">
+          <Card key={record.id} className={`p-4 hover:shadow-md transition-shadow ${
+            isAIGenerated && isPendingAdmin
+              ? "border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-violet-50" 
+              : isAIGenerated && isRejectedAdmin
+              ? "border-2 border-red-200 bg-gradient-to-r from-red-50 to-pink-50"
+              : isAIGenerated 
+              ? "border-2 border-green-200 bg-gradient-to-r from-green-50 to-emerald-50"
+              : ""
+          }`}>
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
               <div className="flex-1 min-w-0">
-                <h4 className="font-medium text-[#EE4D2D] text-base sm:text-lg break-words">{record.holidayName}</h4>
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="font-medium text-[#EE4D2D] text-base sm:text-lg break-words">{record.holidayName}</h4>
+                  {isAIGenerated && (
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold ${
+                      isPendingAdmin 
+                        ? "bg-purple-100 text-purple-700"
+                        : isRejectedAdmin
+                        ? "bg-red-100 text-red-700" 
+                        : "bg-green-100 text-green-700"
+                    }`}>
+                      <Bot className="h-3 w-3" />
+                      <Sparkles className="h-3 w-3" />
+                      {isPendingAdmin ? "Aguardando" : isRejectedAdmin ? "Rejeitado" : "Aprovado"}
+                    </div>
+                  )}
+                </div>
                 <div className="flex items-center text-xs sm:text-sm text-gray-600 mt-1">
                   <Calendar className="h-3.5 w-3.5 mr-1" />
                   {formatDate(record.date)}
                 </div>
                 <div className="mt-2 flex flex-col gap-2">
-                  <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs sm:text-sm w-fit">
+                  <Badge variant="outline" className={`text-xs sm:text-sm w-fit ${
+                    isAIGenerated && isPendingAdmin
+                      ? "bg-purple-50 text-purple-700 border-purple-200"
+                      : isAIGenerated && isRejectedAdmin
+                      ? "bg-red-50 text-red-700 border-red-200"
+                      : isAIGenerated 
+                      ? "bg-green-50 text-green-700 border-green-200"
+                      : "bg-green-50 text-green-700 border-green-200"
+                  }`}>
                     <Clock className="h-3 w-3 mr-1" />
-                    {formatHours(record.hours)} - {record.optionLabel}
-                    </Badge>
+                    {formatHours(record.hours)} - {
+                      isAIGenerated 
+                        ? isPendingAdmin 
+                          ? "Banco de Horas IA (Aguardando verificação)"
+                          : isRejectedAdmin
+                          ? "Banco de Horas IA (Rejeitado pelo admin)"
+                          : "Banco de Horas IA (Aprovado)"
+                        : record.optionLabel
+                    }
+                  </Badge>
                   {record.task && (
-                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-orange-100 text-orange-800 text-xs font-semibold w-fit">
-                      <ClipboardCheck className="h-3 w-3" /> Task: {record.task}
+                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold w-fit ${
+                      isAIGenerated 
+                        ? "bg-blue-100 text-blue-800" 
+                        : "bg-orange-100 text-orange-800"
+                    }`}>
+                      {isAIGenerated ? <Bot className="h-3 w-3" /> : <ClipboardCheck className="h-3 w-3" />}
+                      {isAIGenerated ? "Compensação Automática" : `Task: ${record.task}`}
                     </span>
                   )}
                 </div>

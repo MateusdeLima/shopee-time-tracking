@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import { CalendarDays, Calendar, Users, LogOut, FileText, Clock, User, Menu, X, Edit, Upload } from "lucide-react"
+import { CalendarDays, Calendar, Users, LogOut, FileText, Clock, User, Menu, X, Edit, Upload, Banknote } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 
 interface SidebarProps {

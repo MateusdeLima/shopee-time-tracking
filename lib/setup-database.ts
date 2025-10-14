@@ -13,6 +13,22 @@ export async function createTables() {
     
     console.log("Tabelas já existem no Supabase")
 
+    // Verificar se a tabela hour_bank_compensations existe
+    try {
+      const { data: compensationsExist, error: compensationsCheckError } = await supabase
+        .from("hour_bank_compensations")
+        .select("id")
+        .limit(1)
+
+      if (compensationsCheckError) {
+        console.log("Tabela hour_bank_compensations não existe ainda, será criada via migrations")
+      } else {
+        console.log("Tabela hour_bank_compensations já existe")
+      }
+    } catch (e) {
+      console.log("Tabela hour_bank_compensations será criada via migrations")
+    }
+
     // Inserir feriados iniciais se não existirem
     try {
       const { data: holidaysExist, error: checkError } = await supabase.from("holidays").select("id").limit(1)

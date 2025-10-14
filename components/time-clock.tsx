@@ -6,10 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import { Clock, AlertCircle } from "lucide-react"
+import { Clock, AlertCircle, Upload, FileImage, Loader2, CheckCircle, XCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { determineOvertimeOption, getOvertimeRecordsByUserId, getUserHolidayStats } from "@/lib/db"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import Image from "next/image"
+import { useRef } from "react"
 
 interface OvertimeOption {
   id: string
@@ -131,6 +134,28 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
   const [groupedOptions, setGroupedOptions] = useState<any>({ antecipado: [], apos: [], misto: [] })
   const [task, setTask] = useState<string>("")
   const [isDeadlineDialogOpen, setIsDeadlineDialogOpen] = useState(false)
+  
+  // Estados para banco de horas
+  const [isHourBankDialogOpen, setIsHourBankDialogOpen] = useState(false)
+  const [hourBankStep, setHourBankStep] = useState(1) // 1: anexar, 2: loading, 3: resultado
+  const [selectedImage, setSelectedImage] = useState<string | null>(null)
+  const [declaredHours, setDeclaredHours] = useState("")
+  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisResult, setAnalysisResult] = useState<any>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Função para recarregar estatísticas do feriado
+  const refreshHolidayStats = async () => {
+    if (user && selectedHoliday) {
+      try {
+        const stats = await getUserHolidayStats(user.id, selectedHoliday.id)
+        console.log('Estatísticas atualizadas do feriado:', stats)
+        // As estatísticas serão refletidas na próxima verificação de horas
+      } catch (error) {
+        console.error('Erro ao atualizar estatísticas:', error)
+      }
+    }
+  }
 
   useEffect(() => {
     if (user?.shift === "8-17" || user?.shift === "9-18") {
@@ -187,7 +212,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
 
     try {
       // Verificar o total de horas já registradas para este feriado
-      const { used: horasRegistradas, max: horasMaximas } = await getUserHolidayStats(user.id, selectedHoliday.id)
+      const { used: horasRegistradas, max: horasMaximas, compensated: horasCompensadas } = await getUserHolidayStats(user.id, selectedHoliday.id)
 
       const allOptions = [...options]
       const option = allOptions.find((opt: OvertimeOption) => opt.id === selectedOption)
@@ -201,10 +226,18 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       // Verificar se o novo registro ultrapassará o limite de horas
       if (horasRegistradas + option.value > horasMaximas) {
         const horasRestantes = horasMaximas - horasRegistradas
+        const horasOriginais = selectedHoliday.maxHours
+        
+        let description = `Você já registrou ${horasRegistradas}h de ${horasMaximas}h permitidas. Restam ${horasRestantes}h para este feriado.`
+        
+        if (horasCompensadas > 0) {
+          description += ` (${horasCompensadas}h foram compensadas pelo seu banco de horas da Page)`
+        }
+        
         toast({
           variant: "destructive",
           title: "Limite de horas excedido",
-          description: `Você já registrou ${horasRegistradas}h de ${horasMaximas}h permitidas. Restam ${horasRestantes}h para este feriado.`
+          description
         })
         setError(`Você só pode registrar mais ${horasRestantes}h para este feriado`)
         setLoading(false)
@@ -235,9 +268,15 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       setSelectedOption("")
       setTask("")
 
+      let successDescription = `Foram registradas ${option.value === 0.5 ? "30 min" : `${option.value}h`} extras (${formatTimeString(startTime)} - ${formatTimeString(endTime)}). Total: ${horasRegistradas + option.value === 0.5 ? "30 min" : `${horasRegistradas + option.value}h`} de ${horasMaximas}h`
+      
+      if (horasCompensadas > 0) {
+        successDescription += `. Você economizou ${horasCompensadas}h com seu banco de horas da Page! 🎉`
+      }
+      
       toast({
         title: "Horas extras registradas",
-        description: `Foram registradas ${option.value === 0.5 ? "30 min" : `${option.value}h`} extras (${formatTimeString(startTime)} - ${formatTimeString(endTime)}). Total: ${horasRegistradas + option.value === 0.5 ? "30 min" : `${horasRegistradas + option.value}h`} de ${horasMaximas}h`,
+        description: successDescription,
       })
     } catch (error: any) {
       toast({
@@ -275,6 +314,125 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     if (!time) return "";
     const [hour, minute] = time.split(":");
     return `${hour}:${minute}`;
+  }
+
+  // Funções para banco de horas
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validar tamanho (máximo 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Arquivo muito grande",
+        description: "A imagem deve ter no máximo 5MB",
+        variant: "destructive"
+      })
+      return
+    }
+
+    // Validar tipo
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Tipo inválido",
+        description: "Apenas imagens são aceitas",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      setSelectedImage(event.target?.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleAnalyzeImage = async () => {
+    if (!selectedImage || !declaredHours) {
+      toast({
+        title: "Dados incompletos",
+        description: "Anexe a imagem e informe as horas",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setHourBankStep(2) // Ir para tela de loading
+    setIsAnalyzing(true)
+
+    try {
+      // Usar API completa com novo fluxo
+      const response = await fetch('/api/hour-bank/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          image: selectedImage,
+          declaredHours: parseFloat(declaredHours),
+          holidayId: selectedHoliday.id,
+          userId: user.id
+        })
+      })
+
+      const result = await response.json()
+      console.log('Resposta da API:', result)
+
+      if (!response.ok) {
+        console.error('Erro da API:', result)
+        const errorMsg = result.details || result.error || 'Erro na análise'
+        throw new Error(errorMsg)
+      }
+
+      setAnalysisResult(result)
+      setHourBankStep(3) // Ir para tela de resultado
+    } catch (error) {
+      console.error('Erro na análise:', error)
+      
+      let errorMessage = "Não foi possível analisar a imagem. Tente novamente."
+      
+      if (error instanceof Error) {
+        errorMessage = error.message
+      } else if (typeof error === 'string') {
+        errorMessage = error
+      }
+      
+      toast({
+        title: "Erro na análise",
+        description: errorMessage,
+        variant: "destructive"
+      })
+      setHourBankStep(1) // Voltar para tela inicial
+    } finally {
+      setIsAnalyzing(false)
+    }
+  }
+
+  const handleTryAgain = () => {
+    setHourBankStep(1)
+    setSelectedImage(null)
+    setDeclaredHours("")
+    setAnalysisResult(null)
+  }
+
+  const handleFinishHourBank = async () => {
+    if (analysisResult?.approved) {
+      // Atualizar estatísticas do feriado
+      await refreshHolidayStats()
+      
+      toast({
+        title: "Solicitação enviada!",
+        description: `${analysisResult.detectedHours}h foram aprovadas pela IA e enviadas para verificação no Dashboard Analytics. Aguarde a aprovação final.`,
+      })
+    }
+    
+    // Fechar modal e resetar
+    setIsHourBankDialogOpen(false)
+    setHourBankStep(1)
+    setSelectedImage(null)
+    setDeclaredHours("")
+    setAnalysisResult(null)
   }
 
   if (!selectedHoliday) {
@@ -338,6 +496,29 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
                 Por favor, informe o nome completo do projeto e uma breve descrição da task
               </p>
             </div>
+
+            {/* Botão de Banco de Horas */}
+            <div className="mb-6">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                    <Clock className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-blue-800">Você já tem horas no seu banco da Page?</h4>
+                    <p className="text-sm text-blue-600">Anexe o comprovante para compensar suas horas!</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
+                  onClick={() => setIsHourBankDialogOpen(true)}
+                >
+                  📸 Anexar Comprovante do Banco de Horas
+                </Button>
+              </div>
+            </div>
+
             <div>
               <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -396,6 +577,211 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
           </Button>
       </CardContent>
     </Card>
+
+    {/* Modal de Banco de Horas */}
+    <Dialog open={isHourBankDialogOpen} onOpenChange={setIsHourBankDialogOpen}>
+      <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="h-5 w-5" />
+            Compensação de Banco de Horas - {selectedHoliday.name}
+          </DialogTitle>
+        </DialogHeader>
+
+        {/* Step 1: Anexar Imagem */}
+        {hourBankStep === 1 && (
+          <div className="space-y-6">
+            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+              <h4 className="font-semibold text-blue-800 mb-2">📋 Como verificar seu banco de horas no Page Interim:</h4>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-blue-700">
+                <li>Acesse o sistema <strong>Page Interim</strong></li>
+                <li>Vá na seção <strong>"Saldo Banco de Horas"</strong></li>
+                <li>Tire um print da tela completa mostrando:</li>
+                <ul className="list-disc list-inside ml-4 space-y-1">
+                  <li>Cabeçalho "Page Interim" visível</li>
+                  <li>Seu nome na coluna "Nome"</li>
+                  <li>Valor no <strong>"Saldo Atual"</strong> (ex: 02:00)</li>
+                  <li>Data e informações da empresa</li>
+                </ul>
+              </ol>
+              <div className="mt-2 p-2 bg-yellow-100 rounded text-xs text-yellow-800">
+                <strong>⚠️ Importante:</strong> A imagem deve mostrar claramente o "Saldo Atual" no formato HH:MM (ex: 02:00 = 2 horas)
+              </div>
+            </div>
+
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              {selectedImage ? (
+                <div className="space-y-4">
+                  <div className="relative mx-auto w-64 h-48">
+                    <Image
+                      src={selectedImage}
+                      alt="Comprovante do banco de horas"
+                      fill
+                      className="object-contain rounded-lg"
+                    />
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => setSelectedImage(null)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    Remover imagem
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <FileImage className="h-12 w-12 text-gray-400 mx-auto" />
+                  <div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      Anexe o print do seu banco de horas
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex items-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      Selecionar arquivo
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+
+            {selectedImage && (
+              <div className="space-y-3">
+                <Label htmlFor="hours">Quantas horas aparecem no "Saldo Atual"?</Label>
+                <Input
+                  id="hours"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  max="12"
+                  value={declaredHours}
+                  onChange={(e) => setDeclaredHours(e.target.value)}
+                  placeholder="Ex: 2 (se aparecer 02:00) ou 2.5 (se aparecer 02:30)"
+                  className="text-center text-lg font-semibold"
+                />
+                <p className="text-xs text-gray-500 text-center">
+                  <strong>Conversão:</strong> 02:00 = 2 horas | 02:30 = 2.5 horas | 04:15 = 4.25 horas
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setIsHourBankDialogOpen(false)}
+                className="flex-1"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={handleAnalyzeImage}
+                disabled={!selectedImage || !declaredHours}
+                className="flex-1 bg-[#EE4D2D] hover:bg-[#D23F20]"
+              >
+                Analisar Imagem
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 2: Loading */}
+        {hourBankStep === 2 && (
+          <div className="space-y-6 text-center py-8">
+            <div className="flex justify-center">
+              <Loader2 className="h-16 w-16 animate-spin text-[#EE4D2D]" />
+            </div>
+            <div>
+              <h3 className="text-xl font-semibold mb-2">Analisando sua imagem, um momento...</h3>
+              <p className="text-gray-600">
+                Nossa IA está verificando o comprovante do seu banco de horas
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Resultado */}
+        {hourBankStep === 3 && analysisResult && (
+          <div className="space-y-6">
+            <div className="text-center">
+              {analysisResult.approved ? (
+                <div className="space-y-4">
+                  <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
+                  <div>
+                    <h3 className="text-xl font-semibold text-green-800 mb-2">
+                      ✅ Comprovante Aprovado!
+                    </h3>
+                    <p className="text-green-700">
+                      Detectamos {analysisResult.detectedHours}h no seu banco de horas
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <XCircle className="h-16 w-16 text-red-500 mx-auto" />
+                  <div>
+                    <h3 className="text-xl font-semibold text-red-800 mb-2">
+                      ❌ Comprovante Rejeitado
+                    </h3>
+                    <p className="text-red-700">
+                      Não foi possível validar o comprovante
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h4 className="font-semibold mb-2">Detalhes da Análise:</h4>
+              <p className="text-sm text-gray-700">{analysisResult.reason}</p>
+              <div className="mt-2 text-xs text-gray-500">
+                Confiança: {analysisResult.confidence}%
+              </div>
+            </div>
+
+            {selectedImage && (
+              <div className="text-center">
+                <h4 className="font-semibold mb-2">Imagem Analisada:</h4>
+                <div className="relative mx-auto w-48 h-32">
+                  <Image
+                    src={selectedImage}
+                    alt="Comprovante analisado"
+                    fill
+                    className="object-contain rounded-lg border"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={handleTryAgain}
+                className="flex-1"
+              >
+                Enviar Novamente
+              </Button>
+              <Button
+                onClick={handleFinishHourBank}
+                className="flex-1 bg-[#EE4D2D] hover:bg-[#D23F20]"
+              >
+                Concluir
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
     </>
   )
 }

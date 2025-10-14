@@ -1,0 +1,476 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { toast } from "@/components/ui/use-toast"
+import { format, parseISO } from "date-fns"
+import { ptBR } from "date-fns/locale"
+import { CheckCircle, XCircle, Clock, Calendar, Bot, Sparkles, Eye, User, Image as ImageIcon } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { getOvertimeRecords, updateOvertimeRecord, getUsers, getHolidays } from "@/lib/db"
+import Image from "next/image"
+
+interface HourBankAdminApprovalProps {
+  onUpdate?: () => void
+}
+
+export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) {
+  const [pendingRecords, setPendingRecords] = useState<any[]>([])
+  const [approvedRecords, setApprovedRecords] = useState<any[]>([])
+  const [users, setUsers] = useState<any[]>([])
+  const [holidays, setHolidays] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [selectedRecord, setSelectedRecord] = useState<any>(null)
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
+  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
+  const [approvalAction, setApprovalAction] = useState<"approve" | "reject" | null>(null)
+  const [processing, setProcessing] = useState(false)
+
+  useEffect(() => {
+    loadData()
+  }, [])
+
+  const loadData = async () => {
+    try {
+      setLoading(true)
+      
+      // Carregar registros de banco de horas
+      const allRecords = await getOvertimeRecords()
+      const pending = allRecords.filter(record => 
+        record.optionId === "ai_bank_hours" && record.status === "pending_admin"
+      )
+      const approved = allRecords.filter(record => 
+        record.optionId === "ai_bank_hours" && record.status === "approved"
+      ).slice(0, 10) // Mostrar apenas os 10 mais recentes
+      
+      // Carregar usuários e feriados para exibição
+      const [usersData, holidaysData] = await Promise.all([
+        getUsers(),
+        getHolidays()
+      ])
+      
+      setPendingRecords(pending)
+      setApprovedRecords(approved)
+      setUsers(usersData)
+      setHolidays(holidaysData)
+    } catch (error) {
+      console.error("Erro ao carregar dados:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os dados",
+        variant: "destructive"
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const getUserName = (userId: string) => {
+    const user = users.find(u => u.id === userId)
+    return user ? `${user.firstName} ${user.lastName}` : "Usuário não encontrado"
+  }
+
+  const getHolidayName = (holidayId: number) => {
+    const holiday = holidays.find(h => h.id === holidayId)
+    return holiday ? holiday.name : "Feriado não encontrado"
+  }
+
+  const formatDate = (dateString: string) => {
+    try {
+      if (!dateString) return 'Data não disponível'
+      
+      if (dateString.includes('T') || dateString.includes(' ')) {
+        const date = parseISO(dateString)
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após parseISO')
+        }
+        return format(date, "dd/MM/yyyy", { locale: ptBR })
+      } else {
+        const date = new Date(dateString + 'T12:00:00')
+        if (isNaN(date.getTime())) {
+          throw new Error('Data inválida após new Date')
+        }
+        return format(date, "dd/MM/yyyy", { locale: ptBR })
+      }
+    } catch (error) {
+      console.error('Erro ao formatar data:', dateString, error)
+      return 'Data inválida'
+    }
+  }
+
+  const formatHours = (hours: number) => {
+    if (hours === 0.5) return "30min"
+    return `${hours}h`
+  }
+
+  const handleViewRecord = (record: any) => {
+    setSelectedRecord(record)
+    setIsViewDialogOpen(true)
+  }
+
+  const handleApprovalAction = (record: any, action: "approve" | "reject") => {
+    setSelectedRecord(record)
+    setApprovalAction(action)
+    setIsApprovalDialogOpen(true)
+  }
+
+  const processApproval = async () => {
+    if (!selectedRecord || !approvalAction) return
+
+    try {
+      setProcessing(true)
+      
+      const newStatus = approvalAction === "approve" ? "approved" : "rejected_admin"
+      
+      await updateOvertimeRecord(selectedRecord.id, {
+        status: newStatus,
+        updatedAt: new Date().toISOString()
+      })
+
+      // Atualizar lista local
+      setPendingRecords(prev => prev.filter(r => r.id !== selectedRecord.id))
+      
+      toast({
+        title: approvalAction === "approve" ? "Aprovado com sucesso" : "Rejeitado com sucesso",
+        description: `O registro de ${getUserName(selectedRecord.userId)} foi ${
+          approvalAction === "approve" ? "aprovado" : "rejeitado"
+        }.`,
+      })
+
+      // Callback para atualizar outros componentes
+      if (onUpdate) onUpdate()
+      
+      setIsApprovalDialogOpen(false)
+      setSelectedRecord(null)
+      setApprovalAction(null)
+    } catch (error) {
+      console.error("Erro ao processar aprovação:", error)
+      toast({
+        title: "Erro",
+        description: "Não foi possível processar a aprovação",
+        variant: "destructive"
+      })
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#EE4D2D]"></div>
+      </div>
+    )
+  }
+
+  if (pendingRecords.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-center text-gray-500">
+            <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+            <p>Não há registros de banco de horas aguardando aprovação</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 mb-4">
+        <Bot className="h-5 w-5 text-purple-600" />
+        <h3 className="text-lg font-semibold">Aprovações de Banco de Horas IA</h3>
+        <Badge variant="secondary">{pendingRecords.length} pendente(s)</Badge>
+      </div>
+
+      {pendingRecords.map((record) => (
+        <Card key={record.id} className="border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-violet-50">
+          <CardContent className="p-4">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-2">
+                  <h4 className="font-semibold text-[#EE4D2D]">{getHolidayName(record.holidayId)}</h4>
+                  <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">
+                    <Bot className="h-3 w-3" />
+                    <Sparkles className="h-3 w-3" />
+                    Aguardando
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <User className="h-4 w-4" />
+                    <span>{getUserName(record.userId)}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Calendar className="h-4 w-4" />
+                    <span>Feriado: {formatDate(record.date)}</span>
+                  </div>
+                  
+                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 w-fit">
+                    <Clock className="h-3 w-3 mr-1" />
+                    {formatHours(record.hours)} compensadas
+                  </Badge>
+                </div>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleViewRecord(record)}
+                  className="flex items-center gap-2"
+                >
+                  <Eye className="h-4 w-4" />
+                  Visualizar
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleApprovalAction(record, "approve")}
+                  className="flex items-center gap-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Aprovar
+                </Button>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleApprovalAction(record, "reject")}
+                  className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <XCircle className="h-4 w-4" />
+                  Rejeitar
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+
+      {/* Dialog de Visualização */}
+      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bot className="h-5 w-5 text-purple-600" />
+              Detalhes do Registro de Banco de Horas
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedRecord && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <h4 className="font-semibold mb-2">Informações do Funcionário</h4>
+                  <div className="space-y-2 text-sm">
+                    <p><strong>Nome:</strong> {getUserName(selectedRecord.userId)}</p>
+                    <p><strong>Feriado:</strong> {getHolidayName(selectedRecord.holidayId)}</p>
+                    <p><strong>Data:</strong> {formatDate(selectedRecord.date)}</p>
+                    <p><strong>Horas:</strong> {formatHours(selectedRecord.hours)}</p>
+                  </div>
+                </div>
+                
+                <div>
+                  <h4 className="font-semibold mb-2">Análise da IA</h4>
+                  <div className="space-y-2 text-sm">
+                    <p><strong>Registrado em:</strong> {formatDate(selectedRecord.createdAt)}</p>
+                    <div className="flex items-center gap-2">
+                      <strong>Status:</strong>
+                      {selectedRecord.status === "approved" ? (
+                        <Badge className="bg-green-100 text-green-700">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Aprovado pela IA
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-purple-100 text-purple-700">
+                          <Clock className="h-3 w-3 mr-1" />
+                          Aguardando verificação
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="font-semibold mb-2">Descrição</h4>
+                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
+                  {selectedRecord.task}
+                </p>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+              Fechar
+            </Button>
+            
+            {/* Mostrar botões de ação apenas para registros pendentes */}
+            {selectedRecord && selectedRecord.status === "pending_admin" && (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setApprovalAction("reject")
+                    setIsViewDialogOpen(false)
+                    setIsApprovalDialogOpen(true)
+                  }}
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                >
+                  <XCircle className="h-4 w-4 mr-2" />
+                  Rejeitar
+                </Button>
+                <Button
+                  onClick={() => {
+                    setApprovalAction("approve")
+                    setIsViewDialogOpen(false)
+                    setIsApprovalDialogOpen(true)
+                  }}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Aprovar
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Confirmação de Aprovação/Rejeição */}
+      <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
+        <DialogContent className="max-w-md w-[95vw] sm:w-full">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {approvalAction === "approve" ? (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-600" />
+              )}
+              {approvalAction === "approve" ? "Aprovar" : "Rejeitar"} Registro
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedRecord && (
+            <div className="py-4">
+              <p className="mb-4">
+                Você está prestes a <strong>{approvalAction === "approve" ? "aprovar" : "rejeitar"}</strong> o 
+                registro de banco de horas de <strong>{getUserName(selectedRecord.userId)}</strong> 
+                para o feriado <strong>{getHolidayName(selectedRecord.holidayId)}</strong>.
+              </p>
+              
+              <Alert className={approvalAction === "approve" ? "border-green-200" : "border-red-200"}>
+                <AlertDescription>
+                  {approvalAction === "approve" 
+                    ? `As ${formatHours(selectedRecord.hours)} serão descontadas automaticamente do total exigido para este feriado.`
+                    : "O funcionário será notificado sobre a rejeição e nenhum desconto será aplicado."
+                  }
+                </AlertDescription>
+              </Alert>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsApprovalDialogOpen(false)}
+              disabled={processing}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={processApproval}
+              disabled={processing}
+              className={approvalAction === "approve" 
+                ? "bg-green-600 hover:bg-green-700" 
+                : "bg-red-600 hover:bg-red-700"
+              }
+            >
+              {processing ? (
+                <>
+                  <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  {approvalAction === "approve" ? (
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                  ) : (
+                    <XCircle className="h-4 w-4 mr-2" />
+                  )}
+                  Confirmar {approvalAction === "approve" ? "Aprovação" : "Rejeição"}
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Seção de Registros Aprovados */}
+      {approvedRecords.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <CardTitle className="text-lg">Registros Aprovados pela IA</CardTitle>
+              <Badge variant="secondary">{approvedRecords.length} aprovado(s)</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-3">
+              {approvedRecords.map((record) => (
+                <div key={record.id} className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Bot className="h-4 w-4 text-green-600" />
+                      <Sparkles className="h-4 w-4 text-green-600" />
+                    </div>
+                    
+                    <div>
+                      <div className="font-medium text-green-800">
+                        {getUserName(record.userId)}
+                      </div>
+                      <div className="text-sm text-green-600 flex items-center gap-4">
+                        <span>Feriado: {formatDate(record.date)}</span>
+                        <span>Aprovado em: {formatDate(record.createdAt)}</span>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+                      <CheckCircle className="h-3 w-3 mr-1" />
+                      {formatHours(record.hours)} aprovadas
+                    </Badge>
+                    
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedRecord(record)
+                        setIsViewDialogOpen(true)
+                      }}
+                      className="text-green-700 border-green-300 hover:bg-green-100"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
+                      Ver Detalhes
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  )
+}

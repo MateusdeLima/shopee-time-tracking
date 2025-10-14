@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { LogOut, Search, FileSpreadsheet, PieChart, BarChart3, Users, Calendar, Eye } from "lucide-react"
+import { HourBankAdminApproval } from "@/components/hour-bank-admin-approval"
 import { supabase } from "@/lib/supabase"
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, getMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"
@@ -463,10 +464,11 @@ export default function DashboardPage() {
 
         {/* Gráficos e Tabelas */}
         <Tabs defaultValue="insights" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="insights">📊 Insights</TabsTrigger>
             <TabsTrigger value="absences">📅 Ausências</TabsTrigger>
             <TabsTrigger value="overtime">⏰ Horas Extras</TabsTrigger>
+            <TabsTrigger value="hour-bank">🤖 Banco de Horas IA</TabsTrigger>
           </TabsList>
 
           {/* Aba de Ausências */}
@@ -712,6 +714,14 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          {/* Aba de Banco de Horas IA */}
+          <TabsContent value="hour-bank">
+            <HourBankAdminApproval onUpdate={() => {
+              // Callback para atualizar dados quando houver aprovação/rejeição
+              console.log("Aprovação processada - atualizando dados...")
+            }} />
           </TabsContent>
         </Tabs>
       </main>
