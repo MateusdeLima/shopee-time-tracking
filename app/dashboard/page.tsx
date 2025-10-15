@@ -471,10 +471,10 @@ export default function DashboardPage() {
         {/* Gráficos e Tabelas */}
         <Tabs defaultValue="insights" className="w-full">
           <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="insights">📊 Insights</TabsTrigger>
-            <TabsTrigger value="absences">📅 Ausências</TabsTrigger>
-            <TabsTrigger value="overtime">⏰ Horas Extras</TabsTrigger>
-            <TabsTrigger value="hour-bank">🤖 Banco de Horas</TabsTrigger>
+            <TabsTrigger value="insights"> Insights</TabsTrigger>
+            <TabsTrigger value="absences"> Ausências</TabsTrigger>
+            <TabsTrigger value="overtime"> Horas Extras</TabsTrigger>
+            <TabsTrigger value="hour-bank"> Banco de Horas</TabsTrigger>
           </TabsList>
 
           {/* Aba de Ausências */}
