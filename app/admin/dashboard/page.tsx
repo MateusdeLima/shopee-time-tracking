@@ -11,6 +11,10 @@ import { AdminAbsences } from "@/components/admin-absences"
 import { Sidebar } from "@/components/sidebar"
 import { getCurrentUser, logout, refreshCurrentUser } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
+import { Button } from "@/components/ui/button"
+import { FileSpreadsheet } from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { getHolidays, getOvertimeRecords, getUserById, getUserHolidayStats, getHolidayById } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
 
@@ -20,6 +24,10 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [activeMainTab, setActiveMainTab] = useState("holidays")
   const [activeHolidayTab, setActiveHolidayTab] = useState("manage")
+  const [isHourBankExportModalOpen, setIsHourBankExportModalOpen] = useState(false)
+  const [selectedExportHolidays, setSelectedExportHolidays] = useState<string[]>([])
+  const [isExporting, setIsExporting] = useState(false)
+  const [data, setData] = useState<any>({ holidays: [] }) // garantir array padrão
 
   useEffect(() => {
     // Inicializar banco de dados
@@ -40,6 +48,12 @@ export default function AdminDashboard() {
     setUser(user)
     setLoading(false)
   }, [router])
+
+  useEffect(() => {
+    if (user && !loading) {
+      getHolidays().then(holidays => setData((prev: any) => ({ ...prev, holidays })));
+    }
+  }, [user, loading]);
 
   const handleLogout = () => {
     logout()
@@ -110,6 +124,14 @@ export default function AdminDashboard() {
                       </div>
                     ) : (
                       <div className="w-full">
+                        <div className="flex justify-end mb-4">
+                          <Button
+                            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium h-10 px-4 py-2 bg-green-600 hover:bg-green-700 text-white"
+                            onClick={() => setIsHourBankExportModalOpen(true)}
+                          >
+                            <FileSpreadsheet className="h-4 w-4 mr-2" /> Exportar Relatório
+                          </Button>
+                        </div>
                         <EmployeeReports />
                       </div>
                     )}
@@ -168,6 +190,117 @@ export default function AdminDashboard() {
       
       <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
         {renderContent()}
+
+        <Dialog open={isHourBankExportModalOpen} onOpenChange={setIsHourBankExportModalOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Selecionar Feriados para Exportação</DialogTitle>
+            </DialogHeader>
+            <div className="py-4 max-h-[50vh] overflow-y-auto">
+              {(data.holidays || []).filter(h => h.active).length === 0 ? (
+                <div className="text-center text-gray-500 mb-4">Nenhum feriado ativo disponível para exportação.</div>
+              ) : (
+                (data.holidays || []).filter(h => h.active).map(h => (
+                  <div key={h.id} className="flex items-center mb-2">
+                    <input
+                      type="checkbox"
+                      id={`holiday_export_${h.id}`}
+                      checked={selectedExportHolidays.includes(h.id.toString())}
+                      onChange={e => {
+                        if (e.target.checked) setSelectedExportHolidays(prev => [...prev, h.id.toString()]);
+                        else setSelectedExportHolidays(prev => prev.filter(id => id !== h.id.toString()));
+                      }}
+                      className="mr-2"
+                    />
+                    <label htmlFor={`holiday_export_${h.id}`} className="text-sm cursor-pointer">{h.name} ({h.date})</label>
+                  </div>
+                ))
+              )}
+            </div>
+            <DialogFooter className="mt-4">
+              <Button variant="outline" onClick={() => setIsHourBankExportModalOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                className={`text-white ${isExporting ? 'bg-green-500' : 'bg-green-600 hover:bg-green-700'}`}
+                disabled={selectedExportHolidays.length === 0 || isExporting}
+                onClick={async () => {
+                  if (selectedExportHolidays.length === 0 || isExporting) return;
+                  setIsExporting(true);
+                  try {
+                    const overtimeRecords = await getOvertimeRecords();
+                    const records = (overtimeRecords || []).filter(
+                      (r) => selectedExportHolidays.includes(r.holidayId?.toString()) && (r.status === 'approved' || !r.status)
+                    );
+                    if (!records.length) {
+                      setIsExporting(false);
+                      return;
+                    }
+
+                    // Agrupar por userId
+                    const userIds = Array.from(new Set(records.map(r => r.userId)));
+
+                    // Buscar holiday info (assume mesmo feriado para seleção múltipla -> somaremos por feriado individualmente, mas a linha é por funcionário por feriado)
+                    const summaries: any[] = [];
+                    for (const holidayIdStr of selectedExportHolidays) {
+                      const holidayId = Number(holidayIdStr);
+                      const holiday = (data.holidays || []).find((h: any) => h.id === holidayId) || null;
+                      for (const uid of userIds) {
+                        const stats = await getUserHolidayStats(uid, holidayId);
+                        if (stats.max > 0 || stats.used > 0) {
+                          const user = await getUserById(uid);
+                          summaries.push({
+                            holiday: holiday ? holiday.name : 'Feriado',
+                            funcionario: user ? `${user.firstName} ${user.lastName}` : 'Desconhecido',
+                            horas_totais: holiday ? holiday.maxHours : stats.max,
+                            horas_feitas: stats.used,
+                          });
+                        }
+                      }
+                    }
+
+                    if (!summaries.length) {
+                      setIsExporting(false);
+                      return;
+                    }
+
+                    const response = await fetch('/api/sheets/export-dashboard', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        mode: 'hour_bank_summary',
+                        data: summaries,
+                        month: 'Relatório de Banco de Horas',
+                        stats: { totalAbsences: 0, totalOvertime: 0, totalUsers: userIds.length, totalHolidays: selectedExportHolidays.length },
+                      }),
+                    });
+                    const result = await response.json();
+                    if (!response.ok) throw new Error(result.error || 'Erro ao exportar relatório');
+                    window.open(result.spreadsheetUrl, '_blank');
+                  } catch (error: any) {
+                    alert(error.message || 'Erro ao exportar para o Google Sheets.');
+                  } finally {
+                    setIsExporting(false);
+                    setIsHourBankExportModalOpen(false);
+                    setSelectedExportHolidays([]);
+                  }
+                }}
+              >
+                {isExporting ? (
+                  <>
+                    <span className="inline-flex h-4 w-4 mr-2 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                    Exportando...
+                  </>
+                ) : (
+                  <>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Exportar Selecionados
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   )

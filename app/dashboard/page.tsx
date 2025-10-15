@@ -110,6 +110,10 @@ export default function DashboardPage() {
     holidays: [],
   })
 
+  // 1. Criar estado/funcionalidade para modal:
+  const [isHourBankExportModalOpen, setIsHourBankExportModalOpen] = useState(false)
+  const [selectedExportHolidays, setSelectedExportHolidays] = useState<string[]>([])
+
   useEffect(() => {
     // Verificar autenticação
     const auth = localStorage.getItem("dashboardAuth")
@@ -426,6 +430,23 @@ export default function DashboardPage() {
         </div>
 
         {/* Filtros e Exportação */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Exportar Banco de Horas</CardTitle>
+            <CardDescription>Exporte registros aprovados/rejeitados do banco de horas por feriado ativo</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="outline"
+              className="flex items-center gap-2"
+              onClick={() => setIsHourBankExportModalOpen(true)}
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              Exportar Banco de Horas
+            </Button>
+          </CardContent>
+        </Card>
+
         <Card className="mb-6">
           <CardHeader>
             <CardTitle>Filtros e Exportação</CardTitle>
@@ -815,6 +836,49 @@ export default function DashboardPage() {
               </TableBody>
             </Table>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de seleção e ação */}
+      <Dialog open={isHourBankExportModalOpen} onOpenChange={setIsHourBankExportModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Selecionar Feriados Ativos</DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-2 max-h-[50vh] overflow-y-auto">
+            {data.holidays.filter(h => h.active).map(h => (
+              <div key={h.id} className="flex items-center">
+                <input
+                  type="checkbox"
+                  id={`holiday_${h.id}`}
+                  checked={selectedExportHolidays.includes(h.id.toString())}
+                  onChange={e => {
+                    if (e.target.checked) setSelectedExportHolidays(prev => [...prev, h.id.toString()])
+                    else setSelectedExportHolidays(prev => prev.filter(id => id !== h.id.toString()))
+                  }}
+                  className="mr-2"
+                />
+                <label htmlFor={`holiday_${h.id}`} className="text-sm">{h.name} ({h.date})</label>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setIsHourBankExportModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                // Chamar nova API sheets/export-hour-bank (dica: mesma lógica do export-dashboard)
+                setIsHourBankExportModalOpen(false)
+                setSelectedExportHolidays([])
+                // ... Exemplo fetch para sheets/export-hour-bank ...
+              }}
+              disabled={selectedExportHolidays.length === 0}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              Exportar Selecionados
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

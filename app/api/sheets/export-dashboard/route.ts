@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 
 export async function POST(request: Request) {
   try {
-    const { data, month, stats } = await request.json()
+    const { data, month, stats, mode } = await request.json()
 
     if (!data || !Array.isArray(data)) {
       return NextResponse.json({ error: 'Dados inválidos' }, { status: 400 })
@@ -96,29 +96,47 @@ export async function POST(request: Request) {
       },
     })
 
-    // Aba de Dados Completos
-    const headers = [
-      'Tipo',
-      'Funcionário',
-      'Descrição',
-      'Período',
-      'Horas',
-      'Status',
-      'Data do Registro'
-    ]
+    // Aba de Dados Completos (suporta 2 esquemas)
+    const isHourBankSummary = mode === 'hour_bank_summary'
 
-    const dataValues = [
-      headers,
-      ...data.map((row: any) => [
-        row.tipo,
-        row.funcionario,
-        row.descricao,
-        row.periodo,
-        row.horas,
-        row.status,
-        row.data_registro
-      ])
-    ]
+    const headers = isHourBankSummary
+      ? ['Feriado', 'Funcionário', 'Horas Totais do Feriado', 'Horas Feitas (Funcionário)']
+      : [
+          'Tipo',
+          'Funcionário',
+          'Descrição',
+          'Período',
+          'Horas',
+          'Status',
+          'Data do Registro',
+          'Horas Totais do Feriado',
+          'Horas Feitas (Funcionário)'
+        ]
+
+    const dataValues = isHourBankSummary
+      ? [
+          headers,
+          ...data.map((row: any) => [
+            row.holiday,
+            row.funcionario,
+            row.horas_totais,
+            row.horas_feitas,
+          ])
+        ]
+      : [
+          headers,
+          ...data.map((row: any) => [
+            row.tipo,
+            row.funcionario,
+            row.descricao,
+            row.periodo,
+            row.horas,
+            row.status,
+            row.data_registro,
+            row.horas_totais || '',
+            row.horas_feitas || ''
+          ])
+        ]
 
     await sheets.spreadsheets.values.update({
       spreadsheetId,
@@ -215,7 +233,7 @@ export async function POST(request: Request) {
                 sheetId: dataSheetId,
                 dimension: 'COLUMNS',
                 startIndex: 0,
-                endIndex: 7,
+                endIndex: isHourBankSummary ? 4 : 9,
               },
             },
           },

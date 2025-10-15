@@ -597,18 +597,8 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-800 text-xs font-semibold">
                   <Calendar className="h-3 w-3" /> Registrado em: {formatDate(record.createdAt)}
                 </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                  onClick={() => {
-                    setRecordToDelete(record.id)
-                    setIsDeleteDialogOpen(true)
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span className="sr-only">Excluir registro</span>
-                </Button>
+                {/* Remover botão excluir registro do Card/Item de registro (Trash2 Button) */}
+                {/* NÃO renderizar <Button> de exclusão de registro para funcionário */}
               </div>
             </div>
           </Card>
