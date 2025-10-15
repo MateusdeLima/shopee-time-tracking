@@ -2,7 +2,7 @@
 
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,16 +29,17 @@ interface AnalysisResult {
 export default function HourBankAnalyzer({ 
   holidayId, 
   holidayName, 
-  totalHours, 
+  totalHours,
   userId, 
   onHoursCompensated 
 }: HourBankAnalyzerProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
-  const [declaredHours, setDeclaredHours] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
+  const [showExampleImage, setShowExampleImage] = useState(false)
   const [currentStep, setCurrentStep] = useState(1)
+  const [declaredHours, setDeclaredHours] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -112,12 +113,31 @@ export default function HourBankAnalyzer({
           <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
             <h4 className="font-semibold text-blue-800 mb-2">📋 Passo a passo:</h4>
             <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700">
-              <li>Acesse o sistema de ponto da Page</li>
-              <li>Vá na seção "Banco de Horas" ou "Saldo de Horas"</li>
-              <li>Localize o campo que mostra seu saldo atual</li>
-              <li>Tire um print da tela mostrando claramente o saldo</li>
-              <li>Certifique-se que a data e seu nome estejam visíveis</li>
+              <li>Acesse o sistema <strong>Page Interim</strong></li>
+              <li>Vá na seção <strong>"Saldo Banco de Horas"</strong></li>
+              <li>Tire um print da tela completa mostrando:
+                <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+                  <li>Cabeçalho "Page Interim" visível</li>
+                  <li>Seu nome na coluna "Nome"</li>
+                  <li>Valor no <strong>"Saldo Atual"</strong> (ex: 02:00)</li>
+                  <li>Data e informações da empresa</li>
+                </ul>
+              </li>
             </ol>
+            
+            {/* Botão Ver Imagem Base */}
+            <div className="mt-4 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowExampleImage(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors border border-blue-300"
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Ver imagem base
+              </button>
+            </div>
           </div>
           
           <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
@@ -144,8 +164,8 @@ export default function HourBankAnalyzer({
       title: "Anexar comprovante",
       content: (
         <div className="space-y-4">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-            {selectedImage ? (
+          {selectedImage ? (
+            <div className="border-2 border-dashed border-[#EE4D2D] bg-orange-50 rounded-lg p-6 text-center">
               <div className="space-y-4">
                 <div className="relative mx-auto w-48 h-32">
                   <Image
@@ -163,35 +183,41 @@ export default function HourBankAnalyzer({
                   Remover imagem
                 </Button>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <FileImage className="h-12 w-12 text-gray-400 mx-auto" />
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">
+            </div>
+          ) : (
+            <>
+              <div 
+                className="space-y-6 cursor-pointer hover:bg-orange-100 transition-all duration-200 p-8 rounded-lg border-2 border-dashed border-[#EE4D2D] hover:border-[#D23F20] group bg-orange-50"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <FileImage className="h-20 w-20 text-gray-400 group-hover:text-[#EE4D2D] mx-auto transition-colors" />
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-700 group-hover:text-[#EE4D2D] mb-3 transition-colors">
                     Anexe o print do seu banco de horas
+                  </h3>
+                  <p className="text-base text-gray-600 mb-6">
+                    Clique em qualquer lugar neste card para selecionar a imagem
                   </p>
-                  <div className="flex gap-2 justify-center">
-                    <Button
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2"
-                    >
-                      <Upload className="h-4 w-4" />
-                      Selecionar arquivo
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={handlePasteImage}
-                      className="flex items-center gap-2"
-                    >
-                      <Clipboard className="h-4 w-4" />
-                      Colar imagem
-                    </Button>
+                  <div className="flex items-center justify-center gap-2 text-gray-500 group-hover:text-[#EE4D2D] transition-colors">
+                    <Upload className="h-5 w-5" />
+                    <span className="font-medium">Selecionar arquivo</span>
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+              
+              {/* Botão separado para colar imagem */}
+              <div className="flex justify-center mt-4">
+                <button
+                  type="button"
+                  onClick={handlePasteImage}
+                  className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500 hover:text-[#EE4D2D] hover:bg-gray-50 rounded-lg transition-colors border border-gray-200 hover:border-[#EE4D2D]"
+                >
+                  <Clipboard className="h-4 w-4" />
+                  Colar imagem da área de transferência
+                </button>
+              </div>
+            </>
+          )}
 
           <input
             ref={fileInputRef}
@@ -238,7 +264,7 @@ export default function HourBankAnalyzer({
     setIsAnalyzing(true)
 
     try {
-      const response = await fetch('/api/hour-bank/analyze', {
+      const response = await fetch('/api/hour-bank/submit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -257,11 +283,17 @@ export default function HourBankAnalyzer({
         throw new Error(result.error || 'Erro na análise')
       }
 
-      setAnalysisResult(result)
+      // Sucesso no envio - mostrar mensagem e fechar modal
+      toast({
+        title: "Comprovante Enviado!",
+        description: "Seu comprovante será analisado por nossos admins.",
+      })
       
-      if (result.approved && onHoursCompensated) {
-        onHoursCompensated(parseFloat(declaredHours))
-      }
+      // Fechar modal automaticamente após 2 segundos
+      setTimeout(() => {
+        setIsOpen(false)
+        resetModal()
+      }, 2000)
 
     } catch (error) {
       console.error('Erro na análise:', error)
@@ -399,95 +431,108 @@ export default function HourBankAnalyzer({
                     {isAnalyzing ? (
                       <>
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                        Analisando...
+                        Enviando...
                       </>
                     ) : (
                       <>
                         <CheckCircle className="h-4 w-4 mr-2" />
-                        Analisar Comprovante
+                        Enviar Comprovante
                       </>
                     )}
-                  </Button>
-                )}
-              </div>
-            </div>
-          ) : (
-            /* Resultado da análise */
-            <div className="space-y-6">
-              <Card className={`border-2 ${
-                analysisResult.approved ? 'border-green-500 bg-green-50' : 'border-red-500 bg-red-50'
-              }`}>
-                <CardHeader className="text-center">
-                  <div className="flex justify-center mb-2">
-                    {analysisResult.approved ? (
-                      <CheckCircle className="h-12 w-12 text-green-500" />
-                    ) : (
-                      <XCircle className="h-12 w-12 text-red-500" />
-                    )}
-                  </div>
-                  <CardTitle className={`text-xl ${
-                    analysisResult.approved ? 'text-green-700' : 'text-red-700'
-                  }`}>
-                    {analysisResult.approved ? 'Comprovante Aprovado!' : 'Comprovante Rejeitado'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-600">Horas declaradas:</span>
-                      <p className="font-semibold">{declaredHours}h</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Horas detectadas:</span>
-                      <p className="font-semibold">{analysisResult.detectedHours}h</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Confiança:</span>
-                      <p className="font-semibold">{analysisResult.confidence}%</p>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Status:</span>
-                      <Badge className={analysisResult.approved ? 'bg-green-500' : 'bg-red-500'}>
-                        {analysisResult.approved ? 'Aprovado' : 'Rejeitado'}
-                      </Badge>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white p-3 rounded border">
-                    <span className="text-gray-600 text-sm">Motivo:</span>
-                    <p className="font-medium">{analysisResult.reason}</p>
-                  </div>
-
-                  {analysisResult.approved && (
-                    <div className="bg-green-100 p-3 rounded border border-green-300">
-                      <p className="text-green-800 text-sm">
-                        ✅ Suas {declaredHours}h foram compensadas com sucesso! 
-                        Agora você precisa cumprir apenas {Math.max(0, totalHours - parseFloat(declaredHours))}h neste feriado.
-                      </p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-
-              <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={handleClose}
-                  className="flex-1"
-                >
-                  Fechar
-                </Button>
-                {!analysisResult.approved && (
-                  <Button
-                    onClick={resetModal}
-                    className="flex-1 bg-[#EE4D2D] hover:bg-[#D23F20]"
-                  >
-                    Tentar Novamente
                   </Button>
                 )}
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+      
+      {/* Modal da Imagem Base */}
+      <Dialog open={showExampleImage} onOpenChange={setShowExampleImage}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-center text-lg font-semibold">
+              📊 Imagem Base - Exemplo do Page Interim
+            </DialogTitle>
+            <DialogDescription className="text-center text-sm text-gray-600">
+              Esta é a imagem de exemplo do sistema Page Interim
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Imagem de exemplo */}
+            <div className="border-2 border-dashed border-blue-300 bg-blue-50 rounded-lg p-6 text-center">
+              <div className="bg-white rounded-lg p-4 shadow-sm border">
+                {/* Simulação da tela do Page Interim */}
+                <div className="space-y-4">
+                  {/* Cabeçalho */}
+                  <div className="bg-blue-600 text-white p-3 rounded-t-lg">
+                    <h3 className="font-bold text-lg">Page Interim</h3>
+                    <p className="text-sm opacity-90">Sistema de Controle de Ponto</p>
+                  </div>
+                  
+                  {/* Conteúdo */}
+                  <div className="p-4 space-y-3">
+                    <h4 className="font-semibold text-gray-800">Saldo Banco de Horas</h4>
+                    
+                    {/* Tabela simulada */}
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="bg-gray-100 p-2 border-b">
+                        <div className="grid grid-cols-3 gap-4 text-sm font-medium text-gray-700">
+                          <span>Nome</span>
+                          <span>Saldo Atual</span>
+                          <span>Data Atualização</span>
+                        </div>
+                      </div>
+                      <div className="p-2">
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <span className="font-medium text-blue-600">João Silva</span>
+                          <span className="font-bold text-green-600 text-lg">02:30</span>
+                          <span className="text-gray-600">14/10/2025</span>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Informações da empresa */}
+                    <div className="text-xs text-gray-500 mt-4">
+                      <p>Empresa: Shopee Brasil Ltda.</p>
+                      <p>Período: Outubro 2025</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            {/* Instruções */}
+            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+              <h4 className="font-semibold text-green-800 mb-2">✓ O que a IA procura:</h4>
+              <ul className="list-disc list-inside space-y-1 text-sm text-green-700">
+                <li><strong>Cabeçalho "Page Interim"</strong> - Confirma que é o sistema correto</li>
+                <li><strong>Seu nome</strong> - Valida que é seu comprovante</li>
+                <li><strong>"Saldo Atual" visível</strong> - Deve mostrar o valor em formato HH:MM</li>
+                <li><strong>Data recente</strong> - Máximo 24 horas de diferença</li>
+                <li><strong>Informações da empresa</strong> - Confirma autenticidade</li>
+              </ul>
+            </div>
+            
+            <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+              <h4 className="font-semibold text-amber-800 mb-2">⚠️ Importante:</h4>
+              <p className="text-sm text-amber-700">
+                A imagem deve mostrar claramente o <strong>"Saldo Atual"</strong> no formato HH:MM 
+                (ex: 02:00 = 2 horas). A IA compara sua imagem com este padrão para validar 
+                se todas as informações necessárias estão presentes.
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex justify-center pt-4">
+            <Button 
+              onClick={() => setShowExampleImage(false)}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              Entendi, fechar
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </>

@@ -13,12 +13,14 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { authenticateAdmin, setCurrentUser } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
+import { LoadingScreen } from "@/components/loading-screen"
 
 export function AdminLoginForm() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [dbInitialized, setDbInitialized] = useState(false)
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -96,13 +98,24 @@ export function AdminLoginForm() {
         description: "Bem-vindo ao painel administrativo!",
       })
 
-      router.push("/admin/dashboard")
+      // Mostrar tela de carregamento antes de redirecionar
+      setShowLoadingScreen(true)
+      
+      // Simular carregamento por 2 segundos
+      setTimeout(() => {
+        router.push("/admin/dashboard")
+      }, 2000)
     } catch (error: any) {
       console.error("Erro ao fazer login:", error)
       setError(error.message || "Falha ao realizar login. Tente novamente.")
-    } finally {
       setIsLoading(false)
+      setShowLoadingScreen(false)
     }
+  }
+
+  // Se estiver mostrando a tela de carregamento, renderizar apenas ela
+  if (showLoadingScreen) {
+    return <LoadingScreen message="Carregando admin..." />
   }
 
   return (

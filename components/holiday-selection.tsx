@@ -252,10 +252,6 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
                 <div className="flex justify-between items-start">
                   <div>
                     <h4 className="font-medium text-[#EE4D2D]">{holiday.name}</h4>
-                    <div className="flex items-center text-sm text-gray-600 mt-1">
-                      <Calendar className="h-3.5 w-3.5 mr-1" />
-                      {formatDate(holiday.date)}
-                    </div>
                   </div>
                   <Badge
                     variant={remaining > 0 ? "success" : "outline"}

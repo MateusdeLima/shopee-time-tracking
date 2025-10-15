@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
 import { useRef } from "react"
+import BankHoursNotificationModal from "./rejection-notification-modal"
 
 interface OvertimeOption {
   id: string
@@ -136,12 +137,14 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
   const [isDeadlineDialogOpen, setIsDeadlineDialogOpen] = useState(false)
   
   // Estados para banco de horas
+  const [showRejectionModal, setShowRejectionModal] = useState(true) // Mostrar modal ao carregar
   const [isHourBankDialogOpen, setIsHourBankDialogOpen] = useState(false)
   const [hourBankStep, setHourBankStep] = useState(1) // 1: anexar, 2: loading, 3: resultado
   const [selectedImage, setSelectedImage] = useState<string | null>(null)
   const [declaredHours, setDeclaredHours] = useState("")
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysisResult, setAnalysisResult] = useState<any>(null)
+  const [showExampleImage, setShowExampleImage] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Função para recarregar estatísticas do feriado
@@ -423,7 +426,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       
       toast({
         title: "Solicitação enviada!",
-        description: `${analysisResult.detectedHours}h foram aprovadas pela IA e enviadas para verificação no Dashboard Analytics. Aguarde a aprovação final.`,
+        description: `${analysisResult.detectedHours}h foram aprovadas pela IA e enviadas para aprovação final no Dashboard Analytics.`,
       })
     }
     
@@ -593,24 +596,45 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
           <div className="space-y-6">
             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
               <h4 className="font-semibold text-blue-800 mb-2">📋 Como verificar seu banco de horas no Page Interim:</h4>
-              <ol className="list-decimal list-inside space-y-1 text-sm text-blue-700">
+              <ol className="list-decimal list-inside space-y-2 text-sm text-blue-700">
                 <li>Acesse o sistema <strong>Page Interim</strong></li>
                 <li>Vá na seção <strong>"Saldo Banco de Horas"</strong></li>
-                <li>Tire um print da tela completa mostrando:</li>
-                <ul className="list-disc list-inside ml-4 space-y-1">
-                  <li>Cabeçalho "Page Interim" visível</li>
-                  <li>Seu nome na coluna "Nome"</li>
-                  <li>Valor no <strong>"Saldo Atual"</strong> (ex: 02:00)</li>
-                  <li>Data e informações da empresa</li>
-                </ul>
+                <li>Tire um print da tela completa usando:
+                  <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+                    <li><strong>Botão Print Screen (PrtSc)</strong> do teclado</li>
+                    <li>Ou o aplicativo <strong>"Ferramenta de Captura"</strong> do Windows</li>
+                  </ul>
+                </li>
+                <li>Certifique-se que apareça na imagem:
+                  <ul className="list-disc list-inside ml-4 mt-1 space-y-1">
+                    <li>Cabeçalho "Page Interim" visível</li>
+                    <li><strong>Seu nome</strong> na coluna "Nome"</li>
+                    <li>Valor no <strong>"Saldo Atual"</strong> (ex: 02:00)</li>
+                    <li>Data e informações da empresa</li>
+                  </ul>
+                </li>
               </ol>
+              
+              {/* Botão Ver Imagem Base */}
+              <div className="mt-4 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => setShowExampleImage(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded-lg transition-colors border border-blue-300"
+                >
+                  <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  Ver imagem base
+                </button>
+              </div>
               <div className="mt-2 p-2 bg-yellow-100 rounded text-xs text-yellow-800">
                 <strong>⚠️ Importante:</strong> A imagem deve mostrar claramente o "Saldo Atual" no formato HH:MM (ex: 02:00 = 2 horas)
               </div>
             </div>
 
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              {selectedImage ? (
+            {selectedImage ? (
+              <div className="border-2 border-dashed border-[#EE4D2D] bg-orange-50 rounded-lg p-6 text-center">
                 <div className="space-y-4">
                   <div className="relative mx-auto w-64 h-48">
                     <Image
@@ -628,25 +652,27 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
                     Remover imagem
                   </Button>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  <FileImage className="h-12 w-12 text-gray-400 mx-auto" />
-                  <div>
-                    <p className="text-sm text-gray-600 mb-2">
-                      Anexe o print do seu banco de horas
-                    </p>
-                    <Button
-                      variant="outline"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center gap-2"
-                    >
-                      <Upload className="h-4 w-4" />
-                      Selecionar arquivo
-                    </Button>
+              </div>
+            ) : (
+              <div 
+                className="space-y-6 cursor-pointer hover:bg-orange-100 transition-all duration-200 p-8 rounded-lg border-2 border-dashed border-[#EE4D2D] hover:border-[#D23F20] group bg-orange-50"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <FileImage className="h-20 w-20 text-gray-400 group-hover:text-[#EE4D2D] mx-auto transition-colors" />
+                <div className="text-center">
+                  <h3 className="text-xl font-semibold text-gray-700 group-hover:text-[#EE4D2D] mb-3 transition-colors">
+                    Anexe o print do seu banco de horas
+                  </h3>
+                  <p className="text-base text-gray-600 mb-6">
+                    Clique em qualquer lugar neste card para selecionar a imagem
+                  </p>
+                  <div className="flex items-center justify-center gap-2 text-gray-500 group-hover:text-[#EE4D2D] transition-colors">
+                    <Upload className="h-5 w-5" />
+                    <span className="font-medium">Selecionar arquivo</span>
                   </div>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <input
               ref={fileInputRef}
@@ -743,10 +769,12 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
 
             <div className="bg-gray-50 p-4 rounded-lg">
               <h4 className="font-semibold mb-2">Detalhes da Análise:</h4>
-              <p className="text-sm text-gray-700">{analysisResult.reason}</p>
-              <div className="mt-2 text-xs text-gray-500">
-                Confiança: {analysisResult.confidence}%
-              </div>
+              <p className="text-sm text-gray-700">
+                {analysisResult.approved 
+                  ? "✅ Análise aprovada pela nossa IA" 
+                  : "❌ Análise rejeitada pela nossa IA"
+                }
+              </p>
             </div>
 
             {selectedImage && (
@@ -782,6 +810,93 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         )}
       </DialogContent>
     </Dialog>
+    
+    {/* Modal da Imagem Base */}
+    <Dialog open={showExampleImage} onOpenChange={setShowExampleImage}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-center text-lg font-semibold">
+            📊 Imagem Base - Exemplo do Page Interim
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          {/* Imagem de exemplo real */}
+          <div className="border-2 border-dashed border-blue-300 bg-blue-50 rounded-lg p-6 text-center">
+            <div className="bg-white rounded-lg p-2 shadow-sm border">
+              <h4 className="font-semibold text-blue-800 mb-3">📸 Exemplo: Como deve ser seu print</h4>
+              <div className="relative w-full max-w-3xl mx-auto">
+                <Image
+                  src="/base.png"
+                  alt="Exemplo de tela do Page Interim mostrando banco de horas"
+                  width={800}
+                  height={400}
+                  className="rounded-lg border shadow-sm object-contain w-full"
+                  priority
+                />
+              </div>
+              <div className="mt-3 text-sm text-blue-700">
+                <p className="font-medium">👆 Tire um print exatamente como esta imagem</p>
+                <p>Onde está escrito "Seu nome aqui", deve aparecer <strong>seu nome real</strong></p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Instruções */}
+          <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+            <h4 className="font-semibold text-green-800 mb-2">✓ O que a IA procura na sua imagem:</h4>
+            <ul className="list-disc list-inside space-y-1 text-sm text-green-700">
+              <li><strong>Logo "Page Interim"</strong> - No canto superior esquerdo</li>
+              <li><strong>Informações da empresa</strong> - No canto superior direito</li>
+              <li><strong>Título "Saldo Banco de Horas"</strong> - Centralizado</li>
+              <li><strong>Seu nome real</strong> - Na coluna "Nome" (onde está "Seu nome aqui")</li>
+              <li><strong>Valor no "Saldo Atual"</strong> - Formato HH:MM (ex: 02:00)</li>
+              <li><strong>Data atual</strong> - No campo "Gerado em"</li>
+            </ul>
+          </div>
+          
+          <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+            <h4 className="font-semibold text-amber-800 mb-2">⚠️ Muito Importante:</h4>
+            <p className="text-sm text-amber-700">
+              <strong>Sua imagem deve ser IDÊNTICA</strong> ao exemplo acima. A IA usa esta imagem base 
+              como referência para validar seu comprovante. Certifique-se que:
+            </p>
+            <ul className="list-disc list-inside mt-2 space-y-1 text-sm text-amber-700">
+              <li>O layout seja exatamente igual</li>
+              <li>Todas as informações estejam visíveis</li>
+              <li>O "Saldo Atual" mostre suas horas reais</li>
+            </ul>
+          </div>
+          
+          <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+            <h4 className="font-semibold text-blue-800 mb-2">📋 Como tirar o print:</h4>
+            <ol className="list-decimal list-inside space-y-1 text-sm text-blue-700">
+              <li>Pressione <strong>Print Screen (PrtSc)</strong> no teclado</li>
+              <li>Ou use a <strong>"Ferramenta de Captura"</strong> do Windows</li>
+              <li>Cole a imagem em um editor (Paint, Word, etc.)</li>
+              <li>Salve como arquivo de imagem (PNG, JPG)</li>
+            </ol>
+          </div>
+        </div>
+        
+        <div className="flex justify-center pt-4">
+          <Button 
+            onClick={() => setShowExampleImage(false)}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            Entendi, fechar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal de Notificação de Banco de Horas */}
+    {showRejectionModal && (
+      <BankHoursNotificationModal 
+        userId={user.id}
+        onClose={() => setShowRejectionModal(false)}
+      />
+    )}
     </>
   )
 }

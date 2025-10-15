@@ -23,7 +23,7 @@ export interface HourBankCompensation {
   declaredHours: number
   detectedHours: number
   confidence: number
-  proofImage: string
+  proofImage: string // String vazia quando não há imagem
   status: "approved" | "rejected"
   reason: string
   analyzedAt: string
@@ -34,7 +34,7 @@ export interface HourBankCompensation {
 export interface Holiday {
   id: number
   name: string
-  date: string
+  date?: string // Campo opcional - não usado mais na interface
   active: boolean
   deadline: string
   maxHours: number
@@ -55,6 +55,7 @@ export interface OvertimeRecord {
   endTime?: string
   task?: string
   status?: "approved" | "pending_admin" | "rejected_admin"
+  proofImage?: string // Imagem do comprovante (temporária)
   createdAt: string
   updatedAt?: string
 }
@@ -98,7 +99,7 @@ export interface HourBankCompensation {
   declaredHours: number
   detectedHours: number
   confidence: number
-  proofImage: string
+  proofImage: string // String vazia quando não há imagem
   status: "approved" | "rejected"
   reason: string
   analyzedAt: string
@@ -960,30 +961,54 @@ export async function getHolidayStats(holidayId: number): Promise<{ used: number
   }
 }
 
-export async function getUserHolidayStats(userId: string, holidayId: number): Promise<{ used: number; max: number; compensated: number }> {
+export async function getUserHolidayStats(userId: string, holidayId: number, forceRefresh: boolean = false): Promise<{ used: number; max: number; compensated: number }> {
   try {
+    // Verificar cache primeiro (se não for refresh forçado)
+    if (!forceRefresh) {
+      const { getCachedStats } = await import("@/lib/stats-cache")
+      const cached = getCachedStats(userId, holidayId)
+      if (cached) {
+        return { used: cached.used, max: cached.max, compensated: cached.compensated }
+      }
+    }
     // Buscar informações do feriado
     const holiday = await getHolidayById(holidayId)
     if (!holiday) {
       return { used: 0, max: 0, compensated: 0 }
     }
 
-    // Buscar registros de horas extras do usuário para este feriado
-    // Incluir apenas registros aprovados ou sem status (registros manuais antigos)
+    // Buscar todos os registros de horas extras do usuário para este feriado
     const { data, error } = await supabase
       .from("overtime_records")
       .select("hours, status")
       .eq("user_id", userId)
       .eq("holiday_id", holidayId)
-      .or("status.is.null,status.eq.approved")
 
     if (error) {
       console.error("Erro ao buscar estatísticas de usuário para feriado:", error)
       return { used: 0, max: holiday.maxHours, compensated: 0 }
     }
 
-    // Calcular total de horas usadas
-    const hoursUsed = data.reduce((total: number, record: any) => total + record.hours, 0)
+    // Filtrar apenas registros que devem ser contabilizados:
+    // - Registros sem status (antigos, manuais) 
+    // - Registros aprovados (status = "approved")
+    // EXCLUIR: rejected_admin, pending_admin
+    const validRecords = data.filter((record: any) => {
+      const status = record.status
+      return status === null || status === "approved"
+    })
+
+    // Debug: Log dos registros para entender o problema
+    console.log(`[getUserHolidayStats] Usuário ${userId}, Feriado ${holidayId}:`)
+    console.log(`- Total de registros encontrados: ${data.length}`)
+    console.log(`- Registros válidos (null ou approved): ${validRecords.length}`)
+    data.forEach((record: any, index: number) => {
+      console.log(`  Registro ${index + 1}: ${record.hours}h, status: ${record.status || 'null'}`)
+    })
+
+    // Calcular total de horas usadas (apenas registros válidos)
+    const hoursUsed = validRecords.reduce((total: number, record: any) => total + record.hours, 0)
+    console.log(`- Horas usadas (contabilizadas): ${hoursUsed}h`)
 
     // Buscar horas compensadas do banco de horas para este usuário e feriado
     const { data: compensationsData, error: compensationsError } = await supabase
@@ -1004,11 +1029,21 @@ export async function getUserHolidayStats(userId: string, holidayId: number): Pr
     // O máximo efetivo é o máximo original menos as horas compensadas
     const effectiveMax = Math.max(0, holiday.maxHours - compensatedHours)
 
-    return {
+    const result = {
       used: hoursUsed,
       max: effectiveMax,
       compensated: compensatedHours
     }
+
+    // Armazenar no cache
+    try {
+      const { setCachedStats } = await import("@/lib/stats-cache")
+      setCachedStats(userId, holidayId, result)
+    } catch (error) {
+      console.error("Erro ao armazenar no cache:", error)
+    }
+
+    return result
   } catch (error) {
     console.error("Erro ao buscar estatísticas de usuário para feriado:", error)
     return { used: 0, max: 0, compensated: 0 }
@@ -1153,7 +1188,7 @@ export async function createHourBankCompensation(
       declared_hours: compensation.declaredHours,
       detected_hours: compensation.detectedHours,
       confidence: compensation.confidence,
-      proof_image: compensation.proofImage,
+      proof_image: compensation.proofImage || '', // Valor padrão vazio se não houver imagem
       status: compensation.status,
       reason: compensation.reason,
       analyzed_at: compensation.analyzedAt,

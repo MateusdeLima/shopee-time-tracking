@@ -77,18 +77,14 @@ export default function EmployeeDashboard() {
     switch (activeMainTab) {
       case "holidays":
         return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Gerenciamento de Feriados</CardTitle>
-              <CardDescription>Registre horas extras e visualize seu histórico</CardDescription>
+          <Card className="mx-2 sm:mx-0">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl">Gerenciamento de Feriados</CardTitle>
+              <CardDescription className="text-sm sm:text-base">Registre horas extras e visualize seu histórico</CardDescription>
             </CardHeader>
-            <CardContent>
-              {activeHolidayTab === "register" ? (
-                <HolidaySelection user={user} />
-              ) : (
-                <EmployeeHistory user={user} />
-              )}
-              <div className="flex justify-center mt-6">
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
+              {/* Botões de navegação dentro do card */}
+              <div className="flex justify-center mb-6">
                 <div className="flex bg-gray-100 rounded-lg p-1">
                   <button
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
@@ -112,18 +108,27 @@ export default function EmployeeDashboard() {
                   </button>
                 </div>
               </div>
+              <div className="overflow-x-auto">
+                {activeHolidayTab === "register" ? (
+                  <HolidaySelection user={user} />
+                ) : (
+                  <EmployeeHistory user={user} />
+                )}
+              </div>
             </CardContent>
           </Card>
         )
       case "absences":
         return (
-          <Card>
-            <CardHeader>
-              <CardTitle>Gerenciamento de Ausências</CardTitle>
-              <CardDescription>Registre e gerencie suas ausências futuras</CardDescription>
+          <Card className="mx-2 sm:mx-0">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl">Gerenciamento de Ausências</CardTitle>
+              <CardDescription className="text-sm sm:text-base">Registre e gerencie suas ausências futuras</CardDescription>
             </CardHeader>
-            <CardContent>
-              <AbsenceManagement user={user} />
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
+              <div className="overflow-x-auto">
+                <AbsenceManagement user={user} />
+              </div>
             </CardContent>
           </Card>
         )
@@ -146,7 +151,7 @@ export default function EmployeeDashboard() {
         onProfileUpdate={handleProfileUpdate}
       />
       
-      <main className="flex-1 md:ml-64 pt-20 md:pt-0 p-6">
+      <main className="flex-1 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
         {renderContent()}
       </main>
 

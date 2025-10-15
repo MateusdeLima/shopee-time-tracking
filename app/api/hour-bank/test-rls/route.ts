@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
       declaredHours: parseFloat(declaredHours),
       detectedHours: parseFloat(declaredHours),
       confidence: 85,
-      proofImage: "data:image/jpeg;base64,test",
+      proofImage: '', // String vazia - não salvar imagem
       status: "approved",
       reason: "Teste de RLS",
       analyzedAt: new Date().toISOString()

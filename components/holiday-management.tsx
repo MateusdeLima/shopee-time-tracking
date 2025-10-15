@@ -33,7 +33,6 @@ export function HolidayManagement() {
 
   const [formData, setFormData] = useState({
     name: "",
-    date: new Date(),
     active: true,
     deadline: new Date(),
     maxHours: 2,
@@ -53,7 +52,7 @@ export function HolidayManagement() {
       // Ensure allHolidays is an array before sorting
       if (Array.isArray(allHolidays)) {
         // Ordenar por data (mais recentes primeiro)
-        allHolidays.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        allHolidays.sort((a, b) => a.name.localeCompare(b.name))
         setHolidays(allHolidays)
       } else {
         console.error("getHolidays() did not return an array:", allHolidays)
@@ -108,7 +107,6 @@ export function HolidayManagement() {
     // Reset form
     setFormData({
       name: "",
-      date: new Date(),
       active: true,
       deadline: new Date(),
       maxHours: 2,
@@ -120,7 +118,6 @@ export function HolidayManagement() {
     setSelectedHoliday(holiday)
     setFormData({
       name: holiday.name,
-      date: new Date(holiday.date + 'T12:00:00'),
       active: holiday.active,
       deadline: new Date(holiday.deadline + 'T12:00:00'),
       maxHours: holiday.maxHours,
@@ -179,15 +176,13 @@ export function HolidayManagement() {
 
   const saveHoliday = async (isEdit: boolean) => {
     try {
-      // Formatar datas para string ISO
-      const formattedDate = format(formData.date, "yyyy-MM-dd")
+      // Formatar data do prazo para string ISO
       const formattedDeadline = format(formData.deadline, "yyyy-MM-dd")
 
       if (isEdit && selectedHoliday) {
         // Atualizar feriado existente
         const updatedHoliday = await updateHoliday(selectedHoliday.id, {
           name: formData.name,
-          date: formattedDate,
           active: formData.active,
           deadline: formattedDeadline,
           maxHours: formData.maxHours,
@@ -201,7 +196,6 @@ export function HolidayManagement() {
         // Adicionar novo feriado
         await createHoliday({
           name: formData.name,
-          date: formattedDate,
           active: formData.active,
           deadline: formattedDeadline,
           maxHours: formData.maxHours,
@@ -276,10 +270,6 @@ export function HolidayManagement() {
                   <Card key={holiday.id}>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-[#EE4D2D] text-base sm:text-lg font-medium">{holiday.name}</CardTitle>
-                      <div className="flex items-center text-xs sm:text-sm text-gray-600 mt-1">
-                        <CalendarIcon className="h-3.5 w-3.5 mr-1" />
-                        {formatDate(holiday.date)}
-                      </div>
                       <div className="flex items-center text-xs text-gray-400 mt-1">
                         Prazo: {formatDate(holiday.deadline)}
                       </div>
@@ -348,10 +338,6 @@ export function HolidayManagement() {
                   <Card key={holiday.id}>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-[#EE4D2D] text-base sm:text-lg font-medium">{holiday.name}</CardTitle>
-                      <div className="flex items-center text-xs sm:text-sm text-gray-600 mt-1">
-                        <CalendarIcon className="h-3.5 w-3.5 mr-1" />
-                        {formatDate(holiday.date)}
-                      </div>
                       <div className="flex items-center text-xs text-gray-400 mt-1">
                         Prazo: {formatDate(holiday.deadline)}
                       </div>
@@ -452,7 +438,7 @@ export function HolidayManagement() {
                           <div>
                             <h4 className="font-medium">{holiday.name}</h4>
                             <p className="text-sm text-gray-500">
-                              Data: {formatDate(holiday.date)} | Prazo: {formatDate(holiday.deadline)}
+                              Prazo: {formatDate(holiday.deadline)}
                             </p>
                           </div>
                           <Badge
@@ -496,20 +482,6 @@ export function HolidayManagement() {
               />
             </div>
 
-            <div className="grid gap-2">
-              <Label>Data do Feriado</Label>
-              <Input
-                type="date"
-                name="date"
-                value={formData.date ? format(formData.date, "yyyy-MM-dd") : ""}
-                onChange={e => {
-                  // Corrigir problema de timezone que causava data -1 dia
-                  const selectedDate = new Date(e.target.value + 'T12:00:00')
-                  handleDateChange(selectedDate, "date")
-                }}
-                required
-              />
-            </div>
 
             <div className="grid gap-2">
               <Label>Prazo para Cumprimento</Label>
@@ -577,18 +549,6 @@ export function HolidayManagement() {
             </div>
 
             <div className="grid gap-2">
-              <Label>Data do Feriado</Label>
-              <Input
-                type="date"
-                name="date"
-                value={formData.date ? format(formData.date, "yyyy-MM-dd") : ""}
-                onChange={e => {
-                  // Corrigir problema de timezone que causava data -1 dia
-                  const selectedDate = new Date(e.target.value + 'T12:00:00')
-                  handleDateChange(selectedDate, "date")
-                }}
-                required
-              />
             </div>
 
             <div className="grid gap-2">
@@ -644,7 +604,7 @@ export function HolidayManagement() {
             <DialogTitle>Excluir Feriado</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p>Você está prestes a excluir o feriado <strong>{holidayToDelete?.name}</strong> ({holidayToDelete && formatDate(holidayToDelete.date)}).</p>
+            <p>Você está prestes a excluir o feriado <strong>{holidayToDelete?.name}</strong>.</p>
             <Alert className="mt-4" variant="destructive">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>

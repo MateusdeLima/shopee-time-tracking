@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
       declaredHours: parseFloat(declaredHours.toString()),
       detectedHours: parseFloat(detectedHours.toString()),
       confidence: confidence ? parseInt(confidence.toString()) : 85,
-      proofImage: proofImage || 'data:image/jpeg;base64,placeholder',
+      proofImage: '', // String vazia - não salvar imagem
       status: approved ? 'approved' : 'rejected',
       reason: reason || (approved ? 'Análise automática aprovada' : 'Análise automática rejeitada'),
       analyzedAt: new Date().toISOString()
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
         userId: userId,
         holidayId: parseInt(holidayId.toString()),
         holidayName: holiday.name,
-        date: holiday.date,
+        date: holiday.date || new Date().toISOString().split('T')[0],
         optionId: "ai_bank_hours", // ID especial para identificar que veio da IA
         optionLabel: `Banco de Horas IA - ${hoursToRegister}h compensadas`,
         hours: hoursToRegister,

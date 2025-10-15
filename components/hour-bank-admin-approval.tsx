@@ -37,14 +37,19 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
     try {
       setLoading(true)
       
-      // Carregar registros de banco de horas
+      // TEMPORÁRIO: usar registros de horas extras (mais estável)
+      console.log("Carregando dados do Dashboard Analytics...")
       const allRecords = await getOvertimeRecords()
       const pending = allRecords.filter(record => 
-        record.optionId === "ai_bank_hours" && record.status === "pending_admin"
+        (record.optionId === "ai_bank_hours" || record.optionId === "manual_bank_hours") && 
+        record.status === "pending_admin"
       )
-      const approved = allRecords.filter(record => 
-        record.optionId === "ai_bank_hours" && record.status === "approved"
-      ).slice(0, 10) // Mostrar apenas os 10 mais recentes
+      const processed = allRecords.filter(record => 
+        (record.optionId === "ai_bank_hours" || record.optionId === "manual_bank_hours") && 
+        (record.status === "approved" || record.status === "rejected_admin")
+      ).slice(0, 10)
+      
+      console.log("Dados carregados:", { pending: pending.length, processed: processed.length })
       
       // Carregar usuários e feriados para exibição
       const [usersData, holidaysData] = await Promise.all([
@@ -52,15 +57,16 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
         getHolidays()
       ])
       
-      setPendingRecords(pending)
-      setApprovedRecords(approved)
+      setPendingRecords(pending || [])
+      setApprovedRecords(processed || [])
       setUsers(usersData)
       setHolidays(holidaysData)
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
+      console.error("Detalhes do erro:", JSON.stringify(error, null, 2))
       toast({
         title: "Erro",
-        description: "Não foi possível carregar os dados",
+        description: `Não foi possível carregar os dados: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
         variant: "destructive"
       })
     } finally {
@@ -70,7 +76,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
 
   const getUserName = (userId: string) => {
     const user = users.find(u => u.id === userId)
-    return user ? `${user.firstName} ${user.lastName}` : "Usuário não encontrado"
+    return user ? `${user.first_name || user.firstName} ${user.last_name || user.lastName}` : "Usuário não encontrado"
   }
 
   const getHolidayName = (holidayId: number) => {
@@ -123,11 +129,30 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
     try {
       setProcessing(true)
       
+      console.log("=== PROCESSANDO APROVAÇÃO ===")
+      console.log("selectedRecord:", selectedRecord)
+      console.log("approvalAction:", approvalAction)
+      
+      // Atualizar o registro existente (que já está pendente)
+      const { updateOvertimeRecord } = await import("@/lib/db")
+      
       const newStatus = approvalAction === "approve" ? "approved" : "rejected_admin"
       
-      await updateOvertimeRecord(selectedRecord.id, {
+      const updateData: any = {
         status: newStatus,
         updatedAt: new Date().toISOString()
+      }
+      
+      if (approvalAction === "approve") {
+        updateData.optionLabel = `Banco de Horas IA - ${formatHours(selectedRecord.hours)} (Aprovado pelo Dashboard Analytics)`
+        console.log("Admin aprovou - ativando registro de horas extras")
+      } else {
+        console.log("Admin rejeitou - marcando registro como rejeitado")
+      }
+      
+      await updateOvertimeRecord(selectedRecord.id, {
+        ...updateData,
+        proofImage: undefined // Remover imagem após decisão
       })
 
       // Atualizar lista local
@@ -143,14 +168,35 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
       // Callback para atualizar outros componentes
       if (onUpdate) onUpdate()
       
+      // Invalidar cache e forçar recálculo das estatísticas
+      console.log("Invalidando cache e forçando recálculo das estatísticas...")
+      try {
+        const { invalidateCache } = await import("@/lib/stats-cache")
+        const { getUserHolidayStats } = await import("@/lib/db")
+        
+        // Invalidar cache
+        invalidateCache(selectedRecord.userId, selectedRecord.holidayId)
+        
+        // Forçar recálculo
+        const stats = await getUserHolidayStats(selectedRecord.userId, selectedRecord.holidayId, true)
+        console.log("Estatísticas recalculadas:", stats)
+      } catch (error) {
+        console.error("Erro ao atualizar estatísticas:", error)
+      }
+      
       setIsApprovalDialogOpen(false)
       setSelectedRecord(null)
       setApprovalAction(null)
     } catch (error) {
-      console.error("Erro ao processar aprovação:", error)
+      console.error("=== ERRO AO PROCESSAR APROVAÇÃO ===")
+      console.error("Tipo do erro:", typeof error)
+      console.error("Erro completo:", error)
+      console.error("Stack trace:", error instanceof Error ? error.stack : "Sem stack")
+      console.error("selectedRecord no erro:", selectedRecord)
+      
       toast({
-        title: "Erro",
-        description: "Não foi possível processar a aprovação",
+        title: "Erro ao processar aprovação",
+        description: `Erro: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
         variant: "destructive"
       })
     } finally {
@@ -183,7 +229,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-4">
         <Bot className="h-5 w-5 text-purple-600" />
-        <h3 className="text-lg font-semibold">Aprovações de Banco de Horas IA</h3>
+        <h3 className="text-lg font-semibold">Aprovações de Banco de Horas</h3>
         <Badge variant="secondary">{pendingRecords.length} pendente(s)</Badge>
       </div>
 
@@ -209,13 +255,25 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
                   
                   <div className="flex items-center gap-2 text-sm text-gray-600">
                     <Calendar className="h-4 w-4" />
-                    <span>Feriado: {formatDate(record.date)}</span>
+                    <span>Registrado em: {formatDate(record.date)}</span>
                   </div>
                   
                   <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 w-fit">
                     <Clock className="h-3 w-3 mr-1" />
                     {formatHours(record.hours)} compensadas
                   </Badge>
+                  
+                  {record.proofImage && (
+                    <div className="mt-2">
+                      <p className="text-xs text-gray-500 mb-1">Comprovante anexado:</p>
+                      <img 
+                        src={record.proofImage} 
+                        alt="Comprovante de banco de horas"
+                        className="max-w-full h-32 object-contain border rounded cursor-pointer hover:opacity-80"
+                        onClick={() => window.open(record.proofImage, '_blank')}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
               
@@ -271,17 +329,17 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
                 <div>
                   <h4 className="font-semibold mb-2">Informações do Funcionário</h4>
                   <div className="space-y-2 text-sm">
-                    <p><strong>Nome:</strong> {getUserName(selectedRecord.userId)}</p>
-                    <p><strong>Feriado:</strong> {getHolidayName(selectedRecord.holidayId)}</p>
-                    <p><strong>Data:</strong> {formatDate(selectedRecord.date)}</p>
-                    <p><strong>Horas:</strong> {formatHours(selectedRecord.hours)}</p>
+                    <p><strong>Nome:</strong> {getUserName(selectedRecord.user_id)}</p>
+                    <p><strong>Feriado:</strong> {getHolidayName(selectedRecord.holiday_id)}</p>
+                    <p><strong>Horas Detectadas:</strong> {formatHours(selectedRecord.detected_hours)}</p>
+                    <p><strong>Confiança:</strong> {selectedRecord.confidence}%</p>
                   </div>
                 </div>
                 
                 <div>
                   <h4 className="font-semibold mb-2">Análise da IA</h4>
                   <div className="space-y-2 text-sm">
-                    <p><strong>Registrado em:</strong> {formatDate(selectedRecord.createdAt)}</p>
+                    <p><strong>Registrado em:</strong> {formatDate(selectedRecord.analyzed_at)}</p>
                     <div className="flex items-center gap-2">
                       <strong>Status:</strong>
                       {selectedRecord.status === "approved" ? (
@@ -303,7 +361,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
               <div>
                 <h4 className="font-semibold mb-2">Descrição</h4>
                 <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                  {selectedRecord.task}
+                  {selectedRecord.reason}
                 </p>
               </div>
             </div>
@@ -364,14 +422,14 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
             <div className="py-4">
               <p className="mb-4">
                 Você está prestes a <strong>{approvalAction === "approve" ? "aprovar" : "rejeitar"}</strong> o 
-                registro de banco de horas de <strong>{getUserName(selectedRecord.userId)}</strong> 
-                para o feriado <strong>{getHolidayName(selectedRecord.holidayId)}</strong>.
+                registro de banco de horas de <strong>{getUserName(selectedRecord.user_id)}</strong> 
+                para o feriado <strong>{getHolidayName(selectedRecord.holiday_id)}</strong>.
               </p>
               
               <Alert className={approvalAction === "approve" ? "border-green-200" : "border-red-200"}>
                 <AlertDescription>
                   {approvalAction === "approve" 
-                    ? `As ${formatHours(selectedRecord.hours)} serão descontadas automaticamente do total exigido para este feriado.`
+                    ? `As ${formatHours(selectedRecord.detected_hours)} serão descontadas automaticamente do total exigido para este feriado.`
                     : "O funcionário será notificado sobre a rejeição e nenhum desconto será aplicado."
                   }
                 </AlertDescription>

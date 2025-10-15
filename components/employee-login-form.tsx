@@ -14,6 +14,7 @@ import { authenticateEmployee, setCurrentUser, isEmailRegistered } from "@/lib/a
 import { initializeDb } from "@/lib/db"
 import type { User } from "@/lib/db"
 import { uploadProfilePicture } from "@/lib/supabase"
+import { LoadingScreen } from "@/components/loading-screen"
 
 enum LoginStep {
   INITIAL = "initial",
@@ -40,6 +41,7 @@ export function EmployeeLoginForm() {
   const [dbInitialized, setDbInitialized] = useState(false)
   const [profilePicture, setProfilePicture] = useState<File | null>(null)
   const [profilePicturePreview, setProfilePicturePreview] = useState<string>("")
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false)
 
   const [formData, setFormData] = useState({
     firstName: "",
@@ -248,12 +250,18 @@ export function EmployeeLoginForm() {
       })
       }
 
-      router.push("/employee/dashboard")
+      // Mostrar tela de carregamento antes de redirecionar
+      setShowLoadingScreen(true)
+      
+      // Simular carregamento por 2 segundos
+      setTimeout(() => {
+        router.push("/employee/dashboard")
+      }, 2000)
     } catch (error: any) {
       console.error("Erro ao fazer login:", error)
       setError(error.message || "Falha ao realizar login. Tente novamente.")
-    } finally {
       setIsLoading(false)
+      setShowLoadingScreen(false)
     }
   }
 
@@ -495,6 +503,11 @@ export function EmployeeLoginForm() {
           </div>
         )
     }
+  }
+
+  // Se estiver mostrando a tela de carregamento, renderizar apenas ela
+  if (showLoadingScreen) {
+    return <LoadingScreen message="Carregando portal..." />
   }
 
   return (
