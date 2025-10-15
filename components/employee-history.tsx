@@ -430,6 +430,9 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
     }
   }
 
+  const approvedRecords = records.filter(r => r.status === 'approved')
+  const pendingRecords = records.filter(r => r.status === 'pending_admin')
+
   if (records.length === 0) {
     return (
       <div className="text-center p-6">
@@ -505,7 +508,19 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
           </DialogContent>
         </Dialog>
       </div>
-      {records.map((record) => {
+      {pendingRecords.length > 0 && (
+        <div className="my-4 p-4 bg-gray-50 border border-gray-200 rounded-md">
+          <h4 className="text-sm font-semibold text-gray-600 mb-3">Aguardando aprovação do RH</h4>
+          {pendingRecords.map(r => (
+            <div key={r.id} className="flex gap-3 items-center mb-2 text-gray-500">
+              <span className="font-mono bg-gray-200 text-gray-700 rounded px-2 py-1 text-xs">{r.hours}h</span>
+              <span>{r.holidayName} ({r.date})</span>
+              <span className="italic text-xs">Comprovante em análise</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {approvedRecords.map((record) => {
         const holiday = holidays.find((h) => h.id === record.holidayId)
         const hoursInfo = holidayHoursMap[record.holidayId]
         const availableOptions = getAvailableOptions(record)

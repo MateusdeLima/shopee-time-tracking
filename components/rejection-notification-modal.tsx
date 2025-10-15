@@ -40,18 +40,19 @@ export default function BankHoursNotificationModal({ userId, onClose }: BankHour
     loadProcessedRecords()
   }, [userId])
 
+  const STORAGE_KEY = `hourBankNoticeSeen_${userId}`
+
   const loadProcessedRecords = async () => {
     try {
       setLoading(true)
       const { getOvertimeRecords } = await import("@/lib/db")
-      
       const allRecords = await getOvertimeRecords()
       const userProcessed = allRecords.filter(record => 
         record.userId === userId &&
         record.optionId === "manual_bank_hours" &&
         (record.status === "approved" || record.status === "rejected_admin") &&
-        // Apenas registros das últimas 24 horas para evitar spam
-        new Date(record.updatedAt || record.createdAt).getTime() > Date.now() - 24 * 60 * 60 * 1000
+        // últimas 30 dias para comparação, mas exibiremos só se não visto
+        new Date(record.updatedAt || record.createdAt).getTime() > Date.now() - 30 * 24 * 60 * 60 * 1000
       ).map(record => ({
         id: record.id,
         holidayName: record.holidayName,
@@ -62,12 +63,18 @@ export default function BankHoursNotificationModal({ userId, onClose }: BankHour
         updatedAt: record.updatedAt || new Date().toISOString(),
         status: record.status as "approved" | "rejected_admin"
       }))
-      
+
       setProcessedRecords(userProcessed)
-      
-      // Se há registros processados recentemente, mostrar modal
+
+      // Verificar se há novidade não vista
       if (userProcessed.length > 0) {
-        setIsOpen(true)
+        const latest = userProcessed
+          .map(r => new Date(r.updatedAt).getTime())
+          .reduce((a, b) => Math.max(a, b), 0)
+        const lastSeen = Number(localStorage.getItem(STORAGE_KEY) || 0)
+        if (latest > lastSeen) {
+          setIsOpen(true)
+        }
       }
     } catch (error) {
       console.error("Erro ao carregar rejeições:", error)
@@ -77,6 +84,13 @@ export default function BankHoursNotificationModal({ userId, onClose }: BankHour
   }
 
   const handleClose = () => {
+    // Marcar como visto até o último registro processado
+    if (processedRecords.length > 0) {
+      const latest = processedRecords
+        .map(r => new Date(r.updatedAt).getTime())
+        .reduce((a, b) => Math.max(a, b), 0)
+      localStorage.setItem(STORAGE_KEY, String(latest))
+    }
     setIsOpen(false)
     onClose()
   }

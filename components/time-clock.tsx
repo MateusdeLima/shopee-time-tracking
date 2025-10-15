@@ -351,7 +351,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     reader.readAsDataURL(file)
   }
 
-  const handleAnalyzeImage = async () => {
+  const handleSubmitHourBank = async () => {
     if (!selectedImage || !declaredHours) {
       toast({
         title: "Dados incompletos",
@@ -361,16 +361,14 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       return
     }
 
-    setHourBankStep(2) // Ir para tela de loading
+    setHourBankStep(2) // Loading
     setIsAnalyzing(true)
 
     try {
-      // Usar API completa com novo fluxo
-      const response = await fetch('/api/hour-bank/analyze', {
+      // Submeter comprovante para aprovação
+      const response = await fetch('/api/hour-bank/submit', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           image: selectedImage,
           declaredHours: parseFloat(declaredHours),
@@ -378,64 +376,23 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
           userId: user.id
         })
       })
+      if (!response.ok) throw new Error('Falha ao enviar comprovante')
 
-      const result = await response.json()
-      console.log('Resposta da API:', result)
-
-      if (!response.ok) {
-        console.error('Erro da API:', result)
-        const errorMsg = result.details || result.error || 'Erro na análise'
-        throw new Error(errorMsg)
-      }
-
-      setAnalysisResult(result)
-      setHourBankStep(3) // Ir para tela de resultado
-    } catch (error) {
-      console.error('Erro na análise:', error)
-      
-      let errorMessage = "Não foi possível analisar a imagem. Tente novamente."
-      
-      if (error instanceof Error) {
-        errorMessage = error.message
-      } else if (typeof error === 'string') {
-        errorMessage = error
-      }
-      
+      setHourBankStep(3)
       toast({
-        title: "Erro na análise",
-        description: errorMessage,
+        title: "Imagem enviada!",
+        description: "Seu comprovante foi enviado ao dashboard, aguarde análise do RH.",
+      })
+    } catch (error) {
+      toast({
+        title: "Erro no envio",
+        description: error instanceof Error ? error.message : 'Tente novamente.',
         variant: "destructive"
       })
-      setHourBankStep(1) // Voltar para tela inicial
+      setHourBankStep(1)
     } finally {
       setIsAnalyzing(false)
     }
-  }
-
-  const handleTryAgain = () => {
-    setHourBankStep(1)
-    setSelectedImage(null)
-    setDeclaredHours("")
-    setAnalysisResult(null)
-  }
-
-  const handleFinishHourBank = async () => {
-    if (analysisResult?.approved) {
-      // Atualizar estatísticas do feriado
-      await refreshHolidayStats()
-      
-      toast({
-        title: "Solicitação enviada!",
-        description: `${analysisResult.detectedHours}h foram aprovadas pela IA e enviadas para aprovação final no Dashboard Analytics.`,
-      })
-    }
-    
-    // Fechar modal e resetar
-    setIsHourBankDialogOpen(false)
-    setHourBankStep(1)
-    setSelectedImage(null)
-    setDeclaredHours("")
-    setAnalysisResult(null)
   }
 
   if (!selectedHoliday) {
@@ -711,11 +668,11 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
                 Cancelar
               </Button>
               <Button
-                onClick={handleAnalyzeImage}
+                onClick={handleSubmitHourBank}
                 disabled={!selectedImage || !declaredHours}
                 className="flex-1 bg-[#EE4D2D] hover:bg-[#D23F20]"
               >
-                Analisar Imagem
+                Confirmar envio
               </Button>
             </div>
           </div>
@@ -728,84 +685,24 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
               <Loader2 className="h-16 w-16 animate-spin text-[#EE4D2D]" />
             </div>
             <div>
-              <h3 className="text-xl font-semibold mb-2">Analisando sua imagem, um momento...</h3>
-              <p className="text-gray-600">
-                Nossa IA está verificando o comprovante do seu banco de horas
-              </p>
+              <h3 className="text-xl font-semibold mb-2">Enviando comprovante...</h3>
+              <p className="text-gray-600">Um momento, estamos processando seu envio!</p>
             </div>
           </div>
         )}
 
         {/* Step 3: Resultado */}
-        {hourBankStep === 3 && analysisResult && (
-          <div className="space-y-6">
-            <div className="text-center">
-              {analysisResult.approved ? (
-                <div className="space-y-4">
-                  <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
-                  <div>
-                    <h3 className="text-xl font-semibold text-green-800 mb-2">
-                      ✅ Comprovante Aprovado!
-                    </h3>
-                    <p className="text-green-700">
-                      Detectamos {analysisResult.detectedHours}h no seu banco de horas
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <XCircle className="h-16 w-16 text-red-500 mx-auto" />
-                  <div>
-                    <h3 className="text-xl font-semibold text-red-800 mb-2">
-                      ❌ Comprovante Rejeitado
-                    </h3>
-                    <p className="text-red-700">
-                      Não foi possível validar o comprovante
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h4 className="font-semibold mb-2">Detalhes da Análise:</h4>
-              <p className="text-sm text-gray-700">
-                {analysisResult.approved 
-                  ? "✅ Análise aprovada pela nossa IA" 
-                  : "❌ Análise rejeitada pela nossa IA"
-                }
-              </p>
-            </div>
-
-            {selectedImage && (
-              <div className="text-center">
-                <h4 className="font-semibold mb-2">Imagem Analisada:</h4>
-                <div className="relative mx-auto w-48 h-32">
-                  <Image
-                    src={selectedImage}
-                    alt="Comprovante analisado"
-                    fill
-                    className="object-contain rounded-lg border"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={handleTryAgain}
-                className="flex-1"
-              >
-                Enviar Novamente
-              </Button>
-              <Button
-                onClick={handleFinishHourBank}
-                className="flex-1 bg-[#EE4D2D] hover:bg-[#D23F20]"
-              >
-                Concluir
-              </Button>
-            </div>
+        {hourBankStep === 3 && (
+          <div className="space-y-8 text-center py-8">
+            <div className='flex justify-center'><CheckCircle className='h-16 w-16 text-green-500 mx-auto' /></div>
+            <h3 className="text-xl font-semibold text-green-800 mb-4">Comprovante enviado!</h3>
+            <p className="text-green-700 max-w-xs mx-auto">Seu comprovante foi enviado ao dashboard RH. Você será avisado(a) automaticamente se ele for aprovado ou reprovado.<br/>Você pode acompanhar o status na tela principal do sistema.</p>
+            <Button onClick={() => {
+              setIsHourBankDialogOpen(false);
+              setHourBankStep(1);
+              setSelectedImage(null);
+              setDeclaredHours("")
+            }} className="bg-[#EE4D2D] hover:bg-[#D23F20] w-52 mx-auto">Fechar</Button>
           </div>
         )}
       </DialogContent>

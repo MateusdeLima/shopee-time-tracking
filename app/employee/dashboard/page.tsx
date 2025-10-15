@@ -151,7 +151,7 @@ export default function EmployeeDashboard() {
         onProfileUpdate={handleProfileUpdate}
       />
       
-      <main className="flex-1 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
+      <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
         {renderContent()}
       </main>
 

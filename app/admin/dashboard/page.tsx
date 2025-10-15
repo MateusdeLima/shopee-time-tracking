@@ -101,12 +101,19 @@ export default function AdminDashboard() {
                     </button>
                   </div>
                 </div>
-                <div className="overflow-x-auto">
-                  {activeHolidayTab === "manage" ? (
-                    <HolidayManagement />
-                  ) : (
-                    <EmployeeReports />
-                  )}
+                {/* Área com altura mínima igual para ambas as abas e responsiva */}
+                <div className="min-h-[70vh]">
+                  <div className="w-full overflow-x-auto">
+                    {activeHolidayTab === "manage" ? (
+                      <div className="w-full">
+                        <HolidayManagement />
+                      </div>
+                    ) : (
+                      <div className="w-full">
+                        <EmployeeReports />
+                      </div>
+                    )}
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -134,7 +141,7 @@ export default function AdminDashboard() {
               <CardDescription className="text-sm sm:text-base">Visualize, gerencie e exclua funcionários do sistema</CardDescription>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-              <div className="overflow-x-auto">
+              <div className="w-full overflow-x-auto">
                 <EmployeeManagement />
               </div>
             </CardContent>
@@ -159,7 +166,7 @@ export default function AdminDashboard() {
         onProfileUpdate={handleProfileUpdate}
       />
       
-      <main className="flex-1 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
+      <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
         {renderContent()}
       </main>
     </div>

@@ -20,6 +20,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from "@/components/ui/dialog"
 import {
   Select,
@@ -327,7 +328,10 @@ export default function DashboardPage() {
   // Calcular estatísticas com dados filtrados
   const stats = {
     totalAbsences: filteredAbsences.length,
-    totalOvertime: filteredOvertime.reduce((sum, r) => sum + (r.hours || 0), 0),
+    // Somar apenas horas aprovadas (ou sem status)
+    totalOvertime: filteredOvertime
+      .filter((r) => !r.status || r.status === 'approved')
+      .reduce((sum, r) => sum + (r.hours || 0), 0),
     totalUsers: data.users.length,
     totalHolidays: data.holidays.length,
     absencesByReason: filteredAbsences.reduce((acc: any, absence) => {
@@ -335,12 +339,14 @@ export default function DashboardPage() {
       acc[motivo] = (acc[motivo] || 0) + 1
       return acc
     }, {}),
-    overtimeByUser: filteredOvertime.reduce((acc: any, record) => {
-      const user = record.users || data.users.find((u: any) => u.id === record.user_id)
-      const userName = user ? `${user.first_name} ${user.last_name}` : "Desconhecido"
-      acc[userName] = (acc[userName] || 0) + (record.hours || 0)
-      return acc
-    }, {}),
+    overtimeByUser: filteredOvertime
+      .filter((r) => !r.status || r.status === 'approved')
+      .reduce((acc: any, record) => {
+        const user = record.users || data.users.find((u: any) => u.id === record.user_id)
+        const userName = user ? `${user.first_name} ${user.last_name}` : "Desconhecido"
+        acc[userName] = (acc[userName] || 0) + (record.hours || 0)
+        return acc
+      }, {}),
   }
 
   if (loading) {
@@ -468,7 +474,7 @@ export default function DashboardPage() {
             <TabsTrigger value="insights">📊 Insights</TabsTrigger>
             <TabsTrigger value="absences">📅 Ausências</TabsTrigger>
             <TabsTrigger value="overtime">⏰ Horas Extras</TabsTrigger>
-            <TabsTrigger value="hour-bank">🤖 Banco de Horas IA</TabsTrigger>
+            <TabsTrigger value="hour-bank">🤖 Banco de Horas</TabsTrigger>
           </TabsList>
 
           {/* Aba de Ausências */}
@@ -553,39 +559,51 @@ export default function DashboardPage() {
                         <TableHead>Data</TableHead>
                         <TableHead>Horas</TableHead>
                         <TableHead>Horário</TableHead>
+                        <TableHead>Status</TableHead>
                         <TableHead>Registrado em</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {filteredOvertime.map((record) => {
-                        const user = record.users || data.users.find((u) => u.id === record.user_id)
-                        return (
-                          <TableRow key={record.id}>
-                            <TableCell className="font-medium">
-                              {user ? `${user.first_name} ${user.last_name}` : "Desconhecido"}
-                            </TableCell>
-                            <TableCell>{record.holiday_name}</TableCell>
-                            <TableCell>
-                              <span className="font-medium">
-                                {formatDateSafe(record.date)}
-                              </span>
-                              <br />
-                              <span className="text-xs text-gray-500">
-                                {formatDateSafe(record.date, "EEEE")}
-                              </span>
-                            </TableCell>
-                            <TableCell className="font-bold text-[#EE4D2D]">{record.hours}h</TableCell>
-                            <TableCell className="text-sm">
-                              {record.start_time && record.end_time
-                                ? `${record.start_time} - ${record.end_time}`
-                                : "Não informado"}
-                            </TableCell>
-                            <TableCell className="text-sm">
-                              {formatDateSafe(record.created_at, "dd/MM/yyyy HH:mm")}
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
+                      {filteredOvertime
+                        .filter((record) => record.status !== 'rejected_admin')
+                        .map((record) => {
+                          const user = record.users || data.users.find((u) => u.id === record.user_id)
+                          return (
+                            <TableRow key={record.id}>
+                              <TableCell className="font-medium">
+                                {user ? `${user.first_name} ${user.last_name}` : "Desconhecido"}
+                              </TableCell>
+                              <TableCell>{record.holiday_name}</TableCell>
+                              <TableCell>
+                                <span className="font-medium">
+                                  {formatDateSafe(record.date)}
+                                </span>
+                                <br />
+                                <span className="text-xs text-gray-500">
+                                  {formatDateSafe(record.date, "EEEE")}
+                                </span>
+                              </TableCell>
+                              <TableCell className="font-bold text-[#EE4D2D]">{record.hours}h</TableCell>
+                              <TableCell className="text-sm">
+                                {record.start_time && record.end_time
+                                  ? `${record.start_time} - ${record.end_time}`
+                                  : "Não informado"}
+                              </TableCell>
+                              <TableCell>
+                                {record.status === 'approved' ? (
+                                  <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-700">Aprovado</span>
+                                ) : record.status === 'pending_admin' ? (
+                                  <span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">Aguardando aprovação</span>
+                                ) : (
+                                  <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-700">Rejeitado</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {formatDateSafe(record.created_at, "dd/MM/yyyy HH:mm")}
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
                     </TableBody>
                   </Table>
                 </div>

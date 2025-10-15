@@ -236,9 +236,11 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
         <h3 className="text-lg font-medium mb-3">Feriados Disponíveis</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {activeHolidays.map((holiday) => {
-            // Calculate used hours for this holiday
+            // Calculate used hours for this holiday (apenas aprovados)
             const holidayRecords = userRecords.filter((record) => record.holidayId === holiday.id)
-            const hoursUsed = holidayRecords.reduce((total, record) => total + record.hours, 0)
+            const hoursUsed = holidayRecords
+              .filter((r) => !r.status || r.status === 'approved')
+              .reduce((total, record) => total + record.hours, 0)
             const remaining = holiday.maxHours - hoursUsed
 
             return (

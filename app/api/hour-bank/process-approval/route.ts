@@ -58,23 +58,20 @@ export async function POST(request: NextRequest) {
 
     // 2. Se aprovado, criar registro de horas extras (como o método manual)
     if (approved) {
-      console.log("Aprovado pela IA - criando registro de horas extras...")
-      
-      // Usar as horas detectadas pela IA
+      console.log("Aprovado - criando registro de horas extras (Banco de Horas)...")
       const hoursToRegister = parseFloat(detectedHours.toString())
-      
-      // Criar um registro de horas extras especial para banco de horas
+
       overtimeRecord = await createOvertimeRecord({
         userId: userId,
         holidayId: parseInt(holidayId.toString()),
         holidayName: holiday.name,
         date: holiday.date || new Date().toISOString().split('T')[0],
-        optionId: "ai_bank_hours", // ID especial para identificar que veio da IA
-        optionLabel: `Banco de Horas IA - ${hoursToRegister}h compensadas`,
+        optionId: "manual_bank_hours",
+        optionLabel: `Banco de Horas - ${hoursToRegister}h (Aprovado pelo Dashboard Analytics)`,
         hours: hoursToRegister,
-        startTime: undefined, // Não há horário específico para banco de horas
+        startTime: undefined,
         endTime: undefined,
-        task: `Compensação automática via banco de horas da Page Interim - ${hoursToRegister}h detectadas pela IA`
+        task: `Compensação de banco de horas - ${hoursToRegister}h aprovadas pelo Dashboard Analytics`,
       })
 
       console.log("Registro de horas extras criado:", overtimeRecord)

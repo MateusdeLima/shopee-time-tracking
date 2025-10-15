@@ -133,6 +133,10 @@ export function EmployeeReports() {
 
       // Atualizar com registros reais
       records.forEach((record) => {
+        // Somar apenas registros aprovados (ou antigos sem status)
+        if (record.status && record.status !== 'approved') {
+          return
+        }
         const key = `${record.userId}-${record.holidayId}`
         if (summaryMap.has(key)) {
           const entry = summaryMap.get(key)
@@ -506,10 +510,25 @@ export function EmployeeReports() {
                             {formatDate(record.date)}
                           </div>
                           <div className="mt-2 flex flex-col gap-2">
-                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs sm:text-sm w-fit">
-                              <Clock className="h-3 w-3 mr-1" />
-                              {formatHours(record.hours)} - {record.optionLabel}
-                            </Badge>
+                            {/* Badge de horas com cor conforme status */}
+                            {(!record.status || record.status === 'approved') && (
+                              <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 text-xs sm:text-sm w-fit">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatHours(record.hours)} - {record.optionLabel}
+                              </Badge>
+                            )}
+                            {record.status === 'pending_admin' && (
+                              <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-300 text-xs sm:text-sm w-fit">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatHours(record.hours)} - Aguardando aprovação
+                              </Badge>
+                            )}
+                            {record.status === 'rejected_admin' && (
+                              <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 text-xs sm:text-sm w-fit">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {formatHours(record.hours)} - Reprovado
+                              </Badge>
+                            )}
                             {record.task && (
                               <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-orange-100 text-orange-800 text-xs font-semibold w-fit">
                                 <ClipboardCheck className="h-3 w-3" /> Task: {record.task}

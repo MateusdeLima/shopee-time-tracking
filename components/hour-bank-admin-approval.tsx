@@ -20,6 +20,7 @@ interface HourBankAdminApprovalProps {
 export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) {
   const [pendingRecords, setPendingRecords] = useState<any[]>([])
   const [approvedRecords, setApprovedRecords] = useState<any[]>([])
+  const [historyRecords, setHistoryRecords] = useState<any[]>([])
   const [users, setUsers] = useState<any[]>([])
   const [holidays, setHolidays] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -28,6 +29,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
   const [approvalAction, setApprovalAction] = useState<"approve" | "reject" | null>(null)
   const [processing, setProcessing] = useState(false)
+  const [isImageFullscreen, setIsImageFullscreen] = useState(false);
 
   useEffect(() => {
     loadData()
@@ -40,14 +42,14 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
       // TEMPORÁRIO: usar registros de horas extras (mais estável)
       console.log("Carregando dados do Dashboard Analytics...")
       const allRecords = await getOvertimeRecords()
-      const pending = allRecords.filter(record => 
-        (record.optionId === "ai_bank_hours" || record.optionId === "manual_bank_hours") && 
-        record.status === "pending_admin"
-      )
-      const processed = allRecords.filter(record => 
-        (record.optionId === "ai_bank_hours" || record.optionId === "manual_bank_hours") && 
-        (record.status === "approved" || record.status === "rejected_admin")
-      ).slice(0, 10)
+      const pending = allRecords
+        .filter(record => (record.optionId === "ai_bank_hours" || record.optionId === "manual_bank_hours") && record.status === "pending_admin")
+        .sort((a,b) => new Date(b.createdAt || b.date).getTime() - new Date(a.createdAt || a.date).getTime())
+
+      const processed = allRecords
+        .filter(record => (record.optionId === "ai_bank_hours" || record.optionId === "manual_bank_hours") && (record.status === "approved" || record.status === "rejected_admin"))
+        .sort((a,b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime())
+        .slice(0, 20)
       
       console.log("Dados carregados:", { pending: pending.length, processed: processed.length })
       
@@ -59,6 +61,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
       
       setPendingRecords(pending || [])
       setApprovedRecords(processed || [])
+      setHistoryRecords(processed || [])
       setUsers(usersData)
       setHolidays(holidaysData)
     } catch (error) {
@@ -152,7 +155,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
       
       await updateOvertimeRecord(selectedRecord.id, {
         ...updateData,
-        proofImage: undefined // Remover imagem após decisão
+        proofImage: '', // Limpa imagem ao aprovar/reprovar como solicitado
       })
 
       // Atualizar lista local
@@ -212,19 +215,6 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
     )
   }
 
-  if (pendingRecords.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-center text-gray-500">
-            <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-            <p>Não há registros de banco de horas aguardando aprovação</p>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-4">
@@ -233,174 +223,180 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
         <Badge variant="secondary">{pendingRecords.length} pendente(s)</Badge>
       </div>
 
-      {pendingRecords.map((record) => (
-        <Card key={record.id} className="border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-violet-50">
-          <CardContent className="p-4">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-2">
-                  <h4 className="font-semibold text-[#EE4D2D]">{getHolidayName(record.holidayId)}</h4>
-                  <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">
-                    <Bot className="h-3 w-3" />
-                    <Sparkles className="h-3 w-3" />
-                    Aguardando
-                  </div>
-                </div>
-                
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <User className="h-4 w-4" />
-                    <span>{getUserName(record.userId)}</span>
-                  </div>
-                  
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Calendar className="h-4 w-4" />
-                    <span>Registrado em: {formatDate(record.date)}</span>
-                  </div>
-                  
-                  <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 w-fit">
-                    <Clock className="h-3 w-3 mr-1" />
-                    {formatHours(record.hours)} compensadas
-                  </Badge>
-                  
-                  {record.proofImage && (
-                    <div className="mt-2">
-                      <p className="text-xs text-gray-500 mb-1">Comprovante anexado:</p>
-                      <img 
-                        src={record.proofImage} 
-                        alt="Comprovante de banco de horas"
-                        className="max-w-full h-32 object-contain border rounded cursor-pointer hover:opacity-80"
-                        onClick={() => window.open(record.proofImage, '_blank')}
-                      />
+      {pendingRecords.length > 0 ? (
+        pendingRecords.map((record) => (
+          <Card key={record.id} className="border-2 border-purple-200 bg-gradient-to-r from-purple-50 to-violet-50">
+            <CardContent className="p-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="font-semibold text-[#EE4D2D]">{getHolidayName(record.holidayId)}</h4>
+                    <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-purple-100 text-purple-700 text-xs font-semibold">
+                      <Bot className="h-3 w-3" />
+                      <Sparkles className="h-3 w-3" />
+                      Aguardando
                     </div>
-                  )}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <User className="h-4 w-4" />
+                      <span>{getUserName(record.userId)}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                      <Calendar className="h-4 w-4" />
+                      <span>Registrado em: {formatDate(record.date)}</span>
+                    </div>
+                    
+                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 w-fit">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {formatHours(record.hours)} compensadas
+                    </Badge>
+                    
+                    {record.hourBankProof && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-500 mb-1">Comprovante anexado:</p>
+                        <img 
+                          src={record.hourBankProof} 
+                          alt="Comprovante de banco de horas"
+                          className="max-w-full h-32 object-contain border rounded cursor-pointer hover:opacity-80"
+                          onClick={() => setIsViewDialogOpen(true) || setSelectedRecord(record)}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleViewRecord(record)}
+                    className="flex items-center gap-2"
+                  >
+                    <Eye className="h-4 w-4" />
+                    Visualizar
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleApprovalAction(record, "approve")}
+                    className="flex items-center gap-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    Aprovar
+                  </Button>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleApprovalAction(record, "reject")}
+                    className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <XCircle className="h-4 w-4" />
+                    Rejeitar
+                  </Button>
                 </div>
               </div>
-              
-              <div className="flex flex-col sm:flex-row gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleViewRecord(record)}
-                  className="flex items-center gap-2"
-                >
-                  <Eye className="h-4 w-4" />
-                  Visualizar
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleApprovalAction(record, "approve")}
-                  className="flex items-center gap-2 text-green-600 hover:text-green-700 hover:bg-green-50"
-                >
-                  <CheckCircle className="h-4 w-4" />
-                  Aprovar
-                </Button>
-                
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleApprovalAction(record, "reject")}
-                  className="flex items-center gap-2 text-red-600 hover:text-red-700 hover:bg-red-50"
-                >
-                  <XCircle className="h-4 w-4" />
-                  Rejeitar
-                </Button>
-              </div>
+            </CardContent>
+          </Card>
+        ))
+      ) : (
+        <Card>
+          <CardContent className="p-6">
+            <div className="text-center text-gray-500">
+              <Bot className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+              <p>Não há registros de banco de horas aguardando aprovação</p>
             </div>
           </CardContent>
         </Card>
-      ))}
+      )}
+
+      {historyRecords.length > 0 && (
+        <Card className="mt-2">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CheckCircle className="h-5 w-5 text-green-600" />
+              <CardTitle className="text-lg">Histórico de Solicitações (Aprovadas/Recusadas)</CardTitle>
+              <Badge variant="secondary">{historyRecords.length} recente(s)</Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="p-6">
+            <div className="space-y-3">
+              {historyRecords.map((record) => (
+                <div key={record.id} className={`flex items-center justify-between p-4 rounded-lg border ${record.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      {record.status === 'approved' ? (
+                        <CheckCircle className="h-4 w-4 text-green-600" />
+                      ) : (
+                        <XCircle className="h-4 w-4 text-red-600" />
+                      )}
+                    </div>
+                    <div>
+                      <div className={`font-medium ${record.status === 'approved' ? 'text-green-800' : 'text-red-800'}`}>
+                        {getUserName(record.userId)}
+                      </div>
+                      <div className={`text-sm ${record.status === 'approved' ? 'text-green-700' : 'text-red-700'}`}>
+                        {record.holidayName} • {formatDate(record.date)}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className={`${record.status === 'approved' ? 'bg-green-100 text-green-700 border-green-300' : 'bg-red-100 text-red-700 border-red-300'}`}>
+                      {formatHours(record.hours)}
+                    </Badge>
+                    <span className="text-xs text-gray-500">{formatDate(record.updatedAt || record.createdAt)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Dialog de Visualização */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Bot className="h-5 w-5 text-purple-600" />
-              Detalhes do Registro de Banco de Horas
+              Status do Registro
             </DialogTitle>
           </DialogHeader>
-          
           {selectedRecord && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Informações do Funcionário</h4>
-                  <div className="space-y-2 text-sm">
-                    <p><strong>Nome:</strong> {getUserName(selectedRecord.user_id)}</p>
-                    <p><strong>Feriado:</strong> {getHolidayName(selectedRecord.holiday_id)}</p>
-                    <p><strong>Horas Detectadas:</strong> {formatHours(selectedRecord.detected_hours)}</p>
-                    <p><strong>Confiança:</strong> {selectedRecord.confidence}%</p>
-                  </div>
-                </div>
-                
-                <div>
-                  <h4 className="font-semibold mb-2">Análise da IA</h4>
-                  <div className="space-y-2 text-sm">
-                    <p><strong>Registrado em:</strong> {formatDate(selectedRecord.analyzed_at)}</p>
-                    <div className="flex items-center gap-2">
-                      <strong>Status:</strong>
-                      {selectedRecord.status === "approved" ? (
-                        <Badge className="bg-green-100 text-green-700">
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Aprovado pela IA
-                        </Badge>
-                      ) : (
-                        <Badge className="bg-purple-100 text-purple-700">
-                          <Clock className="h-3 w-3 mr-1" />
-                          Aguardando verificação
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <div>
-                <h4 className="font-semibold mb-2">Descrição</h4>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded">
-                  {selectedRecord.reason}
-                </p>
-              </div>
+            <div className="flex flex-col items-center gap-8 p-4">
+              <span className={`px-4 py-2 rounded-full font-bold text-base ${selectedRecord.status === 'approved' ? 'bg-green-100 text-green-700' : selectedRecord.status === 'pending_admin' ? 'bg-purple-100 text-purple-700' : 'bg-red-100 text-red-700'}`}>
+                {selectedRecord.status === 'approved' ? 'Aprovado' : selectedRecord.status === 'pending_admin' ? 'Aguardando aprovação' : 'Rejeitado'}
+              </span>
+              {selectedRecord.hourBankProof ? (
+                <img
+                  src={selectedRecord.hourBankProof}
+                  alt="Comprovante do banco de horas"
+                  className="rounded shadow-lg cursor-zoom-in max-w-xs max-h-80 border"
+                  onClick={() => setIsImageFullscreen(true)}
+                />
+              ) : (
+                <div className="text-gray-500 italic">Nenhum comprovante anexado</div>
+              )}
             </div>
           )}
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
-              Fechar
-            </Button>
-            
-            {/* Mostrar botões de ação apenas para registros pendentes */}
-            {selectedRecord && selectedRecord.status === "pending_admin" && (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setApprovalAction("reject")
-                    setIsViewDialogOpen(false)
-                    setIsApprovalDialogOpen(true)
-                  }}
-                  className="text-red-600 border-red-300 hover:bg-red-50"
-                >
-                  <XCircle className="h-4 w-4 mr-2" />
-                  Rejeitar
-                </Button>
-                <Button
-                  onClick={() => {
-                    setApprovalAction("approve")
-                    setIsViewDialogOpen(false)
-                    setIsApprovalDialogOpen(true)
-                  }}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Aprovar
-                </Button>
-              </>
-            )}
+          <DialogFooter className="flex justify-end">
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>Fechar</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog fullscreen/lightbox para imagem */}
+      <Dialog open={isImageFullscreen} onOpenChange={setIsImageFullscreen}>
+        <DialogContent className="flex justify-center items-center bg-black bg-opacity-90 max-w-none w-auto h-auto p-0" style={{maxWidth: "90vw", maxHeight: "90vh"}}>
+          <img
+            src={selectedRecord?.hourBankProof}
+            alt="Comprovante banco de horas fullscreen"
+            className="rounded-lg shadow-lg max-w-[90vw] max-h-[90vh] object-contain border-4 border-white"
+          />
+          <Button variant="secondary" className="absolute top-5 right-5" onClick={() => setIsImageFullscreen(false)}>Fechar</Button>
         </DialogContent>
       </Dialog>
 
@@ -429,7 +425,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
               <Alert className={approvalAction === "approve" ? "border-green-200" : "border-red-200"}>
                 <AlertDescription>
                   {approvalAction === "approve" 
-                    ? `As ${formatHours(selectedRecord.detected_hours)} serão descontadas automaticamente do total exigido para este feriado.`
+                    ? `As ${formatHours(selectedRecord.hours)} serão descontadas automaticamente do total exigido para este feriado.`
                     : "O funcionário será notificado sobre a rejeição e nenhum desconto será aplicado."
                   }
                 </AlertDescription>
@@ -472,63 +468,6 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Seção de Registros Aprovados */}
-      {approvedRecords.length > 0 && (
-        <Card className="mt-6">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <CardTitle className="text-lg">Registros Aprovados pela IA</CardTitle>
-              <Badge variant="secondary">{approvedRecords.length} aprovado(s)</Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6">
-            <div className="space-y-3">
-              {approvedRecords.map((record) => (
-                <div key={record.id} className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Bot className="h-4 w-4 text-green-600" />
-                      <Sparkles className="h-4 w-4 text-green-600" />
-                    </div>
-                    
-                    <div>
-                      <div className="font-medium text-green-800">
-                        {getUserName(record.userId)}
-                      </div>
-                      <div className="text-sm text-green-600 flex items-center gap-4">
-                        <span>Feriado: {formatDate(record.date)}</span>
-                        <span>Aprovado em: {formatDate(record.createdAt)}</span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      {formatHours(record.hours)} aprovadas
-                    </Badge>
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setSelectedRecord(record)
-                        setIsViewDialogOpen(true)
-                      }}
-                      className="text-green-700 border-green-300 hover:bg-green-100"
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Ver Detalhes
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }

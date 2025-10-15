@@ -513,25 +513,30 @@ export async function getOvertimeRecordById(id: number): Promise<OvertimeRecord 
 
 export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "createdAt">): Promise<OvertimeRecord> {
   try {
-    // Validar campos obrigatórios
     if (!record.userId || !record.holidayId || !record.date || !record.optionId || !record.optionLabel || record.hours === undefined) {
       throw new Error("Campos obrigatórios faltando")
     }
 
-  // Converter para snake_case para o Supabase
-  const recordData = convertToSnakeCase({
+    // Montagem manual para lidar com coluna específica hour_bank_proof
+    const recordData: any = {
       user_id: record.userId,
       holiday_id: record.holidayId,
       holiday_name: record.holidayName,
-    date: record.date,
+      date: record.date,
       option_id: record.optionId,
       option_label: record.optionLabel,
       hours: Number(record.hours),
       start_time: record.startTime || null,
       end_time: record.endTime || null,
       task: record.task || null,
-      status: record.status || 'approved', // Adicionar status
-  })
+      status: record.status || 'approved',
+    }
+
+    // Mapeia a imagem do comprovante para a coluna correta
+    if (typeof (record as any).proofImage !== 'undefined') {
+      recordData.hour_bank_proof = (record as any).proofImage || null
+      recordData.is_hour_bank = true
+    }
 
     const { data, error } = await supabase
       .from("overtime_records")
@@ -539,16 +544,16 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
       .select()
       .single()
 
-  if (error) {
+    if (error) {
       console.error("Erro detalhado ao criar registro:", error)
       throw new Error(`Falha ao criar registro: ${error.message}`)
     }
 
     if (!data) {
       throw new Error("Nenhum dado retornado após a inserção")
-  }
+    }
 
-  return convertToCamelCase<OvertimeRecord>(data)
+    return convertToCamelCase<OvertimeRecord>(data)
   } catch (error: any) {
     console.error("Erro ao criar registro de horas extras:", error)
     throw new Error(error.message || "Falha ao criar registro de horas extras")
@@ -556,15 +561,21 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
 }
 
 export async function updateOvertimeRecord(id: number, data: Partial<OvertimeRecord>): Promise<OvertimeRecord> {
-  // Converter para snake_case para o Supabase
-  const recordData = convertToSnakeCase({
+  // Converter padrão para snake_case
+  const baseData = convertToSnakeCase({
     ...data,
     updatedAt: new Date().toISOString(),
-  })
+  }) as any
+
+  // Corrigir campo de imagem: usar hour_bank_proof ao invés de proof_image
+  if (Object.prototype.hasOwnProperty.call(data, 'proofImage')) {
+    baseData.hour_bank_proof = (data as any).proofImage ? (data as any).proofImage : null
+    delete baseData.proof_image
+  }
 
   const { data: updatedData, error } = await supabase
     .from("overtime_records")
-    .update(recordData)
+    .update(baseData)
     .eq("id", id)
     .select()
     .single()
