@@ -236,6 +236,11 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
         <h3 className="text-lg font-medium mb-3">Feriados Disponíveis</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {activeHolidays.map((holiday) => {
+            const today = new Date().toISOString().slice(0,10)
+            const hasTodayRecord = userRecords.some((r) => {
+              const created = (r.createdAt || r.created_at || r.date || '').slice(0,10)
+              return created === today
+            })
             // Calculate used hours for this holiday (apenas aprovados)
             const holidayRecords = userRecords.filter((record) => record.holidayId === holiday.id)
             const hoursUsed = holidayRecords
@@ -246,10 +251,22 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
             return (
               <Card
                 key={holiday.id}
-                className={`p-4 cursor-pointer transition-all hover:shadow-md ${
-                  selectedHoliday?.id === holiday.id ? "border-[#EE4D2D] bg-orange-50" : "border-gray-200"
-                }`}
-                onClick={() => handleHolidaySelect(holiday)}
+                className={`p-4 transition-all ${
+                  hasTodayRecord
+                    ? "opacity-60 cursor-not-allowed"
+                    : "cursor-pointer hover:shadow-md"
+                } ${selectedHoliday?.id === holiday.id ? "border-[#EE4D2D] bg-orange-50" : "border-gray-200"}`}
+                onClick={() => {
+                  if (hasTodayRecord) {
+                    toast({
+                      variant: "destructive",
+                      title: "Limite diário atingido",
+                      description: "Você já registrou hoje. Só poderá registrar novamente amanhã ou após exclusão pelo admin.",
+                    })
+                    return
+                  }
+                  handleHolidaySelect(holiday)
+                }}
               >
                 <div className="flex justify-between items-start">
                   <div>
@@ -263,6 +280,9 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
                     {formatHours(remaining)} restantes
                   </Badge>
                 </div>
+                {hasTodayRecord && (
+                  <div className="mt-2 text-xs text-red-600">Registro de hoje já efetuado</div>
+                )}
                 <div className="mt-2 text-sm">
                   <p>Prazo: {formatDate(holiday.deadline)}</p>
                   <div className="w-full bg-gray-200 rounded-full h-2 mt-2">

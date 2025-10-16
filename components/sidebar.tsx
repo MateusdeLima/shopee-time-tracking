@@ -19,6 +19,8 @@ interface SidebarProps {
   profilePictureUrl?: string
   userId?: string
   onProfileUpdate?: () => void
+  userUsername?: string
+  customTabs?: Array<{ id: string; label: string; icon?: any }>
 }
 
 export function Sidebar({ 
@@ -30,7 +32,9 @@ export function Sidebar({
   userEmail,
   profilePictureUrl,
   userId,
-  onProfileUpdate 
+  onProfileUpdate,
+  userUsername,
+  customTabs,
 }: SidebarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isMobile, setIsMobile] = useState(false)
@@ -53,6 +57,7 @@ export function Sidebar({
     { id: "holidays", label: "Feriados", icon: CalendarDays },
     { id: "absences", label: "Ausências", icon: Calendar },
     { id: "employees", label: "Funcionários", icon: Users },
+    { id: "employee-portal", label: "Portal Funcionário", icon: User },
   ]
 
   const employeeTabs = [
@@ -60,7 +65,7 @@ export function Sidebar({
     { id: "absences", label: "Ausências", icon: Calendar },
   ]
 
-  const tabs = userRole === "admin" ? adminTabs : employeeTabs
+  const tabs = customTabs && customTabs.length > 0 ? customTabs : (userRole === "admin" ? adminTabs : employeeTabs)
 
   const handleTabChange = (tabId: string) => {
     onTabChange(tabId)
@@ -162,19 +167,22 @@ export function Sidebar({
     return (
       <>
         {/* Mobile header with menu button */}
-        <div className="fixed top-0 left-0 right-0 bg-[#EE4D2D] text-white p-4 z-50 flex justify-between items-center">
-          <div>
+        <div className="fixed top-0 left-0 right-0 bg-[#EE4D2D] text-white p-4 z-50 flex items-center">
+          <div className="w-10 flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              className="text-white hover:bg-[#D23F20]"
+            >
+              {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            </Button>
+          </div>
+          <div className="flex-1 text-center">
             <h1 className="text-lg font-bold">Shopee Page Control</h1>
             <p className="text-xs text-white/80">O controle da shopee external</p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="text-white hover:bg-[#D23F20]"
-          >
-            {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-          </Button>
+          <div className="w-10 flex-shrink-0" />
         </div>
 
         {/* Mobile sidebar overlay */}
@@ -196,10 +204,66 @@ export function Sidebar({
                 userRole={userRole}
                 showHeader={false}
                 onPhotoClick={handlePhotoClick}
+                userUsername={userUsername}
               />
             </div>
           </>
         )}
+
+        {/* Dialog de foto para mobile */}
+        <Dialog open={isPhotoDialogOpen} onOpenChange={setIsPhotoDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Foto de Perfil</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex justify-center">
+                {profilePictureUrl ? (
+                  <img
+                    src={profilePictureUrl}
+                    alt="Foto de perfil"
+                    className="w-32 h-32 rounded-full object-cover border-4 border-[#EE4D2D]"
+                  />
+                ) : (
+                  <div className="w-32 h-32 rounded-full bg-gray-300 flex items-center justify-center border-4 border-[#EE4D2D]">
+                    <User className="h-16 w-16 text-gray-600" />
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col gap-3">
+                <Button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUpdatingPhoto}
+                  className="bg-[#EE4D2D] hover:bg-[#D23F20] w-full"
+                >
+                  {isUpdatingPhoto ? (
+                    <>
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                      Atualizando...
+                    </>
+                  ) : (
+                    <>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Alterar Foto
+                    </>
+                  )}
+                </Button>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/jpeg,image/png,image/gif,image/webp"
+                  capture="environment"
+                  onChange={handleFileChange}
+                />
+                <p className="text-xs text-gray-500 text-center">
+                  Formatos aceitos: JPEG, PNG, GIF, WEBP<br />
+                  Tamanho máximo: 5MB
+                </p>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </>
     )
   }
@@ -218,6 +282,7 @@ export function Sidebar({
         userRole={userRole}
         showHeader={true}
         onPhotoClick={handlePhotoClick}
+        userUsername={userUsername}
       />
       
       {/* Dialog de visualização e edição da foto */}
@@ -268,6 +333,7 @@ export function Sidebar({
                 ref={fileInputRef}
                 className="hidden"
                 accept="image/jpeg,image/png,image/gif,image/webp"
+                capture="environment"
                 onChange={handleFileChange}
               />
               
@@ -293,7 +359,8 @@ function SidebarContent({
   profilePictureUrl, 
   userRole,
   showHeader,
-  onPhotoClick 
+  onPhotoClick,
+  userUsername,
 }: {
   tabs: Array<{ id: string; label: string; icon: any }>
   activeTab: string
@@ -305,6 +372,7 @@ function SidebarContent({
   userRole: "admin" | "employee"
   showHeader: boolean
   onPhotoClick?: () => void
+  userUsername?: string
 }) {
   return (
     <>
@@ -348,6 +416,11 @@ function SidebarContent({
               {userEmail && (
                 <p className="text-xs text-gray-500 truncate">{userEmail}</p>
               )}
+              {userUsername && (
+                <p className="text-[10px] mt-1 inline-flex items-center px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
+                  user: <span className="ml-1 font-semibold">{userUsername}</span>
+                </p>
+              )}
               <p className="text-xs text-gray-400">
                 {userRole === "admin" ? "Administrador" : "Funcionário"}
               </p>
@@ -373,7 +446,7 @@ function SidebarContent({
                 )}
                 onClick={() => onTabChange(tab.id)}
               >
-                <Icon className="h-5 w-5" />
+                {Icon ? <Icon className="h-5 w-5" /> : null}
                 {tab.label}
               </Button>
             )

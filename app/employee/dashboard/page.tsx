@@ -11,7 +11,7 @@ import { AbsenceManagement } from "@/components/absence-management"
 import { Sidebar } from "@/components/sidebar"
 import { User, Edit2, X } from "lucide-react"
 import { getCurrentUser, logout, setCurrentUser, refreshCurrentUser } from "@/lib/auth"
-import { initializeDb } from "@/lib/db"
+import { initializeDb, getEmployeePortalTabs } from "@/lib/db"
 import Image from "next/image"
 import { getProfilePictureUrl } from "@/lib/supabase"
 
@@ -22,6 +22,7 @@ export default function EmployeeDashboard() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeMainTab, setActiveMainTab] = useState("holidays")
+  const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean }>({ holidays: true, absences: true })
   const [activeHolidayTab, setActiveHolidayTab] = useState("register")
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
   const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false)
@@ -51,6 +52,23 @@ export default function EmployeeDashboard() {
     setUser(user)
     setLoading(false)
   }, [router])
+
+  useEffect(() => {
+    getEmployeePortalTabs().then((tabs) => {
+      // Regras: sempre ao menos uma ativa; definir principal
+      const safeTabs = { holidays: !!tabs.holidays, absences: !!tabs.absences }
+      if (!safeTabs.holidays && !safeTabs.absences) safeTabs.absences = true
+      setPortalTabs(safeTabs)
+      if (safeTabs.holidays && safeTabs.absences) setActiveMainTab("holidays")
+      else if (safeTabs.holidays) setActiveMainTab("holidays")
+      else setActiveMainTab("absences")
+    })
+  }, [])
+
+  useEffect(() => {
+    if (activeMainTab === "holidays" && !portalTabs.holidays) setActiveMainTab("absences")
+    if (activeMainTab === "absences" && !portalTabs.absences) setActiveMainTab("holidays")
+  }, [portalTabs, activeMainTab])
 
   const handleLogout = () => {
     logout()
@@ -148,7 +166,12 @@ export default function EmployeeDashboard() {
         userEmail={user?.email}
         profilePictureUrl={user?.profilePictureUrl}
         userId={user?.id}
+        userUsername={user?.username}
         onProfileUpdate={handleProfileUpdate}
+        customTabs={[
+          ...(portalTabs.holidays ? [{ id: 'holidays', label: 'Feriados' }] as any : []),
+          ...(portalTabs.absences ? [{ id: 'absences', label: 'Ausências' }] as any : []),
+        ]}
       />
       
       <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
@@ -221,6 +244,7 @@ export default function EmployeeDashboard() {
               id="profile-picture-upload-dialog"
               type="file"
               accept="image/*"
+              capture="environment"
               className="hidden"
               onChange={async (e) => {
                 const file = e.target.files?.[0];

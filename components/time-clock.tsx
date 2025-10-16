@@ -214,6 +214,20 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     setError("")
 
     try {
+      // Regra: apenas um registro por dia por usuário
+      const today = new Date().toISOString().slice(0, 10)
+      const userRecords = await getOvertimeRecordsByUserId(user.id)
+      const hasTodayRecord = (userRecords || []).some((r: any) => (r.date || '').slice(0,10) === today)
+      if (hasTodayRecord) {
+        toast({
+          variant: "destructive",
+          title: "Limite diário atingido",
+          description: "Você só pode registrar horas uma vez por dia. Fale com o admin para ajustar.",
+        })
+        setLoading(false)
+        return
+      }
+
       // Verificar o total de horas já registradas para este feriado
       const { used: horasRegistradas, max: horasMaximas, compensated: horasCompensadas } = await getUserHolidayStats(user.id, selectedHoliday.id)
 
@@ -459,19 +473,19 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
 
             {/* Botão de Banco de Horas */}
             <div className="mb-6">
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-3 sm:p-4 rounded-lg border border-blue-200">
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 bg-blue-500 rounded-full flex items-center justify-center">
                     <Clock className="h-5 w-5 text-white" />
                   </div>
                   <div>
-                    <h4 className="font-semibold text-blue-800">Você já tem horas no seu banco da Page?</h4>
-                    <p className="text-sm text-blue-600">Anexe o comprovante para compensar suas horas!</p>
+                    <h4 className="font-semibold text-blue-800 text-base sm:text-lg leading-snug break-words">Você já tem horas no seu banco da Page?</h4>
+                    <p className="text-xs sm:text-sm text-blue-600 leading-snug">Anexe o comprovante para compensar suas horas!</p>
                   </div>
                 </div>
                 <Button
                   variant="outline"
-                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
+                  className="w-full border-blue-300 text-blue-700 hover:bg-blue-100 text-sm sm:text-base whitespace-normal leading-snug px-3 py-2"
                   onClick={() => setIsHourBankDialogOpen(true)}
                 >
                   📸 Anexar Comprovante do Banco de Horas

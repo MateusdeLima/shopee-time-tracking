@@ -226,6 +226,7 @@ export function EmployeeLoginForm() {
         toast({
           title: "Conta criada com sucesso",
           description: `Seu user único é: ${user.username}. Guarde-o para futuros acessos.`,
+          duration: 2000,
         })
 
         // Salvar usuário e mostrar mensagem de boas-vindas
@@ -233,6 +234,7 @@ export function EmployeeLoginForm() {
         toast({
           title: "Login realizado com sucesso",
           description: `Bem-vindo(a), ${user.firstName}!`,
+          duration: 2000,
         })
       } else if (currentStep === LoginStep.USERNAME_INPUT) {
         // Login com email e username
@@ -247,6 +249,7 @@ export function EmployeeLoginForm() {
       toast({
         title: "Login realizado com sucesso",
         description: `Bem-vindo(a), ${user.firstName}!`,
+        duration: 2000,
       })
       }
 

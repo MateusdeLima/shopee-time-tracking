@@ -176,6 +176,34 @@ export async function initializeDb() {
     return false
   }
 }
+// ================= Portal Settings =================
+export type EmployeePortalTabs = { holidays: boolean; absences: boolean }
+
+export async function getEmployeePortalTabs(): Promise<EmployeePortalTabs> {
+  const { data, error } = await supabase
+    .from('portal_settings')
+    .select('value')
+    .eq('key', 'employee_portal_tabs')
+    .maybeSingle()
+
+  if (error) {
+    console.error('Erro ao carregar portal_settings:', error)
+    return { holidays: true, absences: true }
+  }
+  const value = (data as any)?.value || { holidays: true, absences: true }
+  return { holidays: !!value.holidays, absences: !!value.absences }
+}
+
+export async function setEmployeePortalTabs(tabs: EmployeePortalTabs): Promise<void> {
+  const { error } = await supabase
+    .from('portal_settings')
+    .upsert({ key: 'employee_portal_tabs', value: tabs, updated_at: new Date().toISOString() }, { onConflict: 'key' })
+
+  if (error) {
+    console.error('Erro ao salvar portal_settings:', error)
+    throw new Error('Falha ao salvar configurações do portal')
+  }
+}
 
 // Funções para usuários
 export async function getUsers(): Promise<User[]> {

@@ -96,6 +96,7 @@ export function AdminLoginForm() {
       toast({
         title: "Login realizado com sucesso",
         description: "Bem-vindo ao painel administrativo!",
+        duration: 2000,
       })
 
       // Mostrar tela de carregamento antes de redirecionar

@@ -14,7 +14,7 @@ import { initializeDb } from "@/lib/db"
 import { Button } from "@/components/ui/button"
 import { FileSpreadsheet } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { getHolidays, getOvertimeRecords, getUserById, getUserHolidayStats, getHolidayById } from "@/lib/db"
+import { getHolidays, getOvertimeRecords, getUserById, getUserHolidayStats, getHolidayById, getEmployeePortalTabs, setEmployeePortalTabs } from "@/lib/db"
 
 export const dynamic = "force-dynamic"
 
@@ -24,6 +24,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true)
   const [activeMainTab, setActiveMainTab] = useState("holidays")
   const [activeHolidayTab, setActiveHolidayTab] = useState("manage")
+  const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean }>({ holidays: true, absences: true })
   const [isHourBankExportModalOpen, setIsHourBankExportModalOpen] = useState(false)
   const [selectedExportHolidays, setSelectedExportHolidays] = useState<string[]>([])
   const [isExporting, setIsExporting] = useState(false)
@@ -52,6 +53,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (user && !loading) {
       getHolidays().then(holidays => setData((prev: any) => ({ ...prev, holidays })));
+      getEmployeePortalTabs().then(setPortalTabs);
     }
   }, [user, loading]);
 
@@ -169,6 +171,43 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         )
+      case "employee-portal":
+        return (
+          <Card className="mx-2 sm:mx-0">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl">Portal do Funcionário</CardTitle>
+              <CardDescription className="text-sm sm:text-base">Ative ou desative as abas visíveis no portal do funcionário</CardDescription>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-3 border rounded-md">
+                  <div>
+                    <p className="font-medium">Feriados</p>
+                    <p className="text-xs text-gray-500">Controla a aba de feriados no portal</p>
+                  </div>
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only" checked={portalTabs.holidays} onChange={async (e) => { let next = { ...portalTabs, holidays: e.target.checked }; if (!next.holidays && !next.absences) { next.absences = true } setPortalTabs(next); try { await setEmployeePortalTabs(next); } catch { /* ignore */ } }} />
+                    <span className={`w-10 h-6 flex items-center bg-gray-200 rounded-full p-1 transition-colors ${portalTabs.holidays ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      <span className={`bg-white w-4 h-4 rounded-full transform transition-transform ${portalTabs.holidays ? 'translate-x-4' : ''}`}></span>
+                    </span>
+                  </label>
+                </div>
+                <div className="flex items-center justify-between p-3 border rounded-md">
+                  <div>
+                    <p className="font-medium">Ausências</p>
+                    <p className="text-xs text-gray-500">Controla a aba de ausências no portal</p>
+                  </div>
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only" checked={portalTabs.absences} onChange={async (e) => { let next = { ...portalTabs, absences: e.target.checked }; if (!next.holidays && !next.absences) { next.holidays = true } setPortalTabs(next); try { await setEmployeePortalTabs(next); } catch { /* ignore */ } }} />
+                    <span className={`w-10 h-6 flex items-center bg-gray-200 rounded-full p-1 transition-colors ${portalTabs.absences ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      <span className={`bg-white w-4 h-4 rounded-full transform transition-transform ${portalTabs.absences ? 'translate-x-4' : ''}`}></span>
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
       default:
         return null
     }
@@ -185,6 +224,7 @@ export default function AdminDashboard() {
         userEmail={user?.email}
         profilePictureUrl={user?.profilePictureUrl}
         userId={user?.id}
+        userUsername={user?.username}
         onProfileUpdate={handleProfileUpdate}
       />
       

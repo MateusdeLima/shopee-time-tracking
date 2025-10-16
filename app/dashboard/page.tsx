@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { Sidebar } from "@/components/sidebar"
 import {
   Table,
   TableBody,
@@ -98,6 +99,7 @@ const MOTIVOS_AUSENCIA: { [key: string]: string } = {
 export default function DashboardPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [selectedTab, setSelectedTab] = useState("insights")
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedMonth, setSelectedMonth] = useState("all")
   const [isUsersModalOpen, setIsUsersModalOpen] = useState(false)
@@ -365,21 +367,21 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-[#EE4D2D] text-white p-4 shadow-lg">
-        <div className="container mx-auto flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold">Dashboard Analytics</h1>
-            <p className="text-sm text-white/80">Shopee Page Control - Visão Completa</p>
-          </div>
-          <Button variant="ghost" onClick={handleLogout} className="text-white hover:bg-[#D23F20]">
-            <LogOut className="mr-2 h-4 w-4" /> Sair
-          </Button>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gray-50 flex">
+      <Sidebar
+        activeTab={selectedTab}
+        onTabChange={(tab) => setSelectedTab(tab)}
+        userRole="admin"
+        onLogout={handleLogout}
+        customTabs={[
+          { id: "insights", label: "Insights" },
+          { id: "absences", label: "Ausências" },
+          { id: "overtime", label: "Horas Extras" },
+          { id: "hour-bank", label: "Banco de Horas" },
+        ]}
+      />
 
-      <main className="container mx-auto p-4 md:p-6">
+      <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
         {/* Estatísticas Rápidas */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card>
@@ -429,74 +431,10 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Filtros e Exportação */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Exportar Banco de Horas</CardTitle>
-            <CardDescription>Exporte registros aprovados/rejeitados do banco de horas por feriado ativo</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button
-              variant="outline"
-              className="flex items-center gap-2"
-              onClick={() => setIsHourBankExportModalOpen(true)}
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              Exportar Banco de Horas
-            </Button>
-          </CardContent>
-        </Card>
+        {/* Card de filtros e exportação removido conforme solicitação */}
 
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Filtros e Exportação</CardTitle>
-            <CardDescription>Filtre por mês, pesquise e exporte os dados para Google Sheets</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="w-full md:w-48">
-                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o mês" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MESES.map((mes) => (
-                      <SelectItem key={mes.value} value={mes.value}>
-                        {mes.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Pesquisar por funcionário ou feriado..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <Button 
-                onClick={exportToGoogleSheets} 
-                className="bg-green-600 hover:bg-green-700"
-                disabled={isExporting}
-              >
-                <FileSpreadsheet className="mr-2 h-4 w-4" />
-                {isExporting ? "Exportando..." : "Exportar para Google Sheets"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Gráficos e Tabelas */}
-        <Tabs defaultValue="insights" className="w-full">
-          <TabsList className="grid w-full grid-cols-4">
-            <TabsTrigger value="insights"> Insights</TabsTrigger>
-            <TabsTrigger value="absences"> Ausências</TabsTrigger>
-            <TabsTrigger value="overtime"> Horas Extras</TabsTrigger>
-            <TabsTrigger value="hour-bank"> Banco de Horas</TabsTrigger>
-          </TabsList>
+        {/* Gráficos e Tabelas - controladas pela sidebar */}
+        <Tabs value={selectedTab} className="w-full">
 
           {/* Aba de Ausências */}
           <TabsContent value="absences">
@@ -755,7 +693,7 @@ export default function DashboardPage() {
             </div>
           </TabsContent>
 
-          {/* Aba de Banco de Horas IA */}
+          {/* Aba de Banco de Horas */}
           <TabsContent value="hour-bank">
             <HourBankAdminApproval onUpdate={() => {
               // Callback para atualizar dados quando houver aprovação/rejeição
