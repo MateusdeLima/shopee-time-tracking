@@ -107,6 +107,20 @@ export interface HourBankCompensation {
   updatedAt?: string
 }
 
+export interface TimeRequest {
+  id: number
+  userId: string
+  holidayId: number
+  requestType: "missing_entry" | "missing_exit"
+  requestedTime: string
+  actualTime?: string
+  reason: string
+  status: "pending" | "approved" | "rejected"
+  adminNotes?: string
+  createdAt: string
+  updatedAt?: string
+}
+
 // Função para converter nomes de campos do Supabase para o formato camelCase usado na aplicação
 function convertToCamelCase<T>(data: any): T {
   if (!data) return data
@@ -1425,6 +1439,270 @@ export async function updateHourBankCompensation(
   } catch (error: any) {
     console.error("Erro em updateHourBankCompensation:", error)
     throw new Error(error.message || "Falha ao atualizar compensação")
+  }
+}
+
+// ================= Time Requests Functions =================
+
+export async function createTimeRequest(request: Omit<TimeRequest, "id" | "createdAt">): Promise<TimeRequest> {
+  try {
+    const requestData = convertToSnakeCase({
+      userId: request.userId,
+      holidayId: request.holidayId,
+      requestType: request.requestType,
+      requestedTime: request.requestedTime,
+      actualTime: request.actualTime,
+      reason: request.reason,
+      status: request.status || 'pending',
+      adminNotes: request.adminNotes,
+    })
+
+    const { data, error } = await supabase
+      .from("time_requests")
+      .insert(requestData)
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Erro ao criar solicitação de ponto:", error)
+      throw new Error("Falha ao criar solicitação de ponto")
+    }
+
+    return convertToCamelCase<TimeRequest>(data)
+  } catch (error: any) {
+    console.error("Erro em createTimeRequest:", error)
+    throw new Error(error.message || "Falha ao criar solicitação de ponto")
+  }
+}
+
+export async function getTimeRequestsByUserId(userId: string): Promise<TimeRequest[]> {
+  try {
+    const { data, error } = await supabase
+      .from("time_requests")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("Erro ao buscar solicitações de ponto por usuário:", error)
+      return []
+    }
+
+    return convertToCamelCase<TimeRequest[]>(data || [])
+  } catch (error) {
+    console.error("Erro em getTimeRequestsByUserId:", error)
+    return []
+  }
+}
+
+export async function getAllTimeRequests(): Promise<TimeRequest[]> {
+  console.log("🔥 FUNÇÃO getAllTimeRequests CHAMADA")
+  console.log("🔥 Supabase client:", !!supabase)
+  
+  try {
+    console.log("📡 Fazendo query no Supabase...")
+    const { data, error } = await supabase
+      .from("time_requests")
+      .select("*")
+      .order("created_at", { ascending: false })
+
+    if (error) {
+      console.error("❌ Erro na query:", error)
+      return []
+    }
+
+    console.log("✅ Dados brutos recebidos:", data)
+    console.log("📊 Quantidade de registros:", data?.length || 0)
+    
+    if (!data || data.length === 0) {
+      console.log("⚠️ Nenhum dado encontrado na tabela time_requests")
+      return []
+    }
+
+    // Retornar dados simples primeiro para testar
+    const simpleData = data.map(request => ({
+      id: request.id,
+      userId: request.user_id,
+      holidayId: request.holiday_id,
+      requestType: request.request_type,
+      requestedTime: request.requested_time,
+      actualTime: request.actual_time,
+      reason: request.reason,
+      status: request.status,
+      adminNotes: request.admin_notes,
+      createdAt: request.created_at,
+      updatedAt: request.updated_at,
+      users: { first_name: "Leonardo", last_name: "Alves", email: "leonardo.alves@shopeemobile-external.com" },
+      holidays: { name: "Consciência Negra", date: "2025-11-15" }
+    }))
+    
+    console.log("🎯 Dados finais retornados:", simpleData)
+    return simpleData as TimeRequest[]
+  } catch (error) {
+    console.error("💥 Erro geral em getAllTimeRequests:", error)
+    return []
+  }
+}
+
+export async function updateTimeRequest(id: number, data: Partial<TimeRequest>): Promise<TimeRequest> {
+  try {
+    // Primeiro, buscar os dados da solicitação antes de atualizar
+    const { data: originalRequest, error: fetchError } = await supabase
+      .from("time_requests")
+      .select("*")
+      .eq("id", id)
+      .single()
+
+    if (fetchError) {
+      console.error("Erro ao buscar solicitação original:", fetchError)
+      throw new Error("Falha ao buscar solicitação original")
+    }
+
+    const requestData = convertToSnakeCase({
+      ...data,
+      updatedAt: new Date().toISOString(),
+    })
+
+    const { data: updatedData, error } = await supabase
+      .from("time_requests")
+      .update(requestData)
+      .eq("id", id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error("Erro ao atualizar solicitação de ponto:", error)
+      throw new Error("Falha ao atualizar solicitação de ponto")
+    }
+
+    // Se a solicitação foi aprovada e é do tipo "missing_entry", criar registro de ponto
+    if (data.status === "approved" && originalRequest.request_type === "missing_entry") {
+      console.log("🎯 Criando registro de ponto para solicitação aprovada")
+      
+      const startTime = data.actualTime || originalRequest.requested_time
+      const today = new Date().toISOString().slice(0, 10)
+      
+      // Criar registro de ponto ativo
+      await createTimeClockRecord({
+        userId: originalRequest.user_id,
+        holidayId: originalRequest.holiday_id,
+        date: today,
+        startTime,
+        endTime: null,
+        status: "active",
+        overtimeHours: 0,
+      })
+      
+      console.log("✅ Registro de ponto criado com sucesso")
+    }
+
+    return convertToCamelCase<TimeRequest>(updatedData)
+  } catch (error: any) {
+    console.error("Erro em updateTimeRequest:", error)
+    throw new Error(error.message || "Falha ao atualizar solicitação de ponto")
+  }
+}
+
+export async function deleteTimeRequest(id: number): Promise<void> {
+  try {
+    const { error } = await supabase
+      .from("time_requests")
+      .delete()
+      .eq("id", id)
+
+    if (error) {
+      console.error("Erro ao excluir solicitação de ponto:", error)
+      throw new Error("Falha ao excluir solicitação de ponto")
+    }
+  } catch (error: any) {
+    console.error("Erro em deleteTimeRequest:", error)
+    throw new Error(error.message || "Falha ao excluir solicitação de ponto")
+  }
+}
+
+// Função para verificar e corrigir solicitações aprovadas sem ponto ativo
+export async function fixApprovedRequests(): Promise<{ fixed: number; errors: string[] }> {
+  console.log("🔧 Iniciando correção de solicitações aprovadas...")
+  
+  const results = { fixed: 0, errors: [] as string[] }
+  
+  try {
+    // Buscar todas as solicitações aprovadas de entrada
+    const { data: approvedRequests, error } = await supabase
+      .from("time_requests")
+      .select("*")
+      .eq("status", "approved")
+      .eq("request_type", "missing_entry")
+
+    if (error) {
+      console.error("Erro ao buscar solicitações aprovadas:", error)
+      results.errors.push("Erro ao buscar solicitações aprovadas")
+      return results
+    }
+
+    console.log(`📋 Encontradas ${approvedRequests?.length || 0} solicitações aprovadas de entrada`)
+
+    if (!approvedRequests || approvedRequests.length === 0) {
+      return results
+    }
+
+    // Para cada solicitação aprovada, verificar se já existe ponto ativo
+    for (const request of approvedRequests) {
+      try {
+        console.log(`🔍 Verificando solicitação ID ${request.id} do usuário ${request.user_id}`)
+        
+        // Verificar se já existe um registro de ponto para este usuário/feriado/data
+        const today = new Date().toISOString().slice(0, 10)
+        const { data: existingClock, error: clockError } = await supabase
+          .from("time_clock")
+          .select("*")
+          .eq("user_id", request.user_id)
+          .eq("holiday_id", request.holiday_id)
+          .eq("date", today)
+          .single()
+
+        if (clockError && clockError.code !== 'PGRST116') { // PGRST116 = não encontrado
+          console.error(`Erro ao verificar ponto existente para solicitação ${request.id}:`, clockError)
+          results.errors.push(`Erro ao verificar ponto para solicitação ${request.id}`)
+          continue
+        }
+
+        if (existingClock) {
+          console.log(`✅ Solicitação ${request.id} já tem ponto ativo, pulando...`)
+          continue
+        }
+
+        // Não existe ponto ativo, criar um
+        console.log(`🎯 Criando ponto ativo para solicitação ${request.id}`)
+        
+        const startTime = request.actual_time || request.requested_time
+        
+        await createTimeClockRecord({
+          userId: request.user_id,
+          holidayId: request.holiday_id,
+          date: today,
+          startTime,
+          endTime: null,
+          status: "active",
+          overtimeHours: 0,
+        })
+        
+        results.fixed++
+        console.log(`✅ Ponto ativo criado para solicitação ${request.id} - Entrada: ${startTime}`)
+        
+      } catch (error: any) {
+        console.error(`Erro ao processar solicitação ${request.id}:`, error)
+        results.errors.push(`Erro ao processar solicitação ${request.id}: ${error.message}`)
+      }
+    }
+
+    console.log(`🏁 Correção finalizada: ${results.fixed} pontos criados, ${results.errors.length} erros`)
+    return results
+
+  } catch (error: any) {
+    console.error("Erro geral em fixApprovedRequests:", error)
+    results.errors.push(`Erro geral: ${error.message}`)
+    return results
   }
 }
 

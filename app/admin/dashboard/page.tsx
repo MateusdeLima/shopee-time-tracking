@@ -8,6 +8,7 @@ import { EmployeeReports } from "@/components/employee-reports"
 import { EmployeeManagement } from "@/components/employee-management"
 import { AdminSummary } from "@/components/admin-summary"
 import { AdminAbsences } from "@/components/admin-absences"
+import { TimeRequestsManagement } from "@/components/time-requests-management"
 import { Sidebar } from "@/components/sidebar"
 import { getCurrentUser, logout, refreshCurrentUser } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
@@ -23,6 +24,9 @@ export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeMainTab, setActiveMainTab] = useState("holidays")
+  
+  // Debug do estado da aba
+  console.log("🔥 ESTADO ATUAL activeMainTab:", activeMainTab)
   const [activeHolidayTab, setActiveHolidayTab] = useState("manage")
   const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean }>({ holidays: true, absences: true })
   const [isHourBankExportModalOpen, setIsHourBankExportModalOpen] = useState(false)
@@ -79,6 +83,7 @@ export default function AdminDashboard() {
   }
 
   const renderContent = () => {
+    console.log("🔥 DASHBOARD renderContent chamado, activeMainTab:", activeMainTab)
     switch (activeMainTab) {
       case "holidays":
         return (
@@ -144,22 +149,11 @@ export default function AdminDashboard() {
           </div>
         )
       case "schedules":
+        console.log("🎯 DASHBOARD: Renderizando aba schedules (horarios)")
         return (
-          <Card className="mx-2 sm:mx-0">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">Horários</CardTitle>
-              <CardDescription className="text-sm sm:text-base">Acompanhe e aprove solicitações de ajuste de saída</CardDescription>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-              <div className="flex items-center justify-center h-[60vh] border rounded-md bg-gray-50">
-                <div className="text-center">
-                  <div className="text-2xl mb-2">🕒</div>
-                  <p className="text-gray-600">Nenhuma solicitação de horário no momento.</p>
-                  <p className="text-xs text-gray-500 mt-1">Quando um funcionário inserir a saída manualmente, ela aparecerá aqui para revisão.</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-4 sm:space-y-6">
+            <TimeRequestsManagement />
+          </div>
         )
       case "absences":
         return (
@@ -235,7 +229,10 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-gray-50 flex">
       <Sidebar
         activeTab={activeMainTab}
-        onTabChange={setActiveMainTab}
+        onTabChange={(newTab) => {
+          console.log("🔥 SIDEBAR: Mudando aba de", activeMainTab, "para", newTab)
+          setActiveMainTab(newTab)
+        }}
         userRole="admin"
         onLogout={handleLogout}
         userName={user ? `${user.firstName} ${user.lastName}` : undefined}
@@ -255,10 +252,10 @@ export default function AdminDashboard() {
               <DialogTitle>Selecionar Feriados para Exportação</DialogTitle>
             </DialogHeader>
             <div className="py-4 max-h-[50vh] overflow-y-auto">
-              {(data.holidays || []).filter(h => h.active).length === 0 ? (
+              {(data.holidays || []).filter((h: any) => h.active).length === 0 ? (
                 <div className="text-center text-gray-500 mb-4">Nenhum feriado ativo disponível para exportação.</div>
               ) : (
-                (data.holidays || []).filter(h => h.active).map(h => (
+                (data.holidays || []).filter((h: any) => h.active).map((h: any) => (
                   <div key={h.id} className="flex items-center mb-2">
                     <input
                       type="checkbox"

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
 import { Clock, AlertCircle, Upload, FileImage, Loader2, CheckCircle, XCircle, LogIn, LogOut, Bell } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { determineOvertimeOption, getOvertimeRecordsByUserId, getUserHolidayStats, createOvertimeRecord, calculateOvertimeHours, createTimeClockRecord, updateTimeClockRecord, getActiveTimeClockByUserId } from "@/lib/db"
+import { determineOvertimeOption, getOvertimeRecordsByUserId, getUserHolidayStats, createOvertimeRecord, calculateOvertimeHours, createTimeClockRecord, updateTimeClockRecord, getActiveTimeClockByUserId, createTimeRequest } from "@/lib/db"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
@@ -145,6 +145,19 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
   const audioCtxRef = useRef<AudioContext | null>(null)
   const oscillatorRef = useRef<OscillatorNode | null>(null)
   const gainRef = useRef<GainNode | null>(null)
+  // Trava de mín/max e sugestões de saída
+  const [suggestedEndOptions, setSuggestedEndOptions] = useState<{ endTime: string; totalHours: number; label: string }[]>([])
+  const [selectedSuggestedEnd, setSelectedSuggestedEnd] = useState<string>("")
+  
+  // Estados para solicitação de ponto perdido
+  const [isMissingTimeDialogOpen, setIsMissingTimeDialogOpen] = useState(false)
+  const [requestedEntryTime, setRequestedEntryTime] = useState("")
+  const [entryReason, setEntryReason] = useState("")
+  
+  // Estados para solicitação de saída
+  const [isMissingExitDialogOpen, setIsMissingExitDialogOpen] = useState(false)
+  const [requestedExitTime, setRequestedExitTime] = useState("")
+  const [exitReason, setExitReason] = useState("")
   
   // Estados para banco de horas
   const [showRejectionModal, setShowRejectionModal] = useState(true) // Mostrar modal ao carregar
@@ -186,6 +199,12 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       if (!user?.id || !selectedHoliday?.id) return
       const rec = await getActiveTimeClockByUserId(user.id, selectedHoliday.id)
       setActiveClock(rec)
+      // Sugestões ao recuperar um ponto ativo
+      if (rec?.startTime) {
+        const opts = buildSuggestedEnds(rec.startTime)
+        setSuggestedEndOptions(opts)
+        setSelectedSuggestedEnd(opts[0]?.endTime || "")
+      }
       // rearm stored alarm if present
       if (rec) {
         const key = `alarm_${user.id}_${selectedHoliday.id}_${rec.id}`
@@ -248,6 +267,20 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     setError("")
 
     try {
+      // Verificar se o funcionário bateu ponto dentro da tolerância hoje
+      const now = new Date()
+      const currentTime = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
+      
+      if (!isWithinTolerance(currentTime, user.shift)) {
+        toast({
+          variant: "destructive",
+          title: "Registro bloqueado",
+          description: `Você não pode registrar horas extras pois chegou fora da janela de tolerância (6:00-9:15). Horário atual: ${currentTime}`
+        })
+        setLoading(false)
+        return
+      }
+
       // Regra: apenas um registro por dia por usuário
       const today = new Date().toISOString().slice(0, 10)
       const userRecords = await getOvertimeRecordsByUserId(user.id)
@@ -342,6 +375,160 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     }
   }
 
+  // Função para verificar se o horário está dentro da tolerância
+  const isWithinTolerance = (currentTime: string, shift: "8-17" | "9-18"): boolean => {
+    const [hours, minutes] = currentTime.split(':').map(Number)
+    const currentMinutes = hours * 60 + minutes
+    
+    // Definir janelas de tolerância baseadas no turno
+    let startWindow: number, endWindow: number
+    
+    if (shift === "8-17") {
+      // Turno 8-17: tolerância de 6:00 às 9:15 (6h às 9h15)
+      startWindow = 6 * 60 // 6:00 = 360 minutos
+      endWindow = 9 * 60 + 15 // 9:15 = 555 minutos
+    } else {
+      // Turno 9-18: tolerância de 6:00 às 9:15 (mesmo horário)
+      startWindow = 6 * 60 // 6:00 = 360 minutos  
+      endWindow = 9 * 60 + 15 // 9:15 = 555 minutos
+    }
+    
+    return currentMinutes >= startWindow && currentMinutes <= endWindow
+  }
+
+  // Função para verificar se o horário de saída está dentro da tolerância
+  const isExitTimeValid = (currentTime: string, shift: "8-17" | "9-18"): { valid: boolean; minTime: string; maxTime: string } => {
+    const [hours, minutes] = currentTime.split(':').map(Number)
+    const currentMinutes = hours * 60 + minutes
+    
+    let minExitTime: number, maxExitTime: number
+    
+    if (shift === "8-17") {
+      // Turno 8-17: saída permitida entre 17:20 (17:30 - 10min) e 20:10 (20:00 + 10min)
+      minExitTime = 17 * 60 + 20 // 17:20 = 1040 minutos
+      maxExitTime = 20 * 60 + 10 // 20:10 = 1210 minutos
+    } else {
+      // Turno 9-18: saída permitida entre 18:20 (18:30 - 10min) e 20:10 (20:00 + 10min)
+      minExitTime = 18 * 60 + 20 // 18:20 = 1100 minutos
+      maxExitTime = 20 * 60 + 10 // 20:10 = 1210 minutos
+    }
+    
+    const minTimeStr = `${Math.floor(minExitTime / 60).toString().padStart(2, '0')}:${(minExitTime % 60).toString().padStart(2, '0')}`
+    const maxTimeStr = `${Math.floor(maxExitTime / 60).toString().padStart(2, '0')}:${(maxExitTime % 60).toString().padStart(2, '0')}`
+    
+    return {
+      valid: currentMinutes >= minExitTime && currentMinutes <= maxExitTime,
+      minTime: minTimeStr,
+      maxTime: maxTimeStr
+    }
+  }
+
+  // Função para criar solicitação de ponto perdido
+  const createMissingTimeRequest = async (requestedTime: string, reason: string) => {
+    try {
+      await createTimeRequest({
+        userId: user.id,
+        holidayId: selectedHoliday.id,
+        requestType: "missing_entry",
+        requestedTime,
+        reason,
+        status: "pending"
+      })
+      
+      toast({
+        title: "Solicitação enviada",
+        description: "Sua solicitação de adição de ponto foi enviada para aprovação do admin."
+      })
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao enviar solicitação",
+        description: error.message || "Tente novamente."
+      })
+    }
+  }
+
+  // Função para enviar solicitação do modal de entrada
+  const handleSubmitMissingTimeRequest = async () => {
+    if (!requestedEntryTime.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Horário obrigatório",
+        description: "Por favor, informe o horário que você começou a trabalhar."
+      })
+      return
+    }
+
+    if (!entryReason.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Motivo obrigatório",
+        description: "Por favor, explique o motivo do esquecimento do ponto."
+      })
+      return
+    }
+
+    try {
+      const reason = `Funcionário esqueceu de bater ponto. Horário real de entrada: ${requestedEntryTime}. Motivo: ${entryReason}`
+      await createMissingTimeRequest(requestedEntryTime, reason)
+      
+      // Limpar campos e fechar modal
+      setRequestedEntryTime("")
+      setEntryReason("")
+      setIsMissingTimeDialogOpen(false)
+    } catch (error: any) {
+      console.error("Erro ao enviar solicitação:", error)
+    }
+  }
+
+  // Função para enviar solicitação do modal de saída
+  const handleSubmitMissingExitRequest = async () => {
+    if (!requestedExitTime.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Horário obrigatório",
+        description: "Por favor, informe o horário que você quer sair."
+      })
+      return
+    }
+
+    if (!exitReason.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Motivo obrigatório",
+        description: "Por favor, explique o motivo da saída fora do horário."
+      })
+      return
+    }
+
+    try {
+      await createTimeRequest({
+        userId: user.id,
+        holidayId: selectedHoliday.id,
+        requestType: "missing_exit",
+        requestedTime: requestedExitTime,
+        reason: `Funcionário quer sair fora da tolerância. Horário solicitado: ${requestedExitTime}. Motivo: ${exitReason}`,
+        status: "pending"
+      })
+      
+      toast({
+        title: "Solicitação enviada",
+        description: "Sua solicitação de saída foi enviada para aprovação do admin."
+      })
+      
+      // Limpar campos e fechar modal
+      setRequestedExitTime("")
+      setExitReason("")
+      setIsMissingExitDialogOpen(false)
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao enviar solicitação",
+        description: error.message || "Tente novamente."
+      })
+    }
+  }
+
   // Novo fluxo: iniciar ponto de entrada
   const handleStartEntry = async () => {
     if (!selectedHoliday) {
@@ -374,6 +561,15 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
 
       const now = new Date()
       const startTime = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
+      
+      // Verificar se o horário está dentro da tolerância
+      if (!isWithinTolerance(startTime, user.shift)) {
+        // Horário fora da tolerância - abrir modal para solicitar ponto
+        setLoading(false)
+        setIsMissingTimeDialogOpen(true)
+        return
+      }
+
       const created = await createTimeClockRecord({
         userId: user.id,
         holidayId: selectedHoliday.id,
@@ -384,6 +580,10 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         overtimeHours: 0,
       })
       setActiveClock(created)
+      // calcular sugestões a partir do novo início
+      const opts = buildSuggestedEnds(startTime)
+      setSuggestedEndOptions(opts)
+      setSelectedSuggestedEnd(opts[0]?.endTime || "")
       toast({ title: "Ponto de entrada registrado", description: `Início: ${startTime}` })
     } catch (e: any) {
       toast({ variant: "destructive", title: "Erro ao iniciar ponto", description: e.message || "Tente novamente." })
@@ -411,8 +611,10 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         setIsAlarmRingingDialogOpen(false)
       } catch {}
 
-      const now = new Date()
-      const endTime = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
+      const endTime = selectedSuggestedEnd || (() => {
+        const now = new Date()
+        return `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
+      })()
       const updatedClock = await updateTimeClockRecord(activeClock.id, { endTime, status: "completed" })
 
       const standard = user?.shift === '8-17' ? { s: '08:00', e: '17:00' } : { s: '09:00', e: '18:00' }
@@ -443,6 +645,43 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     } finally {
       setLoading(false)
     }
+  }
+
+  // Utilitários de tempo (minutos)
+  const toMinutes = (hhmm: string) => {
+    const [hh, mm] = hhmm.split(":").map(Number)
+    return hh * 60 + mm
+  }
+  const fromMinutes = (mins: number) => {
+    const h = Math.floor(mins / 60) % 24
+    const m = Math.abs(mins % 60)
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
+  }
+  const roundUpToHalfHour = (hours: number) => {
+    const halves = Math.ceil(hours * 2)
+    return halves / 2
+  }
+
+  // Monta sugestões válidas entre 0.5h e 2h totais com base no turno
+  const buildSuggestedEnds = (start: string) => {
+    const standard = user?.shift === '8-17' ? { s: '08:00', e: '17:00' } : { s: '09:00', e: '18:00' }
+    const startMin = toMinutes(start)
+    const sMin = toMinutes(standard.s)
+    const eMin = toMinutes(standard.e)
+    // Extra já obtido antes do expediente
+    const earnedBefore = Math.max(0, (sMin - startMin) / 60)
+    // Totais permitidos
+    const allowedTotals = [0.5, 1, 1.5, 2]
+    const floorMin = Math.max(0.5, roundUpToHalfHour(earnedBefore))
+    const validTotals = allowedTotals.filter(t => t >= floorMin)
+    const opts = validTotals.map(t => {
+      const afterHours = t - earnedBefore
+      const endMinutes = eMin + Math.round(afterHours * 60)
+      const endTime = fromMinutes(endMinutes)
+      const label = `${endTime} (${t === 0.5 ? '30min' : `${t}h`})`
+      return { endTime, totalHours: t, label }
+    })
+    return opts
   }
 
   // Alarm helpers
@@ -728,17 +967,106 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
               </div>
               <div className="rounded-md border p-3">
                 <div className="text-[12px] text-gray-500">Saída</div>
-                <div className="text-base font-medium">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                <div className="text-base font-medium">{selectedSuggestedEnd || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
               </div>
             </div>
           )}
+          
+          {/* Verificação de tolerância de saída */}
+          {(() => {
+            const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            const exitValidation = isExitTimeValid(currentTime, user.shift)
+            
+            if (!exitValidation.valid) {
+              return (
+                <div className="rounded-md border-2 border-red-200 bg-red-50 p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                    <div className="font-medium text-red-800">Horário fora da tolerância</div>
+                  </div>
+                  <div className="text-red-700 text-xs mb-3">
+                    Você só pode bater o ponto de saída entre <strong>{exitValidation.minTime}</strong> e <strong>{exitValidation.maxTime}</strong>.
+                  </div>
+                  <div className="text-red-600 text-xs">
+                    Horário atual: <strong>{currentTime}</strong> - Aguarde até {exitValidation.minTime} para registrar a saída.
+                  </div>
+                </div>
+              )
+            }
+            
+            return null
+          })()}
+
+          {/* Sugestões de horários válidos (sempre visível para referência) */}
+          {activeClock && suggestedEndOptions.length > 0 && (() => {
+            const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            const exitValidation = isExitTimeValid(currentTime, user.shift)
+            
+            return (
+              <div className="space-y-2">
+                <div className="text-[12px] text-gray-500">Sugestões conforme seu turno</div>
+                <div className="grid grid-cols-2 gap-2">
+                  {suggestedEndOptions.map(opt => (
+                    <button
+                      key={opt.endTime}
+                      type="button"
+                      onClick={exitValidation.valid ? () => setSelectedSuggestedEnd(opt.endTime) : undefined}
+                      disabled={!exitValidation.valid}
+                      className={`border rounded px-3 py-2 text-sm text-left transition-all ${
+                        !exitValidation.valid 
+                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60' 
+                          : selectedSuggestedEnd === opt.endTime 
+                            ? 'bg-blue-600 text-white border-blue-600' 
+                            : 'bg-white hover:bg-gray-50 cursor-pointer'
+                      }`}
+                    >
+                      <div className="font-medium">{opt.endTime}</div>
+                      <div className="text-[11px] opacity-80">Total: {opt.totalHours === 0.5 ? '30min' : `${opt.totalHours}h`}</div>
+                    </button>
+                  ))}
+                </div>
+                <div className="text-[11px] text-gray-500">
+                  {exitValidation.valid 
+                    ? "A saída deve respeitar o mínimo de 30min e o máximo de 2h por dia, com 10min de tolerância."
+                    : `Opções disponíveis entre ${exitValidation.minTime} e ${exitValidation.maxTime}. Use como referência para planejar sua saída.`
+                  }
+                </div>
+              </div>
+            )
+          })()}
+          
           <div className="text-xs text-gray-500">Ao confirmar, registraremos a saída agora e calcularemos suas horas extras automaticamente conforme seu turno.</div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsFinishDialogOpen(false)}>Voltar</Button>
-          <Button onClick={handleConfirmFinish} className="bg-blue-600 hover:bg-blue-700" disabled={!activeClock || loading}>
-            Confirmar registro
-          </Button>
+          {(() => {
+            const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            const exitValidation = isExitTimeValid(currentTime, user.shift)
+            
+            if (!exitValidation.valid) {
+              return (
+                <Button 
+                  onClick={() => {
+                    setIsFinishDialogOpen(false)
+                    setIsMissingExitDialogOpen(true)
+                  }}
+                  className="bg-orange-600 hover:bg-orange-700"
+                >
+                  Solicitar saída fora do horário
+                </Button>
+              )
+            }
+            
+            return (
+              <Button 
+                onClick={handleConfirmFinish} 
+                className="bg-blue-600 hover:bg-blue-700" 
+                disabled={!activeClock || loading}
+              >
+                Confirmar registro
+              </Button>
+            )
+          })()}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1088,6 +1416,160 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     </Dialog>
 
     {/* Modal de Notificação de Banco de Horas */}
+    {/* Modal de solicitação de ponto perdido */}
+    <Dialog open={isMissingTimeDialogOpen} onOpenChange={setIsMissingTimeDialogOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-red-600">
+            <AlertCircle className="h-5 w-5" />
+            Horário fora da tolerância
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-sm text-red-700 mb-2">
+              <strong>Você chegou às {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, fora da janela permitida (6:00-9:15).</strong>
+            </p>
+            <p className="text-xs text-red-600">
+              Uma solicitação será enviada ao admin para aprovação.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="requestedTime" className="text-sm font-medium">
+                Que horas você realmente começou a trabalhar hoje? *
+              </Label>
+              <Input
+                id="requestedTime"
+                type="time"
+                value={requestedEntryTime}
+                onChange={(e) => setRequestedEntryTime(e.target.value)}
+                className="mt-1"
+                placeholder="HH:MM"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="reason" className="text-sm font-medium">
+                Por que esqueceu de bater o ponto? *
+              </Label>
+              <textarea
+                id="reason"
+                value={entryReason}
+                onChange={(e) => setEntryReason(e.target.value)}
+                className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
+                rows={3}
+                placeholder="Ex: Esqueci de bater o ponto ao chegar, estava focado no trabalho..."
+              />
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
+            <strong>Importante:</strong> Seja honesto sobre o horário real. O admin verificará sua solicitação e poderá aprovar ou rejeitar com base nas informações fornecidas.
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setIsMissingTimeDialogOpen(false)
+              setRequestedEntryTime("")
+              setEntryReason("")
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSubmitMissingTimeRequest}
+            disabled={!requestedEntryTime.trim() || !entryReason.trim()}
+            className="bg-red-600 hover:bg-red-700"
+          >
+            Enviar solicitação
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal de solicitação de saída fora do horário */}
+    <Dialog open={isMissingExitDialogOpen} onOpenChange={setIsMissingExitDialogOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-orange-600">
+            <AlertCircle className="h-5 w-5" />
+            Saída fora da tolerância
+          </DialogTitle>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+            <p className="text-sm text-orange-700 mb-2">
+              <strong>Você está tentando sair fora da janela permitida.</strong>
+            </p>
+            <p className="text-xs text-orange-600">
+              Uma solicitação será enviada ao admin para aprovação.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="requestedExitTime" className="text-sm font-medium">
+                Que horas você quer sair? *
+              </Label>
+              <Input
+                id="requestedExitTime"
+                type="time"
+                value={requestedExitTime}
+                onChange={(e) => setRequestedExitTime(e.target.value)}
+                className="mt-1"
+                placeholder="HH:MM"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="exitReason" className="text-sm font-medium">
+                Por que precisa sair neste horário? *
+              </Label>
+              <textarea
+                id="exitReason"
+                value={exitReason}
+                onChange={(e) => setExitReason(e.target.value)}
+                className="mt-1 w-full border rounded-md px-3 py-2 text-sm resize-none"
+                rows={3}
+                placeholder="Ex: Compromisso médico, emergência familiar, etc..."
+              />
+            </div>
+          </div>
+
+          <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded">
+            <strong>Importante:</strong> O admin verificará sua solicitação e poderá aprovar ou rejeitar com base no motivo fornecido.
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              setIsMissingExitDialogOpen(false)
+              setRequestedExitTime("")
+              setExitReason("")
+            }}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSubmitMissingExitRequest}
+            disabled={!requestedExitTime.trim() || !exitReason.trim()}
+            className="bg-orange-600 hover:bg-orange-700"
+          >
+            Enviar solicitação
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     {showRejectionModal && (
       <BankHoursNotificationModal 
         userId={user.id}
