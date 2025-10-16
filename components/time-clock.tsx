@@ -6,9 +6,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import { Clock, AlertCircle, Upload, FileImage, Loader2, CheckCircle, XCircle } from "lucide-react"
+import { Clock, AlertCircle, Upload, FileImage, Loader2, CheckCircle, XCircle, LogIn, LogOut, Bell } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { determineOvertimeOption, getOvertimeRecordsByUserId, getUserHolidayStats } from "@/lib/db"
+import { determineOvertimeOption, getOvertimeRecordsByUserId, getUserHolidayStats, createOvertimeRecord, calculateOvertimeHours, createTimeClockRecord, updateTimeClockRecord, getActiveTimeClockByUserId } from "@/lib/db"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import Image from "next/image"
@@ -135,6 +135,16 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
   const [groupedOptions, setGroupedOptions] = useState<any>({ antecipado: [], apos: [], misto: [] })
   const [task, setTask] = useState<string>("")
   const [isDeadlineDialogOpen, setIsDeadlineDialogOpen] = useState(false)
+  const [activeClock, setActiveClock] = useState<any | null>(null)
+  const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false)
+  const [isAlarmDialogOpen, setIsAlarmDialogOpen] = useState(false)
+  const [alarmTime, setAlarmTime] = useState<string>("")
+  const alarmTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const [isAlarmRinging, setIsAlarmRinging] = useState(false)
+  const [isAlarmRingingDialogOpen, setIsAlarmRingingDialogOpen] = useState(false)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const oscillatorRef = useRef<OscillatorNode | null>(null)
+  const gainRef = useRef<GainNode | null>(null)
   
   // Estados para banco de horas
   const [showRejectionModal, setShowRejectionModal] = useState(true) // Mostrar modal ao carregar
@@ -169,6 +179,30 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       setOptions([])
     }
   }, [user?.shift])
+
+  // Carregar registro de ponto ativo deste feriado
+  useEffect(() => {
+    const loadActiveClock = async () => {
+      if (!user?.id || !selectedHoliday?.id) return
+      const rec = await getActiveTimeClockByUserId(user.id, selectedHoliday.id)
+      setActiveClock(rec)
+      // rearm stored alarm if present
+      if (rec) {
+        const key = `alarm_${user.id}_${selectedHoliday.id}_${rec.id}`
+        const stored = typeof window !== 'undefined' ? localStorage.getItem(key) : null
+        if (stored) {
+          const when = new Date(stored).getTime()
+          const now = Date.now()
+          if (when > now) {
+            scheduleAlarmAt(new Date(when), key)
+          } else {
+            localStorage.removeItem(key)
+          }
+        }
+      }
+    }
+    loadActiveClock()
+  }, [user?.id, selectedHoliday?.id])
 
   const handleOptionChange = (optionId: string) => {
     setSelectedOption(optionId)
@@ -306,6 +340,157 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     } finally {
       setLoading(false)
     }
+  }
+
+  // Novo fluxo: iniciar ponto de entrada
+  const handleStartEntry = async () => {
+    if (!selectedHoliday) {
+      setError("Selecione um feriado para registrar")
+      return
+    }
+    if (!task.trim()) {
+      setError("Por favor, preencha o projeto/task que está atuando.")
+      return
+    }
+    setLoading(true)
+    setError("")
+    try {
+      const today = new Date().toISOString().slice(0,10)
+      const userRecords = await getOvertimeRecordsByUserId(user.id)
+      const hasTodayRecord = (userRecords || []).some((r: any) => (r.date || '').slice(0,10) === today && r.holidayId === selectedHoliday.id)
+      if (hasTodayRecord) {
+        toast({ variant: "destructive", title: "Limite diário atingido", description: "Você já registrou hoje para este feriado." })
+        setLoading(false)
+        return
+      }
+
+      const existing = await getActiveTimeClockByUserId(user.id, selectedHoliday.id)
+      if (existing) {
+        setActiveClock(existing)
+        setLoading(false)
+        toast({ title: "Ponto já iniciado", description: `Início: ${existing.startTime}` })
+        return
+      }
+
+      const now = new Date()
+      const startTime = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
+      const created = await createTimeClockRecord({
+        userId: user.id,
+        holidayId: selectedHoliday.id,
+        date: today,
+        startTime,
+        endTime: null,
+        status: "active",
+        overtimeHours: 0,
+      })
+      setActiveClock(created)
+      toast({ title: "Ponto de entrada registrado", description: `Início: ${startTime}` })
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Erro ao iniciar ponto", description: e.message || "Tente novamente." })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Finalizar dia: grava saída, calcula horas extras e cria registro consolidado
+  const handleConfirmFinish = async () => {
+    if (!activeClock) return
+    setLoading(true)
+    try {
+      // Parar alarme (som e timer), se ativo
+      try {
+        if (alarmTimerRef.current) {
+          clearTimeout(alarmTimerRef.current as unknown as number)
+          alarmTimerRef.current = null
+        }
+        oscillatorRef.current?.stop()
+        oscillatorRef.current?.disconnect()
+        gainRef.current?.disconnect()
+        oscillatorRef.current = null
+        setIsAlarmRinging(false)
+        setIsAlarmRingingDialogOpen(false)
+      } catch {}
+
+      const now = new Date()
+      const endTime = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
+      const updatedClock = await updateTimeClockRecord(activeClock.id, { endTime, status: "completed" })
+
+      const standard = user?.shift === '8-17' ? { s: '08:00', e: '17:00' } : { s: '09:00', e: '18:00' }
+      const overtime = calculateOvertimeHours(activeClock.date, activeClock.startTime, endTime, standard.s, standard.e)
+
+      const option = determineOvertimeOption(activeClock.startTime, endTime)
+
+      await createOvertimeRecord({
+        userId: user.id,
+        holidayId: selectedHoliday.id,
+        holidayName: selectedHoliday.name,
+        date: activeClock.date,
+        optionId: option.id,
+        optionLabel: `${activeClock.startTime} às ${endTime}`,
+        hours: overtime,
+        startTime: activeClock.startTime,
+        endTime,
+        task: task.trim(),
+        status: 'approved',
+      })
+
+      setActiveClock(updatedClock)
+      setIsFinishDialogOpen(false)
+      toast({ title: "Saída registrada", description: `Fim: ${endTime}. Horas extras: ${overtime}h` })
+      await refreshHolidayStats()
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Erro ao finalizar", description: e.message || "Tente novamente." })
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Alarm helpers
+  const scheduleAlarmAt = (when: Date, storageKey: string) => {
+    if (alarmTimerRef.current) {
+      clearTimeout(alarmTimerRef.current as unknown as number)
+      alarmTimerRef.current = null
+    }
+    const delay = Math.max(0, when.getTime() - Date.now())
+    alarmTimerRef.current = setTimeout(async () => {
+      try {
+        if ("Notification" in window) {
+          if (Notification.permission !== "granted") {
+            await Notification.requestPermission().catch(() => {})
+          }
+          if (Notification.permission === "granted") {
+            new Notification("Lembrete: Confirmar saída", { body: `Hora de finalizar o dia no feriado ${selectedHoliday?.name}` })
+          }
+        }
+        // play continuous alarm
+        try {
+          if (!audioCtxRef.current) {
+            audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)()
+          }
+          const ctx = audioCtxRef.current
+          const osc = ctx.createOscillator()
+          const gain = ctx.createGain()
+          osc.type = 'sine'
+          osc.frequency.value = 880
+          gain.gain.value = 0.05
+          osc.connect(gain)
+          gain.connect(ctx.destination)
+          osc.start()
+          oscillatorRef.current = osc
+          gainRef.current = gain
+          setIsAlarmRinging(true)
+          setIsAlarmRingingDialogOpen(true)
+        } catch {}
+      } finally {
+        localStorage.removeItem(storageKey)
+      }
+    }, delay) as unknown as NodeJS.Timeout
+  }
+
+  const openAlarmDialogWithSuggestion = () => {
+    const suggestion = user?.shift === '8-17' ? '17:00' : '18:00'
+    setAlarmTime(suggestion)
+    setIsAlarmDialogOpen(true)
   }
 
   // Função para extrair horários de entrada e saída da opção
@@ -493,64 +678,165 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
               </div>
             </div>
 
-            <div>
-              <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {/* Coluna Antecipado */}
-          <div>
-                  <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Antecipado</h4>
-            <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
-                    {groupedOptions.antecipado.map((option: any) => (
-                      <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
-                  <RadioGroupItem value={option.id} id={option.id} />
-                  <Label htmlFor={option.id} className="cursor-pointer">
-                          {option.label}
-                  </Label>
-                </div>
-              ))}
-            </RadioGroup>
-          </div>
-                {/* Coluna Após o Expediente */}
-                <div>
-                  <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Após o Expediente</h4>
-                  <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
-                    {groupedOptions.apos.map((option: any) => (
-                      <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
-                        <RadioGroupItem value={option.id} id={option.id} />
-                        <Label htmlFor={option.id} className="cursor-pointer">
-                          {option.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </div>
-                {/* Coluna Misto */}
-                <div>
-                  <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Misto</h4>
-                  <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
-                    {groupedOptions.misto.map((option: any) => (
-                      <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
-                        <RadioGroupItem value={option.id} id={option.id} />
-                        <Label htmlFor={option.id} className="cursor-pointer">
-                          {option.label}
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
+            {/* Novo fluxo: ponto de entrada/saída */}
+            {!activeClock || (activeClock && activeClock.status === 'completed') ? (
+              <div className="rounded-md border p-4 bg-gray-50">
+                <p className="text-sm text-gray-600 mb-3">Registre o início do seu expediente extra para este feriado.</p>
+                <Button onClick={handleStartEntry} disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700">
+                  <LogIn className="h-4 w-4 mr-2" /> {loading ? 'Registrando...' : 'Registrar ponto de entrada'}
+                </Button>
+              </div>
+            ) : (
+              <div className="rounded-md border p-4 bg-green-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-sm text-green-800 font-medium">Ponto iniciado</div>
+                    <div className="text-xs text-green-700">Entrada: {activeClock.startTime}</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={openAlarmDialogWithSuggestion} variant="outline" className="border-green-600 text-green-700">
+                      <Bell className="h-4 w-4 mr-1" /> Alarme
+                    </Button>
+                    <Button onClick={() => setIsFinishDialogOpen(true)} className="bg-green-600 hover:bg-green-700">
+                      <LogOut className="h-4 w-4 mr-2" /> Finalizar dia
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
-          <Button
-            onClick={handleRegisterOvertime}
-            className="w-full bg-[#EE4D2D] hover:bg-[#D23F20]"
-            disabled={loading || !selectedOption}
-          >
-            {loading ? "Processando..." : "Registrar Horas Extras"}
-          </Button>
+          {/* fluxo antigo desativado */}
       </CardContent>
     </Card>
+
+    {/* Modal finalizar dia */}
+    <Dialog open={isFinishDialogOpen} onOpenChange={setIsFinishDialogOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Confirmar saída</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          <div className="rounded-md border p-3 bg-gray-50">
+            <div>Hora atual: {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+          {activeClock && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-md border p-3">
+                <div className="text-[12px] text-gray-500">Entrada</div>
+                <div className="text-base font-medium">{activeClock.startTime}</div>
+              </div>
+              <div className="rounded-md border p-3">
+                <div className="text-[12px] text-gray-500">Saída</div>
+                <div className="text-base font-medium">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+              </div>
+            </div>
+          )}
+          <div className="text-xs text-gray-500">Ao confirmar, registraremos a saída agora e calcularemos suas horas extras automaticamente conforme seu turno.</div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsFinishDialogOpen(false)}>Voltar</Button>
+          <Button onClick={handleConfirmFinish} className="bg-blue-600 hover:bg-blue-700" disabled={!activeClock || loading}>
+            Confirmar registro
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal configurar alarme */}
+    <Dialog open={isAlarmDialogOpen} onOpenChange={setIsAlarmDialogOpen}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Configurar alarme de saída</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-gray-600">Defina um horário para lembrarmos você de confirmar a saída.</p>
+          <div>
+            <Label htmlFor="alarm-time">Horário</Label>
+            <input id="alarm-time" type="time" value={alarmTime} onChange={(e) => setAlarmTime(e.target.value)} className="mt-1 w-full border rounded px-3 py-2" />
+          </div>
+          <div className="text-xs text-gray-500">O alarme usa notificação do navegador; permita notificações quando solicitado.</div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setIsAlarmDialogOpen(false)}>Cancelar</Button>
+          <Button
+            onClick={async () => {
+              if (!activeClock || !alarmTime) return
+              const [hh, mm] = alarmTime.split(":").map(Number)
+              const now = new Date()
+              const when = new Date(now)
+              when.setHours(hh, mm, 0, 0)
+              if (when.getTime() <= now.getTime()) when.setDate(when.getDate() + 1)
+              const key = `alarm_${user.id}_${selectedHoliday.id}_${activeClock.id}`
+              localStorage.setItem(key, when.toISOString())
+              if ("Notification" in window && Notification.permission !== "granted") {
+                await Notification.requestPermission().catch(() => {})
+              }
+              scheduleAlarmAt(when, key)
+              toast({ title: "Alarme configurado", description: `Vamos avisar às ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.` })
+              setIsAlarmDialogOpen(false)
+            }}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            Salvar alarme
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    {/* Modal alarme tocando */}
+    <Dialog open={isAlarmRingingDialogOpen} onOpenChange={(open) => {
+      setIsAlarmRingingDialogOpen(open)
+      if (!open) {
+        try {
+          oscillatorRef.current?.stop()
+          oscillatorRef.current?.disconnect()
+          gainRef.current?.disconnect()
+          oscillatorRef.current = null
+          setIsAlarmRinging(false)
+        } catch {}
+      }
+    }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>⏰ Alarme</DialogTitle>
+        </DialogHeader>
+        <div className="text-sm text-gray-700">Hora de finalizar o dia! Confirme sua saída para parar o alarme.</div>
+        <DialogFooter>
+          <Button
+            className="bg-red-600 hover:bg-red-700"
+            onClick={() => {
+              try {
+                oscillatorRef.current?.stop()
+                oscillatorRef.current?.disconnect()
+                gainRef.current?.disconnect()
+                oscillatorRef.current = null
+                setIsAlarmRinging(false)
+              } catch {}
+              setIsAlarmRingingDialogOpen(false)
+            }}
+          >
+            Parar alarme
+          </Button>
+          <Button
+            onClick={async () => {
+              try {
+                oscillatorRef.current?.stop()
+                oscillatorRef.current?.disconnect()
+                gainRef.current?.disconnect()
+                oscillatorRef.current = null
+                setIsAlarmRinging(false)
+              } catch {}
+              setIsAlarmRingingDialogOpen(false)
+              await handleConfirmFinish()
+            }}
+            className="bg-blue-600 hover:bg-blue-700"
+          >
+            Confirmar saída
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     {/* Modal de Banco de Horas */}
     <Dialog open={isHourBankDialogOpen} onOpenChange={setIsHourBankDialogOpen}>

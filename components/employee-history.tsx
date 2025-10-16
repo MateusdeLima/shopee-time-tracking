@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Edit2, Trash2, AlertCircle, Calendar, Clock, FileDown, ClipboardCheck, Filter, Bot, Sparkles } from "lucide-react"
+import { Edit2, Trash2, AlertCircle, Calendar, Clock, FileDown, ClipboardCheck, Filter, Bot, Sparkles, LogOut } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -19,6 +19,8 @@ import {
   updateOvertimeRecord,
   deleteOvertimeRecord,
   getUserHolidayStats,
+  finalizeOvertimeRecord,
+  getTimesFromOptionId,
 } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
 import jsPDF from "jspdf"
@@ -50,6 +52,11 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
   const [recordToDelete, setRecordToDelete] = useState<number | null>(null)
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false)
   const [selectedHolidayForReport, setSelectedHolidayForReport] = useState<string>("all")
+  const [finalizeDialogOpen, setFinalizeDialogOpen] = useState(false)
+  const [recordToFinalize, setRecordToFinalize] = useState<any | null>(null)
+  const [insertExitDialogOpen, setInsertExitDialogOpen] = useState(false)
+  const [recordToInsertExit, setRecordToInsertExit] = useState<any | null>(null)
+  const [manualExitTime, setManualExitTime] = useState<string>("")
 
   useEffect(() => {
     // Carregar feriados
@@ -597,13 +604,114 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-800 text-xs font-semibold">
                   <Calendar className="h-3 w-3" /> Registrado em: {formatDate(record.createdAt)}
                 </span>
-                {/* Remover botão excluir registro do Card/Item de registro (Trash2 Button) */}
-                {/* NÃO renderizar <Button> de exclusão de registro para funcionário */}
+                <div className="flex items-center gap-2">
+                  {record.endTime ? (
+                    <span className="text-xs text-gray-600">Entrada: {formatTime(record.startTime)} • Saída: {formatTime(record.endTime)}</span>
+                  ) : (
+                    <>
+                      <span className="text-xs text-gray-600">Entrada: {formatTime(record.startTime)} • Saída: —</span>
+                      <Button
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white h-8 px-3"
+                        onClick={() => {
+                          setRecordToInsertExit(record)
+                          setManualExitTime("")
+                          setInsertExitDialogOpen(true)
+                        }}
+                      >
+                        Inserir data de saída
+                      </Button>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
           </Card>
         )
       })}
+      <Dialog open={finalizeDialogOpen} onOpenChange={setFinalizeDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Confirme o registro de ponto</DialogTitle>
+          </DialogHeader>
+          <div className="py-3 space-y-4 text-sm">
+            {recordToFinalize && (
+              <>
+                <div className="rounded-lg border bg-gray-50 p-4">
+                  <div className="text-xs text-gray-600 mb-1">{new Date(recordToFinalize.date + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[13px] text-gray-600">Hora atual</div>
+                      <div className="text-2xl font-semibold">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    </div>
+                    <div className="flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 text-blue-700 font-semibold text-lg">
+                      ✓
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-md border p-3">
+                    <div className="text-[12px] text-gray-500">Entrada</div>
+                    <div className="text-base font-medium">
+                      {(() => {
+                        const derived = getTimesFromOptionId(recordToFinalize.optionId)
+                        return formatTime(recordToFinalize.startTime || derived.startTime || "")
+                      })()}
+                    </div>
+                  </div>
+                  <div className="rounded-md border p-3">
+                    <div className="text-[12px] text-gray-500">Saída prevista</div>
+                    <div className="text-base font-medium">
+                      {(() => {
+                        const derived = getTimesFromOptionId(recordToFinalize.optionId)
+                        return formatTime(derived.endTime || recordToFinalize.endTime || "")
+                      })()}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-xs text-gray-500">Ao confirmar, vamos registrar a saída agora e recalcular as horas extras com base no seu turno padrão.</div>
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFinalizeDialogOpen(false)}>
+              Voltar
+            </Button>
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              onClick={async () => {
+                if (!recordToFinalize) return
+                try {
+                  const updated = await finalizeOvertimeRecord(recordToFinalize.id)
+                  // Atualizar lista local
+                  setRecords(prev => prev.map(r => r.id === updated.id ? updated : r))
+                  toast({ title: "Registro confirmado", description: "Saída registrada com sucesso." })
+                  setFinalizeDialogOpen(false)
+                  setRecordToFinalize(null)
+                } catch (e: any) {
+                  toast({ variant: "destructive", title: "Erro ao finalizar", description: e.message || "Tente novamente." })
+                }
+              }}
+              disabled={(() => {
+                if (!recordToFinalize) return true
+                // Bloquear se já possui endTime
+                if (recordToFinalize.endTime) return true
+                // Bloquear se ainda não chegou na saída prevista
+                const derived = getTimesFromOptionId(recordToFinalize.optionId)
+                const planned = derived.endTime
+                if (!planned) return false
+                const [ph, pm] = planned.split(":").map(Number)
+                const now = new Date()
+                const currentMinutes = now.getHours() * 60 + now.getMinutes()
+                const plannedMinutes = ph * 60 + pm
+                return currentMinutes < plannedMinutes
+              })()}
+            >
+              Confirmar registro
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -625,6 +733,47 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
             <Button variant="destructive" onClick={handleDelete}>
               <Trash2 className="h-4 w-4 mr-2" />
               Confirmar Exclusão
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inserir data de saída (envio para aprovação do admin) */}
+      <Dialog open={insertExitDialogOpen} onOpenChange={setInsertExitDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Inserir data de saída</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p>Informe a hora que você saiu no dia deste registro. O pedido irá para aprovação do administrador.</p>
+            <div>
+              <Label htmlFor="manual-exit-time">Horário de saída</Label>
+              <input id="manual-exit-time" type="time" value={manualExitTime} onChange={(e) => setManualExitTime(e.target.value)} className="mt-1 w-full border rounded px-3 py-2" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInsertExitDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={async () => {
+                if (!recordToInsertExit || !manualExitTime) return
+                try {
+                  // Registrar solicitação para admin (reutiliza overtime_records com status pending_admin e end_time proposto)
+                  await updateOvertimeRecord(recordToInsertExit.id, {
+                    endTime: manualExitTime,
+                    status: 'pending_admin',
+                  })
+                  // Atualiza UI local
+                  setRecords(prev => prev.map(r => r.id === recordToInsertExit.id ? { ...r, endTime: null, status: 'pending_admin' } : r))
+                  toast({ title: 'Enviado para aprovação', description: 'O administrador irá validar sua saída.' })
+                  setInsertExitDialogOpen(false)
+                } catch (e: any) {
+                  toast({ variant: 'destructive', title: 'Erro', description: e.message || 'Tente novamente.' })
+                }
+              }}
+              className="bg-blue-600 hover:bg-blue-700"
+              disabled={!manualExitTime}
+            >
+              Enviar para aprovação
             </Button>
           </DialogFooter>
         </DialogContent>

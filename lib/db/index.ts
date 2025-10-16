@@ -881,13 +881,17 @@ export function calculateOvertimeHours(
   // Calcular horas extras antes do horário padrão
   let overtimeBefore = 0
   if (startDate < standardStart) {
-    overtimeBefore = (standardStart.getTime() - startDate.getTime()) / (1000 * 60 * 60)
+    // Tolerância de 5 minutos: considerar até 5 minutos após o horário pretendido como válido
+    const adjustedStart = new Date(startDate.getTime() - 10 * 60 * 1000)
+    overtimeBefore = (standardStart.getTime() - adjustedStart.getTime()) / (1000 * 60 * 60)
   }
 
   // Calcular horas extras depois do horário padrão
   let overtimeAfter = 0
   if (endDate > standardEnd) {
-    overtimeAfter = (endDate.getTime() - standardEnd.getTime()) / (1000 * 60 * 60)
+    // Tolerância de 5 minutos: considerar até 5 minutos antes do horário pretendido como válido
+    const adjustedEnd = new Date(endDate.getTime() + 10 * 60 * 1000)
+    overtimeAfter = (adjustedEnd.getTime() - standardEnd.getTime()) / (1000 * 60 * 60)
   }
 
   // Arredondar para o número inteiro mais próximo
@@ -978,6 +982,59 @@ export function determineOvertimeOption(
   return options[0]
 }
 
+// Auxiliar: converte "7h" ou "7h30" em "07:00"/"07:30"
+function normalizeHourToken(token: string): string {
+  const match = token.match(/(\d{1,2})h(?:(\d{2}))?/)
+  if (!match) return token
+  const h = match[1].padStart(2, "0")
+  const m = match[2] ? match[2].padStart(2, "0") : "00"
+  return `${h}:${m}`
+}
+
+// Tenta extrair horários a partir de optionId (ex: "7h_18h", "8h30_17h30")
+export function getTimesFromOptionId(optionId?: string): { startTime?: string; endTime?: string } {
+  if (!optionId) return {}
+  const parts = optionId.split("_")
+  if (parts.length === 2) {
+    return {
+      startTime: normalizeHourToken(parts[0]),
+      endTime: normalizeHourToken(parts[1])
+    }
+  }
+  return {}
+}
+
+// Finaliza um registro: define endTime como agora e recalcula horas
+export async function finalizeOvertimeRecord(recordId: number): Promise<OvertimeRecord> {
+  const current = await getOvertimeRecordById(recordId)
+  if (!current) {
+    throw new Error("Registro não encontrado")
+  }
+
+  const date = current.date
+  const now = new Date()
+  const nowTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`
+
+  // Determinar startTime esperado caso ausente
+  let startTime = current.startTime
+  if (!startTime) {
+    const derived = getTimesFromOptionId(current.optionId)
+    if (!derived.startTime) {
+      throw new Error("Não foi possível determinar o horário inicial")
+    }
+    startTime = derived.startTime
+  }
+
+  const recalculatedHours = calculateOvertimeHours(date, startTime, nowTime)
+
+  const updated = await updateOvertimeRecord(recordId, {
+    endTime: nowTime,
+    hours: recalculatedHours,
+    updatedAt: new Date().toISOString(),
+  })
+
+  return updated
+}
 // Funções para cálculos e estatísticas
 export async function getHolidayStats(holidayId: number): Promise<{ used: number; max: number }> {
   const holiday = await getHolidayById(holidayId)

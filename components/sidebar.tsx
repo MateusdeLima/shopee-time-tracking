@@ -20,6 +20,7 @@ interface SidebarProps {
   userId?: string
   onProfileUpdate?: () => void
   userUsername?: string
+  userShift?: string
   customTabs?: Array<{ id: string; label: string; icon?: any }>
 }
 
@@ -34,6 +35,7 @@ export function Sidebar({
   userId,
   onProfileUpdate,
   userUsername,
+  userShift,
   customTabs,
 }: SidebarProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -56,6 +58,7 @@ export function Sidebar({
   const adminTabs = [
     { id: "holidays", label: "Feriados", icon: CalendarDays },
     { id: "absences", label: "Ausências", icon: Calendar },
+    { id: "schedules", label: "Horários", icon: Clock },
     { id: "employees", label: "Funcionários", icon: Users },
     { id: "employee-portal", label: "Portal Funcionário", icon: User },
   ]
@@ -205,6 +208,7 @@ export function Sidebar({
                 showHeader={false}
                 onPhotoClick={handlePhotoClick}
                 userUsername={userUsername}
+                userShift={userShift}
               />
             </div>
           </>
@@ -283,6 +287,7 @@ export function Sidebar({
         showHeader={true}
         onPhotoClick={handlePhotoClick}
         userUsername={userUsername}
+        userShift={userShift}
       />
       
       {/* Dialog de visualização e edição da foto */}
@@ -361,6 +366,7 @@ function SidebarContent({
   showHeader,
   onPhotoClick,
   userUsername,
+  userShift,
 }: {
   tabs: Array<{ id: string; label: string; icon: any }>
   activeTab: string
@@ -373,6 +379,7 @@ function SidebarContent({
   showHeader: boolean
   onPhotoClick?: () => void
   userUsername?: string
+  userShift?: string
 }) {
   return (
     <>
@@ -419,6 +426,11 @@ function SidebarContent({
               {userUsername && (
                 <p className="text-[10px] mt-1 inline-flex items-center px-2 py-0.5 rounded-full bg-orange-100 text-orange-700 border border-orange-200">
                   user: <span className="ml-1 font-semibold">{userUsername}</span>
+                </p>
+              )}
+              {userRole === "employee" && userShift && (
+                <p className="text-[10px] mt-1 inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 border border-blue-200">
+                  expediente: <span className="ml-1 font-semibold">{userShift.replace('-', '–')}</span>
                 </p>
               )}
               <p className="text-xs text-gray-400">

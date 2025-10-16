@@ -210,6 +210,7 @@ export function EmployeeManagement() {
                       <TableHead className="min-w-[220px]">Email</TableHead>
                       <TableHead className="min-w-[140px]">CPF</TableHead>
                       <TableHead className="min-w-[140px]">Data de Nascimento</TableHead>
+                      <TableHead className="min-w-[120px]">Expediente</TableHead>
                       <TableHead className="min-w-[120px]">Data de Cadastro</TableHead>
                       <TableHead className="min-w-[120px]">Foto de Perfil</TableHead>
                       <TableHead className="text-right min-w-[100px]">Ações</TableHead>
@@ -227,6 +228,7 @@ export function EmployeeManagement() {
                         <TableCell>
                           {employee.birthDate ? formatDate(employee.birthDate) : "-"}
                         </TableCell>
+                        <TableCell>{employee.shift ? employee.shift.replace('-', '–') : '-'}</TableCell>
                         <TableCell>{formatDate(employee.createdAt)}</TableCell>
                         <TableCell>
                           {employee.profilePictureUrl ? (
@@ -373,6 +375,11 @@ export function EmployeeManagement() {
                           <Badge variant="secondary" className="text-xs">
                             <Calendar className="h-3 w-3 mr-1" />
                             Nasc: {formatDate(employee.birthDate)}
+                          </Badge>
+                        )}
+                        {employee.shift && (
+                          <Badge variant="outline" className="text-xs">
+                            Expediente: {employee.shift.replace('-', '–')}
                           </Badge>
                         )}
                         <Badge variant="secondary" className="text-xs">

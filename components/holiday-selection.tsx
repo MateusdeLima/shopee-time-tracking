@@ -239,7 +239,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
             const today = new Date().toISOString().slice(0,10)
             const hasTodayRecord = userRecords.some((r) => {
               const created = (r.createdAt || r.created_at || r.date || '').slice(0,10)
-              return created === today
+              return created === today && r.holidayId === holiday.id
             })
             // Calculate used hours for this holiday (apenas aprovados)
             const holidayRecords = userRecords.filter((record) => record.holidayId === holiday.id)

@@ -167,6 +167,7 @@ export default function EmployeeDashboard() {
         profilePictureUrl={user?.profilePictureUrl}
         userId={user?.id}
         userUsername={user?.username}
+        userShift={user?.shift}
         onProfileUpdate={handleProfileUpdate}
         customTabs={[
           ...(portalTabs.holidays ? [{ id: 'holidays', label: 'Feriados' }] as any : []),

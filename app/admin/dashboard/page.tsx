@@ -143,6 +143,24 @@ export default function AdminDashboard() {
             </Card>
           </div>
         )
+      case "schedules":
+        return (
+          <Card className="mx-2 sm:mx-0">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl">Horários</CardTitle>
+              <CardDescription className="text-sm sm:text-base">Acompanhe e aprove solicitações de ajuste de saída</CardDescription>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
+              <div className="flex items-center justify-center h-[60vh] border rounded-md bg-gray-50">
+                <div className="text-center">
+                  <div className="text-2xl mb-2">🕒</div>
+                  <p className="text-gray-600">Nenhuma solicitação de horário no momento.</p>
+                  <p className="text-xs text-gray-500 mt-1">Quando um funcionário inserir a saída manualmente, ela aparecerá aqui para revisão.</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )
       case "absences":
         return (
           <Card className="mx-2 sm:mx-0">

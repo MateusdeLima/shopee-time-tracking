@@ -127,27 +127,31 @@ export function EmployeeReports() {
             hoursCompleted: 0,
             hoursRemaining: holiday.maxHours,
             lastUpdated: null,
+            hasAnyRecord: false,
           })
         })
       })
 
       // Atualizar com registros reais
       records.forEach((record) => {
-        // Somar apenas registros aprovados (ou antigos sem status)
-        if (record.status && record.status !== 'approved') {
-          return
-        }
         const key = `${record.userId}-${record.holidayId}`
-        if (summaryMap.has(key)) {
-          const entry = summaryMap.get(key)
+        if (!summaryMap.has(key)) return
+
+        const entry = summaryMap.get(key)
+
+        // Marcar que há pelo menos um registro (independente de horas/status)
+        entry.hasAnyRecord = true
+
+        // Somar apenas registros aprovados (ou antigos sem status)
+        if (!record.status || record.status === 'approved') {
           entry.hoursCompleted += record.hours
           entry.hoursRemaining = entry.maxHours - entry.hoursCompleted
+        }
 
-          // Rastrear a atualização mais recente
-          const recordDate = new Date(record.updatedAt || record.createdAt)
-          if (!entry.lastUpdated || recordDate > new Date(entry.lastUpdated)) {
-            entry.lastUpdated = record.updatedAt || record.createdAt
-          }
+        // Rastrear a atualização mais recente com base em qualquer registro
+        const recordDate = new Date(record.updatedAt || record.createdAt)
+        if (!entry.lastUpdated || recordDate > new Date(entry.lastUpdated)) {
+          entry.lastUpdated = record.updatedAt || record.createdAt
         }
       })
 
@@ -435,7 +439,7 @@ export function EmployeeReports() {
                           size="icon"
                           className="h-8 w-8"
                           onClick={() => handleViewDetails(item)}
-                          disabled={item.hoursCompleted === 0}
+                          disabled={!item.hasAnyRecord}
                         >
                           <Eye className="h-4 w-4" />
                           <span className="sr-only">Ver detalhes</span>
