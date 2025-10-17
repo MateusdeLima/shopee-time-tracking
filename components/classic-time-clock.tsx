@@ -263,7 +263,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
       if (onUpdate) onUpdate()
 
     } catch (error: any) {
-      setError(error.message || "Falha ao registrar horas extras. Tente novamente.")
+      setError(error.message || "Falha ao registrar horas extras. Tente novamente!")
       toast({
         variant: "destructive",
         title: "Erro ao registrar",
