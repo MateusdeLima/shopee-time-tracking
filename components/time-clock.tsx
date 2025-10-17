@@ -927,17 +927,26 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
               </div>
             ) : (
               <div className="rounded-md border p-4 bg-green-50">
-                <div className="flex items-center justify-between">
-                  <div>
+                <div className="space-y-3">
+                  <div className="text-center sm:text-left">
                     <div className="text-sm text-green-800 font-medium">Ponto iniciado</div>
                     <div className="text-xs text-green-700">Entrada: {activeClock.startTime}</div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button onClick={openAlarmDialogWithSuggestion} variant="outline" className="border-green-600 text-green-700">
-                      <Bell className="h-4 w-4 mr-1" /> Alarme
+                  <div className="flex flex-col xs:flex-row gap-2">
+                    <Button 
+                      onClick={openAlarmDialogWithSuggestion} 
+                      variant="outline" 
+                      className="border-green-600 text-green-700 w-full xs:flex-1 h-10 text-sm"
+                    >
+                      <Bell className="h-4 w-4 mr-2" />
+                      Alarme
                     </Button>
-                    <Button onClick={() => setIsFinishDialogOpen(true)} className="bg-green-600 hover:bg-green-700">
-                      <LogOut className="h-4 w-4 mr-2" /> Finalizar dia
+                    <Button 
+                      onClick={() => setIsFinishDialogOpen(true)} 
+                      className="bg-green-600 hover:bg-green-700 w-full xs:flex-1 h-10 text-sm"
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Finalizar
                     </Button>
                   </div>
                 </div>

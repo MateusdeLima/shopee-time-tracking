@@ -195,26 +195,33 @@ export function TimeRequestsManagement({ onUpdate }: TimeRequestsManagementProps
   return (
     <>
       <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Clock className="h-5 w-5" />
-                Solicitações de Ponto
+        <CardHeader className="pb-4">
+          <div className="flex flex-col space-y-3 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+            <div className="flex-1 min-w-0">
+              <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+                <Clock className="h-5 w-5 flex-shrink-0" />
+                <span className="truncate">Solicitações de Ponto</span>
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="mt-1 text-sm">
                 Gerencie solicitações de adição de ponto perdido dos funcionários
               </CardDescription>
             </div>
-            <Button
-              onClick={handleManualFix}
-              disabled={isFixing}
-              variant="outline"
-              size="sm"
-              className="bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300"
-            >
-              {isFixing ? "Corrigindo..." : "🔧 Corrigir Aprovadas"}
-            </Button>
+            <div className="flex-shrink-0 w-full sm:w-auto">
+              <Button
+                onClick={handleManualFix}
+                disabled={isFixing}
+                variant="outline"
+                size="sm"
+                className="w-full sm:w-auto bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300 text-xs sm:text-sm px-3 py-2"
+              >
+                <span className="flex items-center justify-center gap-1">
+                  <span className="hidden xs:inline">🔧</span>
+                  <span className="truncate">
+                    {isFixing ? "Corrigindo..." : "Corrigir Aprovadas"}
+                  </span>
+                </span>
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -227,27 +234,29 @@ export function TimeRequestsManagement({ onUpdate }: TimeRequestsManagementProps
               {requests.map((request) => (
                 <div
                   key={request.id}
-                  className="border rounded-lg p-4 space-y-3"
+                  className="border rounded-lg p-3 sm:p-4 space-y-3"
                 >
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
+                  <div className="flex flex-col space-y-2 sm:flex-row sm:items-start sm:justify-between sm:space-y-0">
+                    <div className="space-y-1 flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">
+                        <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <span className="font-medium truncate">
                           {(request as any).users?.first_name || 'Nome'} {(request as any).users?.last_name || 'Sobrenome'}
                         </span>
-                        <span className="text-sm text-muted-foreground">
-                          ({(request as any).users?.email || 'email@exemplo.com'})
-                        </span>
+                      </div>
+                      <div className="text-xs sm:text-sm text-muted-foreground truncate pl-6">
+                        {(request as any).users?.email || 'email@exemplo.com'}
                       </div>
                       <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">
+                        <Calendar className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <span className="text-sm truncate">
                           {(request as any).holidays?.name || 'Feriado'} - {getRequestTypeLabel(request.requestType)}
                         </span>
                       </div>
                     </div>
-                    {getStatusBadge(request.status)}
+                    <div className="flex-shrink-0">
+                      {getStatusBadge(request.status)}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -280,11 +289,11 @@ export function TimeRequestsManagement({ onUpdate }: TimeRequestsManagementProps
                   </div>
 
                   {request.status === "pending" && (
-                    <div className="flex gap-2 pt-2">
+                    <div className="flex flex-col xs:flex-row gap-2 pt-2">
                       <Button
                         size="sm"
                         onClick={() => handleApprovalAction(request, "approve")}
-                        className="bg-green-600 hover:bg-green-700"
+                        className="bg-green-600 hover:bg-green-700 w-full xs:w-auto xs:flex-1"
                       >
                         <CheckCircle className="h-4 w-4 mr-1" />
                         Aprovar
@@ -293,7 +302,7 @@ export function TimeRequestsManagement({ onUpdate }: TimeRequestsManagementProps
                         size="sm"
                         variant="outline"
                         onClick={() => handleApprovalAction(request, "reject")}
-                        className="text-red-600 border-red-600 hover:bg-red-50"
+                        className="text-red-600 border-red-600 hover:bg-red-50 w-full xs:w-auto xs:flex-1"
                       >
                         <XCircle className="h-4 w-4 mr-1" />
                         Rejeitar
