@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { HolidaySelection } from "@/components/holiday-selection"
+import { SimpleHolidaySelection } from "@/components/simple-holiday-selection"
 import { EmployeeHistory } from "@/components/employee-history"
 import { AbsenceManagement } from "@/components/absence-management"
 import { Sidebar } from "@/components/sidebar"
@@ -128,7 +128,7 @@ export default function EmployeeDashboard() {
               </div>
               <div className="overflow-x-auto">
                 {activeHolidayTab === "register" ? (
-                  <HolidaySelection user={user} />
+                  <SimpleHolidaySelection user={user} />
                 ) : (
                   <EmployeeHistory user={user} />
                 )}

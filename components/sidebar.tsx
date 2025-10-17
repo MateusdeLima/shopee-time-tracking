@@ -58,7 +58,6 @@ export function Sidebar({
   const adminTabs = [
     { id: "holidays", label: "Feriados", icon: CalendarDays },
     { id: "absences", label: "Ausências", icon: Calendar },
-    { id: "schedules", label: "Horários", icon: Clock },
     { id: "employees", label: "Funcionários", icon: Users },
     { id: "employee-portal", label: "Portal Funcionário", icon: User },
   ]

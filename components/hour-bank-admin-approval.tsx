@@ -29,7 +29,8 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
   const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
   const [approvalAction, setApprovalAction] = useState<"approve" | "reject" | null>(null)
   const [processing, setProcessing] = useState(false)
-  const [isImageFullscreen, setIsImageFullscreen] = useState(false);
+  const [isImageFullscreen, setIsImageFullscreen] = useState(false)
+  const [historyFilter, setHistoryFilter] = useState<"all" | "approved" | "rejected">("all")
 
   useEffect(() => {
     loadData()
@@ -254,14 +255,17 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
                       {formatHours(record.hours)} compensadas
                     </Badge>
                     
-                    {record.hourBankProof && (
+                    {record.proofImage && (
                       <div className="mt-2">
                         <p className="text-xs text-gray-500 mb-1">Comprovante anexado:</p>
                         <img 
-                          src={record.hourBankProof} 
+                          src={record.proofImage} 
                           alt="Comprovante de banco de horas"
                           className="max-w-full h-32 object-contain border rounded cursor-pointer hover:opacity-80"
-                          onClick={() => setIsViewDialogOpen(true) || setSelectedRecord(record)}
+                          onClick={() => {
+                            setSelectedRecord(record)
+                            setIsViewDialogOpen(true)
+                          }}
                         />
                       </div>
                     )}
@@ -317,15 +321,52 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
       {historyRecords.length > 0 && (
         <Card className="mt-2">
           <CardHeader>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-5 w-5 text-green-600" />
-              <CardTitle className="text-lg">Histórico de Solicitações (Aprovadas/Recusadas)</CardTitle>
-              <Badge variant="secondary">{historyRecords.length} recente(s)</Badge>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <CardTitle className="text-lg">Histórico de Solicitações</CardTitle>
+                <Badge variant="secondary">{historyRecords.filter(r => 
+                  historyFilter === "all" || 
+                  (historyFilter === "approved" && r.status === "approved") ||
+                  (historyFilter === "rejected" && r.status === "rejected_admin")
+                ).length} registro(s)</Badge>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant={historyFilter === "all" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setHistoryFilter("all")}
+                >
+                  Todos
+                </Button>
+                <Button
+                  variant={historyFilter === "approved" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setHistoryFilter("approved")}
+                  className="text-green-600 hover:text-green-700"
+                >
+                  Aprovados
+                </Button>
+                <Button
+                  variant={historyFilter === "rejected" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setHistoryFilter("rejected")}
+                  className="text-red-600 hover:text-red-700"
+                >
+                  Recusados
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="p-6">
             <div className="space-y-3">
-              {historyRecords.map((record) => (
+              {historyRecords
+                .filter(record => 
+                  historyFilter === "all" || 
+                  (historyFilter === "approved" && record.status === "approved") ||
+                  (historyFilter === "rejected" && record.status === "rejected_admin")
+                )
+                .map((record) => (
                 <div key={record.id} className={`flex items-center justify-between p-4 rounded-lg border ${record.status === 'approved' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
                   <div className="flex items-center gap-4">
                     <div className="flex items-center gap-2">
@@ -370,9 +411,9 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
               <span className={`px-4 py-2 rounded-full font-bold text-base ${selectedRecord.status === 'approved' ? 'bg-green-100 text-green-700' : selectedRecord.status === 'pending_admin' ? 'bg-purple-100 text-purple-700' : 'bg-red-100 text-red-700'}`}>
                 {selectedRecord.status === 'approved' ? 'Aprovado' : selectedRecord.status === 'pending_admin' ? 'Aguardando aprovação' : 'Rejeitado'}
               </span>
-              {selectedRecord.hourBankProof ? (
+              {selectedRecord.proofImage ? (
                 <img
-                  src={selectedRecord.hourBankProof}
+                  src={selectedRecord.proofImage}
                   alt="Comprovante do banco de horas"
                   className="rounded shadow-lg cursor-zoom-in max-w-xs max-h-80 border"
                   onClick={() => setIsImageFullscreen(true)}
@@ -392,7 +433,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
       <Dialog open={isImageFullscreen} onOpenChange={setIsImageFullscreen}>
         <DialogContent className="flex justify-center items-center bg-black bg-opacity-90 max-w-none w-auto h-auto p-0" style={{maxWidth: "90vw", maxHeight: "90vh"}}>
           <img
-            src={selectedRecord?.hourBankProof}
+            src={selectedRecord?.proofImage}
             alt="Comprovante banco de horas fullscreen"
             className="rounded-lg shadow-lg max-w-[90vw] max-h-[90vh] object-contain border-4 border-white"
           />

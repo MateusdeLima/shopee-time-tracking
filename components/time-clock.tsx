@@ -981,101 +981,45 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
             </div>
           )}
           
-          {/* Verificação de tolerância de saída */}
-          {(() => {
-            const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            const exitValidation = isExitTimeValid(currentTime, user.shift)
-            
-            if (!exitValidation.valid) {
-              return (
-                <div className="rounded-md border-2 border-red-200 bg-red-50 p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <AlertCircle className="h-4 w-4 text-red-600" />
-                    <div className="font-medium text-red-800">Horário fora da tolerância</div>
-                  </div>
-                  <div className="text-red-700 text-xs mb-3">
-                    Você só pode bater o ponto de saída entre <strong>{exitValidation.minTime}</strong> e <strong>{exitValidation.maxTime}</strong>.
-                  </div>
-                  <div className="text-red-600 text-xs">
-                    Horário atual: <strong>{currentTime}</strong> - Aguarde até {exitValidation.minTime} para registrar a saída.
-                  </div>
-                </div>
-              )
-            }
-            
-            return null
-          })()}
 
-          {/* Sugestões de horários válidos (sempre visível para referência) */}
-          {activeClock && suggestedEndOptions.length > 0 && (() => {
-            const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            const exitValidation = isExitTimeValid(currentTime, user.shift)
-            
-            return (
-              <div className="space-y-2">
-                <div className="text-[12px] text-gray-500">Sugestões conforme seu turno</div>
-                <div className="grid grid-cols-2 gap-2">
-                  {suggestedEndOptions.map(opt => (
-                    <button
-                      key={opt.endTime}
-                      type="button"
-                      onClick={exitValidation.valid ? () => setSelectedSuggestedEnd(opt.endTime) : undefined}
-                      disabled={!exitValidation.valid}
-                      className={`border rounded px-3 py-2 text-sm text-left transition-all ${
-                        !exitValidation.valid 
-                          ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-60' 
-                          : selectedSuggestedEnd === opt.endTime 
-                            ? 'bg-blue-600 text-white border-blue-600' 
-                            : 'bg-white hover:bg-gray-50 cursor-pointer'
-                      }`}
-                    >
-                      <div className="font-medium">{opt.endTime}</div>
-                      <div className="text-[11px] opacity-80">Total: {opt.totalHours === 0.5 ? '30min' : `${opt.totalHours}h`}</div>
-                    </button>
-                  ))}
-                </div>
-                <div className="text-[11px] text-gray-500">
-                  {exitValidation.valid 
-                    ? "A saída deve respeitar o mínimo de 30min e o máximo de 2h por dia, com 10min de tolerância."
-                    : `Opções disponíveis entre ${exitValidation.minTime} e ${exitValidation.maxTime}. Use como referência para planejar sua saída.`
-                  }
-                </div>
+          {/* Opções de horários de saída */}
+          {activeClock && suggestedEndOptions.length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[12px] text-gray-500">Escolha o horário de saída</div>
+              <div className="grid grid-cols-2 gap-2">
+                {suggestedEndOptions.map(opt => (
+                  <button
+                    key={opt.endTime}
+                    type="button"
+                    onClick={() => setSelectedSuggestedEnd(opt.endTime)}
+                    className={`border rounded px-3 py-2 text-sm text-left transition-all ${
+                      selectedSuggestedEnd === opt.endTime 
+                        ? 'bg-blue-600 text-white border-blue-600' 
+                        : 'bg-white hover:bg-gray-50 cursor-pointer'
+                    }`}
+                  >
+                    <div className="font-medium">{opt.endTime}</div>
+                    <div className="text-[11px] opacity-80">Total: {opt.totalHours === 0.5 ? '30min' : `${opt.totalHours}h`}</div>
+                  </button>
+                ))}
               </div>
-            )
-          })()}
+              <div className="text-[11px] text-gray-500">
+                Selecione o horário desejado para finalizar seu expediente extra.
+              </div>
+            </div>
+          )}
           
           <div className="text-xs text-gray-500">Ao confirmar, registraremos a saída agora e calcularemos suas horas extras automaticamente conforme seu turno.</div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setIsFinishDialogOpen(false)}>Voltar</Button>
-          {(() => {
-            const currentTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            const exitValidation = isExitTimeValid(currentTime, user.shift)
-            
-            if (!exitValidation.valid) {
-              return (
-                <Button 
-                  onClick={() => {
-                    setIsFinishDialogOpen(false)
-                    setIsMissingExitDialogOpen(true)
-                  }}
-                  className="bg-orange-600 hover:bg-orange-700"
-                >
-                  Solicitar saída fora do horário
-                </Button>
-              )
-            }
-            
-            return (
-              <Button 
-                onClick={handleConfirmFinish} 
-                className="bg-blue-600 hover:bg-blue-700" 
-                disabled={!activeClock || loading}
-              >
-                Confirmar registro
-              </Button>
-            )
-          })()}
+          <Button 
+            onClick={handleConfirmFinish} 
+            className="bg-blue-600 hover:bg-blue-700" 
+            disabled={!activeClock || loading || !selectedSuggestedEnd}
+          >
+            {loading ? 'Registrando...' : 'Confirmar registro'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

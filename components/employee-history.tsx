@@ -439,6 +439,13 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
 
   const approvedRecords = records.filter(r => r.status === 'approved')
   const pendingRecords = records.filter(r => r.status === 'pending_admin')
+  const rejectedBankHours = records.filter(r => 
+    r.status === 'rejected_admin' && 
+    (r.optionId === 'manual_bank_hours' || r.optionId === 'ai_bank_hours')
+  )
+  
+  // Combinar registros aprovados com banco de horas rejeitados para exibição
+  const displayRecords = [...approvedRecords, ...rejectedBankHours]
 
   if (records.length === 0) {
     return (
@@ -527,7 +534,7 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
           ))}
         </div>
       )}
-      {approvedRecords.map((record) => {
+      {displayRecords.map((record) => {
         const holiday = holidays.find((h) => h.id === record.holidayId)
         const hoursInfo = holidayHoursMap[record.holidayId]
         const availableOptions = getAvailableOptions(record)
@@ -597,6 +604,18 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
                       {isAIGenerated ? <Bot className="h-3 w-3" /> : <ClipboardCheck className="h-3 w-3" />}
                       {isAIGenerated ? "Compensação Automática" : `Task: ${record.task}`}
                     </span>
+                  )}
+                  
+                  {/* Mensagem para banco de horas rejeitado */}
+                  {(record.optionId === "manual_bank_hours" || record.optionId === "ai_bank_hours") && isRejectedAdmin && (
+                    <Alert className="mt-3 border-red-200 bg-red-50">
+                      <AlertCircle className="h-4 w-4 text-red-600" />
+                      <AlertDescription className="text-red-800">
+                        <strong>Comprovante de banco de horas rejeitado.</strong>
+                        <br />
+                        Se tiver alguma dúvida, entre em contato com a pessoa responsável pelas horas.
+                      </AlertDescription>
+                    </Alert>
                   )}
                 </div>
               </div>

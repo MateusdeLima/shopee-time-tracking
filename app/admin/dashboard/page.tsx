@@ -8,7 +8,6 @@ import { EmployeeReports } from "@/components/employee-reports"
 import { EmployeeManagement } from "@/components/employee-management"
 import { AdminSummary } from "@/components/admin-summary"
 import { AdminAbsences } from "@/components/admin-absences"
-import { TimeRequestsManagement } from "@/components/time-requests-management"
 import { Sidebar } from "@/components/sidebar"
 import { getCurrentUser, logout, refreshCurrentUser } from "@/lib/auth"
 import { initializeDb } from "@/lib/db"
@@ -146,13 +145,6 @@ export default function AdminDashboard() {
                 </div>
               </CardContent>
             </Card>
-          </div>
-        )
-      case "schedules":
-        console.log("🎯 DASHBOARD: Renderizando aba schedules (horarios)")
-        return (
-          <div className="space-y-4 sm:space-y-6">
-            <TimeRequestsManagement />
           </div>
         )
       case "absences":

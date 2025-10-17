@@ -115,6 +115,11 @@ export default function DashboardPage() {
   // 1. Criar estado/funcionalidade para modal:
   const [isHourBankExportModalOpen, setIsHourBankExportModalOpen] = useState(false)
   const [selectedExportHolidays, setSelectedExportHolidays] = useState<string[]>([])
+  
+  // Estados para filtros da aba Horas Extras
+  const [employeeFilter, setEmployeeFilter] = useState("")
+  const [holidayFilter, setHolidayFilter] = useState("")
+  const [statusFilter, setStatusFilter] = useState("all")
 
   useEffect(() => {
     // Verificar autenticação
@@ -505,10 +510,68 @@ export default function DashboardPage() {
               <CardHeader>
                 <CardTitle>Registros de Horas Extras</CardTitle>
                 <CardDescription>
-                  {filteredOvertime.length} registro(s) encontrado(s)
+                  {filteredOvertime
+                    .filter((record) => record.status !== 'rejected_admin')
+                    .filter((record) => {
+                      const user = record.users || data.users.find((u) => u.id === record.user_id)
+                      const userName = user ? `${user.first_name} ${user.last_name}`.toLowerCase() : ""
+                      const holidayName = (record.holiday_name || "").toLowerCase()
+                      
+                      return (
+                        (employeeFilter === "" || userName.includes(employeeFilter.toLowerCase())) &&
+                        (holidayFilter === "" || holidayName.includes(holidayFilter.toLowerCase())) &&
+                        (statusFilter === "all" || record.status === statusFilter)
+                      )
+                    }).length} registro(s) encontrado(s)
                 </CardDescription>
               </CardHeader>
               <CardContent>
+                {/* Filtros */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Funcionário</label>
+                    <Input
+                      placeholder="Filtrar por funcionário..."
+                      value={employeeFilter}
+                      onChange={(e) => setEmployeeFilter(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Feriado</label>
+                    <Input
+                      placeholder="Filtrar por feriado..."
+                      value={holidayFilter}
+                      onChange={(e) => setHolidayFilter(e.target.value)}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium mb-2 block">Status</label>
+                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos os status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos</SelectItem>
+                        <SelectItem value="approved">Aprovado</SelectItem>
+                        <SelectItem value="pending_admin">Aguardando</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEmployeeFilter("")
+                        setHolidayFilter("")
+                        setStatusFilter("all")
+                      }}
+                      className="w-full"
+                    >
+                      Limpar Filtros
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
@@ -525,8 +588,21 @@ export default function DashboardPage() {
                     <TableBody>
                       {filteredOvertime
                         .filter((record) => record.status !== 'rejected_admin')
+                        .filter((record) => {
+                          const user = record.users || data.users.find((u) => u.id === record.user_id)
+                          const userName = user ? `${user.first_name} ${user.last_name}`.toLowerCase() : ""
+                          const holidayName = (record.holiday_name || "").toLowerCase()
+                          
+                          return (
+                            (employeeFilter === "" || userName.includes(employeeFilter.toLowerCase())) &&
+                            (holidayFilter === "" || holidayName.includes(holidayFilter.toLowerCase())) &&
+                            (statusFilter === "all" || record.status === statusFilter)
+                          )
+                        })
                         .map((record) => {
                           const user = record.users || data.users.find((u) => u.id === record.user_id)
+                          const isBankHours = record.option_id === "manual_bank_hours" || record.option_id === "ai_bank_hours"
+                          
                           return (
                             <TableRow key={record.id}>
                               <TableCell className="font-medium">
@@ -546,15 +622,25 @@ export default function DashboardPage() {
                               <TableCell className="text-sm">
                                 {record.start_time && record.end_time
                                   ? `${record.start_time} - ${record.end_time}`
-                                  : "Não informado"}
+                                  : isBankHours ? "Banco de Horas" : "Não informado"}
                               </TableCell>
                               <TableCell>
                                 {record.status === 'approved' ? (
-                                  <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-700">Aprovado</span>
+                                  <span className={`px-2 py-1 rounded text-xs ${
+                                    isBankHours 
+                                      ? 'bg-blue-100 text-blue-700' 
+                                      : 'bg-green-100 text-green-700'
+                                  }`}>
+                                    {isBankHours ? 'Aprovado por BH' : 'Aprovado'}
+                                  </span>
                                 ) : record.status === 'pending_admin' ? (
-                                  <span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">Aguardando aprovação</span>
+                                  <span className="px-2 py-1 rounded text-xs bg-gray-100 text-gray-700">
+                                    {isBankHours ? 'BH Aguardando' : 'Aguardando aprovação'}
+                                  </span>
                                 ) : (
-                                  <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-700">Rejeitado</span>
+                                  <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-700">
+                                    {isBankHours ? 'BH Rejeitado' : 'Rejeitado'}
+                                  </span>
                                 )}
                               </TableCell>
                               <TableCell className="text-sm">
@@ -695,9 +781,18 @@ export default function DashboardPage() {
 
           {/* Aba de Banco de Horas */}
           <TabsContent value="hour-bank">
-            <HourBankAdminApproval onUpdate={() => {
+            <HourBankAdminApproval onUpdate={async () => {
               // Callback para atualizar dados quando houver aprovação/rejeição
-              console.log("Aprovação processada - atualizando dados...")
+              console.log("Aprovação processada - recarregando dados do dashboard...")
+              await loadData() // Recarregar todos os dados do dashboard
+              
+              // Feedback visual de que os dados foram atualizados
+              const toast = (await import("@/components/ui/use-toast")).toast
+              toast({
+                title: "Dados atualizados",
+                description: "A aba Horas Extras foi atualizada automaticamente.",
+                duration: 2000
+              })
             }} />
           </TabsContent>
         </Tabs>
