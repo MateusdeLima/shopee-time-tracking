@@ -257,7 +257,6 @@ export function Sidebar({
                   ref={fileInputRef}
                   className="hidden"
                   accept="image/jpeg,image/png,image/gif,image/webp"
-                  capture="environment"
                   onChange={handleFileChange}
                 />
                 <p className="text-xs text-gray-500 text-center">
@@ -338,7 +337,6 @@ export function Sidebar({
                 ref={fileInputRef}
                 className="hidden"
                 accept="image/jpeg,image/png,image/gif,image/webp"
-                capture="environment"
                 onChange={handleFileChange}
               />
               
@@ -368,7 +366,7 @@ function SidebarContent({
   userUsername,
   userShift,
 }: {
-  tabs: Array<{ id: string; label: string; icon: any }>
+  tabs: Array<{ id: string; label: string; icon?: any }>
   activeTab: string
   onTabChange: (tab: string) => void
   onLogout: () => void

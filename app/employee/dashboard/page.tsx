@@ -245,7 +245,6 @@ export default function EmployeeDashboard() {
               id="profile-picture-upload-dialog"
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={async (e) => {
                 const file = e.target.files?.[0];
