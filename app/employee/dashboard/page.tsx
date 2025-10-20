@@ -1,19 +1,21 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, lazy, Suspense } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { SimpleHolidaySelection } from "@/components/simple-holiday-selection"
-import { EmployeeHistory } from "@/components/employee-history"
-import { AbsenceManagement } from "@/components/absence-management"
 import { Sidebar } from "@/components/sidebar"
 import { User, Edit2, X } from "lucide-react"
 import { getCurrentUser, logout, setCurrentUser, refreshCurrentUser } from "@/lib/auth"
 import { initializeDb, getEmployeePortalTabs } from "@/lib/db"
 import Image from "next/image"
 import { getProfilePictureUrl } from "@/lib/supabase"
+
+// Lazy loading dos componentes pesados
+const SimpleHolidaySelection = lazy(() => import("@/components/simple-holiday-selection").then(module => ({ default: module.SimpleHolidaySelection })))
+const EmployeeHistory = lazy(() => import("@/components/employee-history").then(module => ({ default: module.EmployeeHistory })))
+const AbsenceManagement = lazy(() => import("@/components/absence-management").then(module => ({ default: module.AbsenceManagement })))
 
 export const dynamic = "force-dynamic"
 
@@ -127,11 +129,13 @@ export default function EmployeeDashboard() {
                 </div>
               </div>
               <div className="overflow-x-auto">
-                {activeHolidayTab === "register" ? (
-                  <SimpleHolidaySelection user={user} />
-                ) : (
-                  <EmployeeHistory user={user} />
-                )}
+                <Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#EE4D2D]"></div></div>}>
+                  {activeHolidayTab === "register" ? (
+                    <SimpleHolidaySelection user={user} />
+                  ) : (
+                    <EmployeeHistory user={user} />
+                  )}
+                </Suspense>
               </div>
             </CardContent>
           </Card>
@@ -145,7 +149,9 @@ export default function EmployeeDashboard() {
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
               <div className="overflow-x-auto">
-                <AbsenceManagement user={user} />
+                <Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#EE4D2D]"></div></div>}>
+                  <AbsenceManagement user={user} />
+                </Suspense>
               </div>
             </CardContent>
           </Card>
