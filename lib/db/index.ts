@@ -133,8 +133,14 @@ function convertToCamelCase<T>(data: any): T {
     const newObj: any = {}
 
     Object.keys(data).forEach((key) => {
-      // Converter snake_case para camelCase
-      const newKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+      // Mapeamento especial para campos específicos
+      let newKey: string
+      if (key === 'hour_bank_proof') {
+        newKey = 'proofImage'
+      } else {
+        // Converter snake_case para camelCase
+        newKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+      }
       newObj[newKey] = convertToCamelCase(data[key])
     })
 
@@ -156,8 +162,14 @@ function convertToSnakeCase(data: any): any {
     const newObj: any = {}
 
     Object.keys(data).forEach((key) => {
-      // Converter camelCase para snake_case
-      const newKey = key.replace(/([A-Z])/g, "_$1").toLowerCase()
+      // Mapeamento especial para campos específicos
+      let newKey: string
+      if (key === 'proofImage') {
+        newKey = 'hour_bank_proof'
+      } else {
+        // Converter camelCase para snake_case
+        newKey = key.replace(/([A-Z])/g, "_$1").toLowerCase()
+      }
       newObj[newKey] = convertToSnakeCase(data[key])
     })
 
