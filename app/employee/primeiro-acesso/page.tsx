@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { uploadProfilePicture } from "@/lib/supabase"
 import { updateUserProfilePicture } from "@/lib/db"
@@ -11,10 +11,31 @@ export default function PrimeiroAcesso() {
   const [file, setFile] = useState<File | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
+  const [user, setUser] = useState<any>(null)
+  const [isChecking, setIsChecking] = useState(true)
 
-  const user = getCurrentUser()
+  useEffect(() => {
+    const currentUser = getCurrentUser()
+    if (!currentUser) {
+      router.push("/")
+      return
+    }
+    setUser(currentUser)
+    setIsChecking(false)
+  }, [router])
+
+  if (isChecking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#EE4D2D] mx-auto"></div>
+          <p className="mt-2 text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+
   if (!user) {
-    router.push("/")
     return null
   }
 
@@ -58,7 +79,7 @@ export default function PrimeiroAcesso() {
         <div className="flex flex-col items-center mb-6">
           <div className="relative group mb-4">
             <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-[#EE4D2D] bg-gray-100 flex items-center justify-center">
-              {file ? (
+              {file && typeof window !== "undefined" ? (
                 <img 
                   src={URL.createObjectURL(file)} 
                   alt="Pré-visualização" 

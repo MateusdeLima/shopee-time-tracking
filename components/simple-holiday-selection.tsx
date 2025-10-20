@@ -145,7 +145,7 @@ export function SimpleHolidaySelection({ user }: SimpleHolidaySelectionProps) {
   const hasReachedLimit = holidayRecords.length >= 2
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 p-4 sm:p-0">
       {/* Seleção de Feriado */}
       <Card>
         <CardHeader>
@@ -168,7 +168,7 @@ export function SimpleHolidaySelection({ user }: SimpleHolidaySelectionProps) {
               return (
                 <div
                   key={holiday.id}
-                  className={`p-4 border rounded-lg cursor-pointer transition-all ${
+                  className={`p-3 sm:p-4 border rounded-lg cursor-pointer transition-all ${
                     selectedHoliday?.id === holiday.id
                       ? "border-[#EE4D2D] bg-[#EE4D2D]/5"
                       : "border-gray-200 hover:border-gray-300"

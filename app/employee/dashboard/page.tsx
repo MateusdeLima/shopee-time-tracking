@@ -175,13 +175,13 @@ export default function EmployeeDashboard() {
         ]}
       />
       
-      <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
+      <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-0 p-2 sm:p-4 lg:p-6">
         {renderContent()}
       </main>
 
       {/* Dialog de visualização e edição da foto de perfil */}
       <Dialog open={isProfileDialogOpen} onOpenChange={setIsProfileDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-center">Foto de Perfil</DialogTitle>
           </DialogHeader>

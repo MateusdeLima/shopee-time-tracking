@@ -425,7 +425,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
 
       {/* Dialog de Visualização */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               Status do Registro
@@ -477,7 +477,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
 
       {/* Dialog de Confirmação de Aprovação/Rejeição */}
       <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
-        <DialogContent className="max-w-md w-[95vw] sm:w-full">
+        <DialogContent className="max-w-md w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {approvalAction === "approve" ? (

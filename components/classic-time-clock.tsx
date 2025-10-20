@@ -356,7 +356,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
               </div>
               <Button
                 variant="outline"
-                className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
+                className="w-full border-blue-300 text-blue-700 hover:bg-blue-100 min-h-[44px] text-sm sm:text-sm"
                 onClick={() => setIsHourBankDialogOpen(true)}
               >
                 📸 Anexar Comprovante do Banco de Horas
@@ -367,14 +367,14 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
           {/* Seleção de Horários */}
           <div>
             <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
               
               {/* Coluna Antecipado */}
               <div>
                 <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Antecipado</h4>
                 <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
                   {groupedOptions.antecipado.map((option: any) => (
-                    <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
+                    <div key={option.id} className="flex items-center space-x-2 p-3 sm:p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2 min-h-[44px]">
                       <RadioGroupItem value={option.id} id={option.id} />
                       <Label htmlFor={option.id} className="cursor-pointer text-sm">
                         {option.label}
@@ -389,7 +389,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
                 <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Após o Expediente</h4>
                 <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
                   {groupedOptions.apos.map((option: any) => (
-                    <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
+                    <div key={option.id} className="flex items-center space-x-2 p-3 sm:p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2 min-h-[44px]">
                       <RadioGroupItem value={option.id} id={option.id} />
                       <Label htmlFor={option.id} className="cursor-pointer text-sm">
                         {option.label}
@@ -404,7 +404,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
                 <h4 className="text-md font-bold text-[#EE4D2D] mb-2 text-center">Misto</h4>
                 <RadioGroup value={selectedOption} onValueChange={handleOptionChange}>
                   {groupedOptions.misto.map((option: any) => (
-                    <div key={option.id} className="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2">
+                    <div key={option.id} className="flex items-center space-x-2 p-3 sm:p-2 rounded-lg hover:bg-gray-50 border border-gray-100 mb-2 min-h-[44px]">
                       <RadioGroupItem value={option.id} id={option.id} />
                       <Label htmlFor={option.id} className="cursor-pointer text-sm">
                         {option.label}
@@ -419,7 +419,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
 
           <Button
             onClick={handleRegisterOvertime}
-            className="w-full bg-[#EE4D2D] hover:bg-[#D23F20]"
+            className="w-full bg-[#EE4D2D] hover:bg-[#D23F20] min-h-[48px] text-base sm:text-sm"
             disabled={loading || !selectedOption || !task.trim() || todayRecordsCount >= 2}
           >
             {loading ? (
@@ -436,7 +436,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
 
       {/* Modal de Banco de Horas */}
       <Dialog open={isHourBankDialogOpen} onOpenChange={setIsHourBankDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5" />
@@ -591,7 +591,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
 
       {/* Modal da Imagem Base */}
       <Dialog open={showExampleImage} onOpenChange={setShowExampleImage}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-center text-lg font-semibold">
               📊 Imagem Base - Exemplo do Page Interim

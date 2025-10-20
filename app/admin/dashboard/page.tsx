@@ -23,9 +23,6 @@ export default function AdminDashboard() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [activeMainTab, setActiveMainTab] = useState("holidays")
-  
-  // Debug do estado da aba
-  console.log("🔥 ESTADO ATUAL activeMainTab:", activeMainTab)
   const [activeHolidayTab, setActiveHolidayTab] = useState("manage")
   const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean }>({ holidays: true, absences: true })
   const [isHourBankExportModalOpen, setIsHourBankExportModalOpen] = useState(false)
