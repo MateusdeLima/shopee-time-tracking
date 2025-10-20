@@ -54,6 +54,31 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
       
       console.log("Dados carregados:", { pending: pending.length, processed: processed.length })
       
+      // Debug: verificar se as imagens estão sendo carregadas
+      console.log("=== DEBUG REGISTROS PENDENTES ===")
+      pending.forEach((record, index) => {
+        console.log(`Registro ${index + 1}:`, {
+          id: record.id,
+          userId: record.userId,
+          status: record.status,
+          optionId: record.optionId,
+          proofImage: record.proofImage ? `${record.proofImage.substring(0, 50)}...` : 'SEM IMAGEM',
+          hasImage: !!record.proofImage,
+          imageLength: record.proofImage?.length || 0
+        })
+      })
+      
+      // Debug: verificar registros processados também
+      console.log("=== DEBUG REGISTROS PROCESSADOS ===")
+      processed.forEach((record, index) => {
+        console.log(`Processado ${index + 1}:`, {
+          id: record.id,
+          status: record.status,
+          proofImage: record.proofImage ? 'TEM IMAGEM (não deveria ter)' : 'SEM IMAGEM (correto)',
+          hasImage: !!record.proofImage
+        })
+      })
+      
       // Carregar usuários e feriados para exibição
       const [usersData, holidaysData] = await Promise.all([
         getUsers(),
@@ -411,12 +436,18 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
               <span className={`px-4 py-2 rounded-full font-bold text-base ${selectedRecord.status === 'approved' ? 'bg-green-100 text-green-700' : selectedRecord.status === 'pending_admin' ? 'bg-purple-100 text-purple-700' : 'bg-red-100 text-red-700'}`}>
                 {selectedRecord.status === 'approved' ? 'Aprovado' : selectedRecord.status === 'pending_admin' ? 'Aguardando aprovação' : 'Rejeitado'}
               </span>
+              
+              
               {selectedRecord.proofImage ? (
                 <img
                   src={selectedRecord.proofImage}
                   alt="Comprovante do banco de horas"
                   className="rounded shadow-lg cursor-zoom-in max-w-xs max-h-80 border"
                   onClick={() => setIsImageFullscreen(true)}
+                  onError={(e) => {
+                    console.error('Erro ao carregar imagem:', e)
+                    console.log('URL da imagem:', selectedRecord.proofImage)
+                  }}
                 />
               ) : (
                 <div className="text-gray-500 italic">Nenhum comprovante anexado</div>
@@ -432,6 +463,9 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
       {/* Dialog fullscreen/lightbox para imagem */}
       <Dialog open={isImageFullscreen} onOpenChange={setIsImageFullscreen}>
         <DialogContent className="flex justify-center items-center bg-black bg-opacity-90 max-w-none w-auto h-auto p-0" style={{maxWidth: "90vw", maxHeight: "90vh"}}>
+          <DialogHeader className="sr-only">
+            <DialogTitle>Visualização em tela cheia do comprovante</DialogTitle>
+          </DialogHeader>
           <img
             src={selectedRecord?.proofImage}
             alt="Comprovante banco de horas fullscreen"

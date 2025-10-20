@@ -133,14 +133,14 @@ function convertToCamelCase<T>(data: any): T {
     const newObj: any = {}
 
     Object.keys(data).forEach((key) => {
-      // Mapeamento especial para campos específicos
-      let newKey: string
+      // Converter snake_case para camelCase
+      let newKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+      
+      // Mapeamento específico para campos de banco de horas
       if (key === 'hour_bank_proof') {
         newKey = 'proofImage'
-      } else {
-        // Converter snake_case para camelCase
-        newKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
       }
+      
       newObj[newKey] = convertToCamelCase(data[key])
     })
 
@@ -162,14 +162,8 @@ function convertToSnakeCase(data: any): any {
     const newObj: any = {}
 
     Object.keys(data).forEach((key) => {
-      // Mapeamento especial para campos específicos
-      let newKey: string
-      if (key === 'proofImage') {
-        newKey = 'hour_bank_proof'
-      } else {
-        // Converter camelCase para snake_case
-        newKey = key.replace(/([A-Z])/g, "_$1").toLowerCase()
-      }
+      // Converter camelCase para snake_case
+      const newKey = key.replace(/([A-Z])/g, "_$1").toLowerCase()
       newObj[newKey] = convertToSnakeCase(data[key])
     })
 
@@ -181,25 +175,20 @@ function convertToSnakeCase(data: any): any {
 
 // Inicialização do banco de dados
 export async function initializeDb() {
-  console.log("Inicializando banco de dados...")
+  // Simplificar inicialização - apenas verificar se o Supabase está acessível
   try {
-    // Importar a função de setup
-    const { setupDatabase } = await import("@/lib/supabase")
+    // Teste simples de conectividade
+    const { data, error } = await supabase.from("users").select("id").limit(1)
     
-    // Tentar configurar o banco de dados
-    const success = await setupDatabase()
-
-    if (!success) {
-      console.error("Falha ao inicializar o banco de dados. Tentando novamente...")
-      // Tentar novamente após um pequeno atraso
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      return await setupDatabase()
+    if (error && error.code !== "PGRST116") {
+      console.warn("Aviso ao verificar banco de dados:", error)
     }
-
-    return success
+    
+    return true
   } catch (error) {
-    console.error("Erro ao inicializar banco de dados:", error)
-    return false
+    console.warn("Aviso ao inicializar banco de dados:", error)
+    // Retornar true mesmo com erro para não bloquear a aplicação
+    return true
   }
 }
 // ================= Portal Settings =================
@@ -394,14 +383,22 @@ export async function getActiveHolidays(): Promise<Holiday[]> {
     const { data, error } = await supabase.from("holidays").select("*").eq("active", true)
 
     if (error) {
-      console.error("Erro ao buscar feriados ativos:", error)
+      console.error("Erro ao buscar feriados ativos:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
       return []
     }
 
     // Ensure data is an array before returning
     return Array.isArray(data) ? convertToCamelCase<Holiday[]>(data) : []
   } catch (error) {
-    console.error("Erro em getActiveHolidays:", error)
+    console.error("Erro em getActiveHolidays:", {
+      error: error,
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    })
     return []
   }
 }
@@ -542,14 +539,24 @@ export async function getOvertimeRecordsByUserId(userId: string): Promise<Overti
     const { data, error } = await supabase.from("overtime_records").select("*").eq("user_id", userId)
 
     if (error) {
-      console.error("Erro ao buscar registros de horas extras por usuário:", error)
+      console.error("Erro ao buscar registros de horas extras por usuário:", {
+        userId: userId,
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      })
       return []
     }
 
     // Ensure data is an array before returning
     return Array.isArray(data) ? convertToCamelCase<OvertimeRecord[]>(data) : []
   } catch (error) {
-    console.error("Erro em getOvertimeRecordsByUserId:", error)
+    console.error("Erro em getOvertimeRecordsByUserId:", {
+      userId: userId,
+      error: error,
+      message: error instanceof Error ? error.message : 'Erro desconhecido'
+    })
     return []
   }
 }
