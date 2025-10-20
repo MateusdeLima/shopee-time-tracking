@@ -115,12 +115,13 @@ export function SimpleTimeClock({ user, selectedHoliday, onUpdate }: SimpleTimeC
         holidayId: selectedHoliday.id,
         holidayName: selectedHoliday.name,
         date: new Date().toISOString().slice(0, 10),
+        optionId: "manual_bank_hours",
+        optionLabel: "Banco de Horas Manual",
+        hours: option.value,
         startTime: startTime,
         endTime: endTime,
-        overtimeHours: option.value,
-        overtimeType: "mixed", // Tipo padrão
         status: "pending_admin", // Aguardando aprovação no dashboard analytics
-        proofDocument: uploadedFile.name, // Salvar nome do arquivo
+        proofImage: uploadedFile.name, // Salvar nome do arquivo
       })
 
       toast({

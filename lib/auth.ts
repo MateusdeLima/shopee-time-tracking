@@ -90,10 +90,10 @@ export async function authenticateEmployee(
             lastName,
             email,
             role: "employee",
-            cpf,
-            birthDate,
-            profilePictureUrl,
-            shift,
+            cpf: cpf || "",
+            birthDate: birthDate || "",
+            profilePictureUrl: profilePictureUrl || "",
+            shift: shift || "8-17",
           })
 
           return newUser
