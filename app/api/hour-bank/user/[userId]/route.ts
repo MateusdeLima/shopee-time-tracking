@@ -3,10 +3,11 @@ import { getHourBankCompensationsByUserId } from "@/lib/db"
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const userId = params.userId
+    const resolvedParams = await params
+    const userId = resolvedParams.userId
 
     if (!userId) {
       return NextResponse.json(

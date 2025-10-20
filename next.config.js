@@ -6,8 +6,7 @@ const nextConfig = {
     parallelServerBuildTraces: true,
   },
   
-  // Otimizações para build
-  swcMinify: true,
+  // Otimizações para build (swcMinify é padrão no Next.js 15)
   
   // Configurações de imagem
   images: {
