@@ -68,7 +68,6 @@ interface ClassicTimeClockProps {
 
 export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTimeClockProps) {
   const [selectedOption, setSelectedOption] = useState<string>("")
-  const [task, setTask] = useState<string>("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [showExampleImage, setShowExampleImage] = useState(false)
@@ -149,7 +148,6 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
         hours: parseFloat(declaredHours.replace(',', '.')) || 0,
         startTime: "00:00",
         endTime: "00:00",
-        task: `Comprovante de banco de horas do Page Interim - ${declaredHours}h declaradas`,
         status: "pending_admin", // Aguardando aprovação no dashboard analytics
         proofImage: imageBase64, // Salvar imagem em base64 via MCP
       })
@@ -194,10 +192,6 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
       return
     }
 
-    if (!task.trim()) {
-      setError("Informe o projeto/task que está atuando.")
-      return
-    }
 
     setLoading(true)
     setError("")
@@ -240,7 +234,6 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
         hours: option.value,
         startTime: startTime,
         endTime: endTime,
-        task: task,
         status: "approved",
         proofImage: "Não anexado",
       })
@@ -252,7 +245,6 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
 
       // Reset form
       setSelectedOption("")
-      setTask("")
       
       // Recarregar contagem de registros do dia
       await loadTodayRecords()
@@ -324,23 +316,6 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
             )}
           </div>
 
-          {/* Campo de Task/Projeto */}
-          <div className="mb-6">
-            <Label htmlFor="task" className="font-medium">Qual projeto/task está atuando?</Label>
-            <input
-              id="task"
-              name="task"
-              type="text"
-              className="w-full border rounded px-3 py-2 mt-1"
-              placeholder="Descreva o nome completo do projeto/task (ex: Projeto E-commerce - Implementação do carrinho de compras)"
-              value={task}
-              onChange={e => setTask(e.target.value)}
-              required
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Por favor, informe o nome completo do projeto e uma breve descrição da task
-            </p>
-          </div>
 
           {/* Botão de Banco de Horas */}
           <div className="mb-6">
@@ -420,7 +395,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
           <Button
             onClick={handleRegisterOvertime}
             className="w-full bg-[#EE4D2D] hover:bg-[#D23F20] min-h-[48px] text-base sm:text-sm"
-            disabled={loading || !selectedOption || !task.trim() || todayRecordsCount >= 2}
+            disabled={loading || !selectedOption || todayRecordsCount >= 2}
           >
             {loading ? (
               <>

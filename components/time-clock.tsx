@@ -122,7 +122,6 @@ interface TimeClockProps {
     endTime: string,
     optionId: string,
     optionLabel: string,
-    task: string
   ) => void
 }
 
@@ -133,7 +132,6 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
   const [error, setError] = useState<string>("")
   const [success, setSuccess] = useState<boolean>(false)
   const [groupedOptions, setGroupedOptions] = useState<any>({ antecipado: [], apos: [], misto: [] })
-  const [task, setTask] = useState<string>("")
   const [isDeadlineDialogOpen, setIsDeadlineDialogOpen] = useState(false)
   const [activeClock, setActiveClock] = useState<any | null>(null)
   const [isFinishDialogOpen, setIsFinishDialogOpen] = useState(false)
@@ -253,15 +251,6 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       return
     }
 
-    if (!task.trim()) {
-      setError("Por favor, preencha o projeto/task que está atuando.")
-      return
-    }
-
-    if (task.trim().length < 10) {
-      setError("Por favor, forneça uma descrição mais detalhada do projeto/task (mínimo 10 caracteres).")
-      return
-    }
 
     setLoading(true)
     setError("")
@@ -345,12 +334,10 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         endTime,
         option.id,
         option.label,
-        task.trim()
       )
 
       // Limpar seleção
-      setSelectedOption("")
-      setTask("")
+      setSelectedOption(undefined)
 
       let successDescription = `Foram registradas ${option.value === 0.5 ? "30 min" : `${option.value}h`} extras (${formatTimeString(startTime)} - ${formatTimeString(endTime)}). Total: ${horasRegistradas + option.value === 0.5 ? "30 min" : `${horasRegistradas + option.value}h`} de ${horasMaximas}h`
       
@@ -535,10 +522,6 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       setError("Selecione um feriado para registrar")
       return
     }
-    if (!task.trim()) {
-      setError("Por favor, preencha o projeto/task que está atuando.")
-      return
-    }
     setLoading(true)
     setError("")
     try {
@@ -632,7 +615,6 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         hours: overtime,
         startTime: activeClock.startTime,
         endTime,
-        task: task.trim(),
         status: 'approved',
       })
 
@@ -878,22 +860,6 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         )}
 
           <div className="space-y-6">
-            <div className="mb-6">
-              <Label htmlFor="task" className="font-medium">Qual projeto/task está atuando?</Label>
-              <input
-                id="task"
-                name="task"
-                type="text"
-                className="w-full border rounded px-3 py-2 mt-1"
-                placeholder="Descreva o nome completo do projeto/task (ex: Projeto E-commerce - Implementação do carrinho de compras)"
-                value={task}
-                onChange={e => setTask(e.target.value)}
-                required
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Por favor, informe o nome completo do projeto e uma breve descrição da task
-              </p>
-            </div>
 
             {/* Botão de Banco de Horas */}
             <div className="mb-6">

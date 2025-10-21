@@ -56,7 +56,6 @@ export async function POST(request: NextRequest) {
       hours: declaredHoursFloat,
       startTime: undefined,
       endTime: undefined,
-      task: `Compensação de banco de horas - ${declaredHoursFloat}h declaradas pelo funcionário`,
       status: "pending_admin", // Status aguardando aprovação do administrador
       proofImage: image // Salvar imagem temporariamente
     })

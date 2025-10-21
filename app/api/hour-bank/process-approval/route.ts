@@ -71,7 +71,6 @@ export async function POST(request: NextRequest) {
         hours: hoursToRegister,
         startTime: undefined,
         endTime: undefined,
-        task: `Compensação de banco de horas - ${hoursToRegister}h aprovadas pelo Dashboard Analytics`,
       })
 
       console.log("Registro de horas extras criado:", overtimeRecord)

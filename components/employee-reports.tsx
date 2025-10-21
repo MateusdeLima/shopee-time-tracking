@@ -533,11 +533,6 @@ export function EmployeeReports() {
                                 {formatHours(record.hours)} - Reprovado
                               </Badge>
                             )}
-                            {record.task && (
-                              <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-orange-100 text-orange-800 text-xs font-semibold w-fit">
-                                <ClipboardCheck className="h-3 w-3" /> Task: {record.task}
-                              </span>
-                            )}
                           </div>
                         </div>
                         <div className="flex flex-row sm:flex-col justify-between items-end sm:items-end gap-2 sm:gap-0 mt-2 sm:mt-0">

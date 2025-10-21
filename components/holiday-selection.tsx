@@ -126,7 +126,6 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
     endTime: string,
     optionId: string,
     optionLabel: string,
-    task: string
   ) => {
     if (!selectedHoliday) return
 
@@ -158,7 +157,6 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
         hours: hours,
         startTime: startTime,
         endTime: endTime,
-        task: task,
       })
 
       // Atualizar registros locais imediatamente

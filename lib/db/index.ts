@@ -53,7 +53,6 @@ export interface OvertimeRecord {
   hours: number
   startTime?: string
   endTime?: string
-  task?: string
   status?: "approved" | "pending_admin" | "rejected_admin"
   proofImage?: string // Imagem do comprovante (temporária)
   createdAt: string
@@ -589,7 +588,6 @@ export async function createOvertimeRecord(record: Omit<OvertimeRecord, "id" | "
       hours: Number(record.hours),
       start_time: record.startTime || null,
       end_time: record.endTime || null,
-      task: record.task || null,
       status: record.status || 'approved',
     }
 

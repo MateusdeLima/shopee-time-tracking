@@ -595,16 +595,6 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
                         : record.optionLabel
                     }
                   </Badge>
-                  {record.task && (
-                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold w-fit ${
-                      isAIGenerated 
-                        ? "bg-blue-100 text-blue-800" 
-                        : "bg-orange-100 text-orange-800"
-                    }`}>
-                      {isAIGenerated ? <Bot className="h-3 w-3" /> : <ClipboardCheck className="h-3 w-3" />}
-                      {isAIGenerated ? "Compensação Automática" : `Task: ${record.task}`}
-                    </span>
-                  )}
                   
                   {/* Mensagem para banco de horas rejeitado */}
                   {(record.optionId === "manual_bank_hours" || record.optionId === "ai_bank_hours") && isRejectedAdmin && (

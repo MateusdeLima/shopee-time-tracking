@@ -75,7 +75,6 @@ export async function POST(request: NextRequest) {
       hours: parseFloat(declaredHours),
       startTime: undefined,
       endTime: undefined,
-      task: "Teste de RLS - Compensação automática",
       status: "pending_admin"
     })
     
