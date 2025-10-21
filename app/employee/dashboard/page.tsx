@@ -145,7 +145,7 @@ export default function EmployeeDashboard() {
           <Card className="mx-2 sm:mx-0">
             <CardHeader className="px-4 sm:px-6">
               <CardTitle className="text-lg sm:text-xl">Gerenciamento de Ausências</CardTitle>
-              <CardDescription className="text-sm sm:text-base">Registre e gerencie suas ausências futuras</CardDescription>
+              <CardDescription className="text-sm sm:text-base">Registre e gerencie suas ausências futuras!</CardDescription>
             </CardHeader>
             <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
               <div className="overflow-x-auto">
