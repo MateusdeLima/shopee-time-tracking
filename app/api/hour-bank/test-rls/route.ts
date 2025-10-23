@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
       holidayName: holiday?.name || "Teste",
       date: holiday?.date || new Date().toISOString().split('T')[0],
       optionId: "ai_bank_hours",
-      optionLabel: `Banco de Horas IA - ${declaredHours}h (Teste)`,
+      optionLabel: `Banco de Horas - ${declaredHours}h (Teste)`,
       hours: parseFloat(declaredHours),
       startTime: undefined,
       endTime: undefined,

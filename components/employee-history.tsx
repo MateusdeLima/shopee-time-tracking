@@ -588,10 +588,10 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
                     {formatHours(record.hours)} - {
                       isAIGenerated 
                         ? isPendingAdmin 
-                          ? "Banco de Horas IA (Aguardando verificação)"
+                          ? "Banco de Horas (Aguardando verificação)"
                           : isRejectedAdmin
-                          ? "Banco de Horas IA (Rejeitado pelo admin)"
-                          : "Banco de Horas IA (Aprovado)"
+                          ? "Banco de Horas (Rejeitado pelo admin)"
+                          : "Banco de Horas (Aprovado)"
                         : record.optionLabel
                     }
                   </Badge>

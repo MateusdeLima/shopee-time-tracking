@@ -173,7 +173,7 @@ export function HourBankAdminApproval({ onUpdate }: HourBankAdminApprovalProps) 
       }
       
       if (approvalAction === "approve") {
-        updateData.optionLabel = `Banco de Horas IA - ${formatHours(selectedRecord.hours)} (Aprovado pelo Dashboard Analytics)`
+        updateData.optionLabel = `Banco de Horas - ${formatHours(selectedRecord.hours)} (Aprovado pelo Dashboard Analytics)`
         console.log("Admin aprovou - ativando registro de horas extras")
       } else {
         console.log("Admin rejeitou - marcando registro como rejeitado")
