@@ -142,7 +142,7 @@ export function SimpleHolidaySelection({ user }: SimpleHolidaySelectionProps) {
     record.optionId !== "manual_bank_hours" && // Excluir banco de horas da contagem
     record.optionId !== "ai_bank_hours" // Excluir banco de horas da contagem
   )
-  const hasReachedLimit = holidayRecords.length >= 2
+  const hasReachedLimit = false // Removido limite de registros por dia
 
   return (
     <div className="space-y-4 sm:space-y-6 p-4 sm:p-0">
@@ -188,11 +188,6 @@ export function SimpleHolidaySelection({ user }: SimpleHolidaySelectionProps) {
                         {holidayRecordsCount > 0 && (
                           <Badge variant="secondary" className="bg-green-100 text-green-800">
                             {holidayRecordsCount === 1 ? "1 registro" : `${holidayRecordsCount} registros`}
-                          </Badge>
-                        )}
-                        {holidayRecordsCount >= 2 && (
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                            Completo
                           </Badge>
                         )}
                         {selectedHoliday?.id === holiday.id && (

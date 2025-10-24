@@ -270,20 +270,6 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         return
       }
 
-      // Regra: apenas um registro por dia por usuário
-      const today = new Date().toISOString().slice(0, 10)
-      const userRecords = await getOvertimeRecordsByUserId(user.id)
-      const hasTodayRecord = (userRecords || []).some((r: any) => (r.date || '').slice(0,10) === today)
-      if (hasTodayRecord) {
-        toast({
-          variant: "destructive",
-          title: "Limite diário atingido",
-          description: "Você só pode registrar horas uma vez por dia. Fale com o admin para ajustar.",
-        })
-        setLoading(false)
-        return
-      }
-
       // Verificar o total de horas já registradas para este feriado
       const { used: horasRegistradas, max: horasMaximas, compensated: horasCompensadas } = await getUserHolidayStats(user.id, selectedHoliday.id)
 
@@ -525,14 +511,6 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     setLoading(true)
     setError("")
     try {
-      const today = new Date().toISOString().slice(0,10)
-      const userRecords = await getOvertimeRecordsByUserId(user.id)
-      const hasTodayRecord = (userRecords || []).some((r: any) => (r.date || '').slice(0,10) === today && r.holidayId === selectedHoliday.id)
-      if (hasTodayRecord) {
-        toast({ variant: "destructive", title: "Limite diário atingido", description: "Você já registrou hoje para este feriado." })
-        setLoading(false)
-        return
-      }
 
       const existing = await getActiveTimeClockByUserId(user.id, selectedHoliday.id)
       if (existing) {
@@ -556,7 +534,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       const created = await createTimeClockRecord({
         userId: user.id,
         holidayId: selectedHoliday.id,
-        date: today,
+        date: new Date().toISOString().slice(0, 10),
         startTime,
         endTime: null,
         status: "active",

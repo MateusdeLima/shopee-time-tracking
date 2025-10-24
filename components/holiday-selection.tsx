@@ -235,10 +235,7 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {activeHolidays.map((holiday) => {
             const today = new Date().toISOString().slice(0,10)
-            const hasTodayRecord = userRecords.some((r) => {
-              const created = (r.createdAt || r.created_at || r.date || '').slice(0,10)
-              return created === today && r.holidayId === holiday.id
-            })
+            const hasTodayRecord = false // Removido limite de registros por dia
             // Calculate used hours for this holiday (apenas aprovados)
             const holidayRecords = userRecords.filter((record) => record.holidayId === holiday.id)
             const hoursUsed = holidayRecords

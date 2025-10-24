@@ -71,46 +71,55 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [showExampleImage, setShowExampleImage] = useState(false)
-  const [todayRecordsCount, setTodayRecordsCount] = useState(0)
   const [isHourBankDialogOpen, setIsHourBankDialogOpen] = useState(false)
   const [hourBankStep, setHourBankStep] = useState(1)
   const [selectedBankImage, setSelectedBankImage] = useState<File | null>(null)
   const [declaredHours, setDeclaredHours] = useState("")
+  const [holidayStats, setHolidayStats] = useState({ used: 0, max: 0, compensated: 0 })
   const bankFileInputRef = useRef<HTMLInputElement>(null)
 
   const overtimeOptions = getOvertimeOptionsByShift(user?.shift || "8-17")
 
-  // Agrupar opções por categoria como no commit original
-  const groupedOptions = {
-    antecipado: overtimeOptions.filter(opt => (opt as any).category === "antecipado"),
-    apos: overtimeOptions.filter(opt => (opt as any).category === "apos"),
-    misto: overtimeOptions.filter(opt => (opt as any).category === "misto"),
-  }
-
-  // Função para carregar contagem de registros do dia
-  const loadTodayRecords = async () => {
-    if (!user?.id || !selectedHoliday?.id) return
-    
-    try {
-      const today = new Date().toISOString().slice(0, 10)
-      const userRecords = await getOvertimeRecordsByUserId(user.id)
-      const todayRecords = userRecords.filter(record => 
-        record.date === today && 
-        record.status === "approved" &&
-        record.holidayId === selectedHoliday.id &&
-        record.optionId !== "manual_bank_hours" && // Excluir banco de horas da contagem
-        record.optionId !== "ai_bank_hours" // Excluir banco de horas da contagem
-      )
-      setTodayRecordsCount(todayRecords.length)
-    } catch (error) {
-      console.error("Erro ao carregar registros do dia:", error)
-    }
-  }
-
-  // Carregar contagem inicial
+  // Carregar estatísticas do feriado
   useEffect(() => {
-    loadTodayRecords()
+    const loadHolidayStats = async () => {
+      if (!user?.id || !selectedHoliday?.id) return
+      
+      try {
+        const { getUserHolidayStats } = await import("@/lib/db")
+        const stats = await getUserHolidayStats(user.id, selectedHoliday.id)
+        setHolidayStats(stats)
+      } catch (error) {
+        console.error("Erro ao carregar estatísticas do feriado:", error)
+      }
+    }
+    
+    loadHolidayStats()
   }, [user?.id, selectedHoliday?.id])
+
+  // Filtrar opções baseado nas horas restantes
+  const getFilteredOptions = () => {
+    const horasRestantes = holidayStats.max - holidayStats.used
+    
+    // Se já atingiu ou ultrapassou o limite, não mostrar nenhuma opção
+    if (horasRestantes <= 0) {
+      return []
+    }
+    
+    // Filtrar opções que não ultrapassem as horas restantes
+    return overtimeOptions.filter(opt => opt.value <= horasRestantes)
+  }
+
+  const filteredOptions = getFilteredOptions()
+
+  // Agrupar opções filtradas por categoria
+  const groupedOptions = {
+    antecipado: filteredOptions.filter(opt => (opt as any).category === "antecipado"),
+    apos: filteredOptions.filter(opt => (opt as any).category === "apos"),
+    misto: filteredOptions.filter(opt => (opt as any).category === "misto"),
+  }
+
+
 
   const handleOptionChange = (value: string) => {
     setSelectedOption(value)
@@ -192,33 +201,18 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
       return
     }
 
+    // Verificar se ainda há horas disponíveis
+    const horasRestantes = holidayStats.max - holidayStats.used
+    if (horasRestantes <= 0) {
+      setError("Você já atingiu o limite máximo de horas para este feriado.")
+      return
+    }
 
     setLoading(true)
     setError("")
 
     try {
-      // Verificar limite de 2 marcações por dia para este feriado
-      const today = new Date().toISOString().slice(0, 10)
-      const userRecords = await getOvertimeRecordsByUserId(user.id)
-      const todayRecords = userRecords.filter(record => 
-        record.date === today && 
-        record.status === "approved" &&
-        record.holidayId === selectedHoliday.id &&
-        record.optionId !== "manual_bank_hours" && // Excluir banco de horas da contagem
-        record.optionId !== "ai_bank_hours" // Excluir banco de horas da contagem
-      )
-      
-      if (todayRecords.length >= 2) {
-        setError(`Você já atingiu o limite de 2 marcações para o feriado ${selectedHoliday.name}.`)
-        toast({
-          variant: "destructive",
-          title: "Limite atingido",
-          description: `Você só pode fazer no máximo 2 marcações por feriado.`
-        })
-        setLoading(false)
-        return
-      }
-      const option = overtimeOptions.find(opt => opt.id === selectedOption)
+      const option = filteredOptions.find(opt => opt.id === selectedOption)
       if (!option) throw new Error("Opção inválida")
 
       const [startTime, endTime] = getTimesFromOption(selectedOption)
@@ -246,8 +240,10 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
       // Reset form
       setSelectedOption("")
       
-      // Recarregar contagem de registros do dia
-      await loadTodayRecords()
+      // Recarregar estatísticas do feriado
+      const { getUserHolidayStats } = await import("@/lib/db")
+      const updatedStats = await getUserHolidayStats(user.id, selectedHoliday.id)
+      setHolidayStats(updatedStats)
       
       // Pequeno delay para garantir que o banco foi atualizado
       await new Promise(resolve => setTimeout(resolve, 100))
@@ -287,36 +283,6 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
         )}
 
         <div className="space-y-6">
-          {/* Indicador de marcações do dia */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-blue-600" />
-                <span className="font-medium text-blue-800">
-                  Marcações neste feriado: {todayRecordsCount}/2
-                </span>
-              </div>
-              <div className="flex gap-1">
-                {[1, 2].map((num) => (
-                  <div
-                    key={num}
-                    className={`w-3 h-3 rounded-full ${
-                      num <= todayRecordsCount 
-                        ? 'bg-blue-600' 
-                        : 'bg-gray-300'
-                    }`}
-                  />
-                ))}
-              </div>
-            </div>
-            {todayRecordsCount >= 2 && (
-              <div className="mt-2 text-sm text-red-600 font-medium">
-                ⚠️ Limite atingido - Não é possível fazer mais marcações neste feriado
-              </div>
-            )}
-          </div>
-
-
           {/* Botão de Banco de Horas */}
           <div className="mb-6">
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
@@ -342,7 +308,35 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
           {/* Seleção de Horários */}
           <div>
             <h3 className="text-lg font-semibold mb-4">Horários disponíveis</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+            
+            {/* Informações sobre horas restantes */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between text-sm">
+                <span>Horas registradas: <strong>{holidayStats.used}h</strong></span>
+                <span>Limite máximo: <strong>{holidayStats.max}h</strong></span>
+                <span>Restantes: <strong>{Math.max(0, holidayStats.max - holidayStats.used)}h</strong></span>
+              </div>
+              {holidayStats.compensated > 0 && (
+                <p className="text-xs text-blue-600 mt-1">
+                  {holidayStats.compensated}h foram compensadas pelo seu banco de horas da Page
+                </p>
+              )}
+            </div>
+
+            {filteredOptions.length === 0 ? (
+              <Alert>
+                <Clock className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Limite atingido!</strong> Você já completou todas as horas permitidas para este feriado.
+                  {holidayStats.used > holidayStats.max && (
+                    <span className="block mt-1 text-orange-600">
+                      Você registrou {holidayStats.used - holidayStats.max}h a mais que o limite.
+                    </span>
+                  )}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
               
               {/* Coluna Antecipado */}
               <div>
@@ -389,13 +383,14 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
                 </RadioGroup>
               </div>
             </div>
+            )}
           </div>
 
 
           <Button
             onClick={handleRegisterOvertime}
             className="w-full bg-[#EE4D2D] hover:bg-[#D23F20] min-h-[48px] text-base sm:text-sm"
-            disabled={loading || !selectedOption || todayRecordsCount >= 2}
+            disabled={loading || !selectedOption || filteredOptions.length === 0}
           >
             {loading ? (
               <>
