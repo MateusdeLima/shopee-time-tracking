@@ -10,6 +10,7 @@ import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { supabase } from '@/lib/supabase'
 import { getUserById } from '@/lib/db'
+import { CustomNotificationPopup } from './custom-notification-popup'
 
 interface AbsenceNotification {
   id: string
@@ -41,10 +42,61 @@ export function AdminNotifications({ isAdmin }: AdminNotificationsProps) {
   const [isOpen, setIsOpen] = useState(false)
   const [unreadCount, setUnreadCount] = useState(0)
   const [showOnlyUnread, setShowOnlyUnread] = useState(false)
+  const [customPopup, setCustomPopup] = useState<any>(null)
   const processedIds = useRef(new Set<string>())
   const channelRef = useRef<any>(null)
   const lastCheckedId = useRef<string>('0')
 
+  // Funções auxiliares
+  const getReasonLabel = (reason: string, customReason?: string) => {
+    if (reason === 'other' && customReason) {
+      return customReason
+    }
+    const reasonObj = ABSENCE_REASONS.find(r => r.id === reason)
+    return reasonObj ? reasonObj.label : 'Motivo não especificado'
+  }
+
+  const formatDatesText = (dates: string[]) => {
+    if (dates.length === 1) {
+      return format(parseISO(dates[0]), "dd/MM/yyyy", { locale: ptBR })
+    } else if (dates.length === 2) {
+      return `${format(parseISO(dates[0]), "dd/MM", { locale: ptBR })} a ${format(parseISO(dates[1]), "dd/MM/yyyy", { locale: ptBR })}`
+    } else {
+      return `${dates.length} dias`
+    }
+  }
+
+  const getTimeText = (notification: AbsenceNotification) => {
+    if (notification.departureTime && notification.returnTime) {
+      return ` das ${notification.departureTime} às ${notification.returnTime}`
+    } else if (notification.departureTime) {
+      return ` a partir das ${notification.departureTime}`
+    }
+    return ''
+  }
+
+  const playNotificationSound = () => {
+    try {
+      // Som simples usando Web Audio API
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+
+      oscillator.frequency.setValueAtTime(800, audioContext.currentTime)
+      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1)
+      
+      gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5)
+
+      oscillator.start(audioContext.currentTime)
+      oscillator.stop(audioContext.currentTime + 0.5)
+    } catch (error) {
+      console.log('🔔 Som de notificação não pôde ser reproduzido:', error)
+    }
+  }
 
   useEffect(() => {
     if (!isAdmin) return
@@ -294,7 +346,7 @@ export function AdminNotifications({ isAdmin }: AdminNotificationsProps) {
 
       // Mostrar notificações
       showNotificationToast(notification)
-      showBrowserNotification(notification.userName, getReasonLabel(notification.reason, notification.customReason), formatDatesText(notification.dates), getTimeText(notification), notification.hasProof)
+      showCustomNotification(notification)
       playNotificationSound()
 
       console.log(`🔔 ✅ Ausência ${recordId} processada com sucesso`)
@@ -314,154 +366,75 @@ export function AdminNotifications({ isAdmin }: AdminNotificationsProps) {
     toast({
       title: "🔔 Nova Ausência Registrada",
       description: fullMessage,
-      duration: 8000,
+      duration: 5000,
     })
   }
 
-  const showBrowserNotification = (userName: string, reason: string, dates: string, timeText: string, hasProof: boolean) => {
-    console.log('🔔 BROWSER: Tentando exibir notificação do navegador...')
-    console.log('🔔 BROWSER: Notification support:', 'Notification' in window)
-    console.log('🔔 BROWSER: Permission:', Notification.permission)
+  const showCustomNotification = (notification: AbsenceNotification) => {
+    console.log('🔔 POPUP: Mostrando popup personalizado...')
     
-    if ('Notification' in window) {
-      if (Notification.permission === 'granted') {
-        const proofText = hasProof ? " 📎" : ""
-        const title = "🔔 Nova Ausência Registrada"
-        const body = `${userName} - ${reason}${timeText}\n📅 ${dates}${proofText}`
+    const handleRedirect = () => {
+      console.log('🔔 CLICK: Redirecionando para aba de ausências...')
+      
+      // URL da página admin com aba de ausências
+      const adminUrl = `${window.location.origin}/admin/dashboard?tab=absences`
+      
+      try {
+        // Tentar focar na aba existente primeiro
+        window.focus()
         
-        console.log('🔔 BROWSER: Criando notificação com:', { title, body })
-        
-        try {
-          const browserNotification = new Notification(title, {
-            body,
-            tag: `absence-${Date.now()}`, // Tag única para evitar sobreposição
-            requireInteraction: false,
-            silent: false,
-            icon: '/favicon.ico'
-          })
-
-          // Fechar automaticamente após 8 segundos
-          setTimeout(() => {
-            browserNotification.close()
-          }, 8000)
-
-          // Redirecionar para aba de ausências quando clicar na notificação
-          browserNotification.onclick = () => {
-            console.log('🔔 CLICK: Redirecionando para aba de ausências...')
-            
-            // URL da página admin com aba de ausências
-            const adminUrl = `${window.location.origin}/admin/dashboard?tab=absences`
-            
-            try {
-              // Tentar focar na aba existente primeiro
-              window.focus()
-              
-              // Verificar se já estamos na página admin
-              if (window.location.pathname === '/admin/dashboard') {
-                console.log('🔔 CLICK: Já na página admin, mudando aba...')
-                
-                // Atualizar URL sem recarregar
-                window.history.pushState({}, '', adminUrl)
-                
-                // Disparar evento personalizado para atualizar a aba ativa
-                window.dispatchEvent(new CustomEvent('admin-tab-change', { 
-                  detail: { tab: 'absences' } 
-                }))
-                
-                // Scroll para o topo da página
-                window.scrollTo({ top: 0, behavior: 'smooth' })
-              } else {
-                console.log('🔔 CLICK: Navegando para página admin...')
-                // Se não estamos no admin, navegar para lá
-                window.location.href = adminUrl
-              }
-              
-              // Mostrar feedback visual
-              const toast = (window as any).toast
-              if (toast) {
-                toast({
-                  title: "📍 Redirecionado",
-                  description: "Você foi direcionado para a aba de ausências.",
-                  duration: 2000,
-                })
-              }
-              
-            } catch (error) {
-              console.error('🔔 CLICK: Erro ao redirecionar:', error)
-              // Fallback: abrir em nova aba se houver erro
-              window.open(adminUrl, '_blank')
-            }
-            
-            browserNotification.close()
-          }
-
-          console.log('🔔 BROWSER: ✅ Notificação do navegador criada com sucesso!')
-        } catch (error) {
-          console.error('🔔 BROWSER: ❌ Erro ao criar notificação:', error)
+        // Verificar se já estamos na página admin
+        if (window.location.pathname === '/admin/dashboard') {
+          console.log('🔔 CLICK: Já na página admin, mudando aba...')
+          
+          // Atualizar URL sem recarregar
+          window.history.pushState({}, '', adminUrl)
+          
+          // Disparar evento personalizado para atualizar a aba ativa
+          window.dispatchEvent(new CustomEvent('admin-tab-change', { 
+            detail: { tab: 'absences' } 
+          }))
+          
+          // Scroll para o topo da página
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+        } else {
+          console.log('🔔 CLICK: Navegando para página admin...')
+          // Se não estamos no admin, navegar para lá
+          window.location.href = adminUrl
         }
-      } else {
-        console.log('🔔 BROWSER: ❌ Permissão não concedida:', Notification.permission)
-        // Tentar solicitar permissão novamente
-        Notification.requestPermission().then(permission => {
-          console.log('🔔 BROWSER: Nova permissão:', permission)
-          if (permission === 'granted') {
-            // Tentar novamente
-            showBrowserNotification(userName, reason, dates, timeText, hasProof)
-          }
+        
+        // Mostrar feedback visual
+        toast({
+          title: "📍 Redirecionado",
+          description: "Você foi direcionado para a aba de ausências.",
+          duration: 2000,
         })
+        
+      } catch (error) {
+        console.error('🔔 CLICK: Erro ao redirecionar:', error)
+        // Fallback: abrir em nova aba se houver erro
+        window.open(adminUrl, '_blank')
       }
-    } else {
-      console.log('🔔 BROWSER: ❌ Navegador não suporta notificações')
     }
+
+    const popupData = {
+      id: notification.id,
+      title: "Nova Ausência Registrada",
+      message: `${notification.userName} registrou uma ausência`,
+      userName: notification.userName,
+      reason: getReasonLabel(notification.reason, notification.customReason),
+      time: format(parseISO(notification.createdAt), "HH:mm", { locale: ptBR }),
+      date: format(parseISO(notification.createdAt), "dd/MM/yyyy", { locale: ptBR }),
+      onClose: () => setCustomPopup(null),
+      onClick: handleRedirect
+    }
+
+    setCustomPopup(popupData)
+    console.log('🔔 POPUP: ✅ Popup personalizado criado com sucesso!')
   }
 
-  const playNotificationSound = () => {
-    try {
-      // Som simples usando Web Audio API
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-      const oscillator = audioContext.createOscillator()
-      const gainNode = audioContext.createGain()
 
-      oscillator.connect(gainNode)
-      gainNode.connect(audioContext.destination)
 
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime)
-      gainNode.gain.setValueAtTime(0.2, audioContext.currentTime)
-      gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2)
-
-      oscillator.start(audioContext.currentTime)
-      oscillator.stop(audioContext.currentTime + 0.2)
-    } catch (error) {
-      // Ignorar erro de som
-    }
-  }
-
-  const getReasonLabel = (reason: string, customReason?: string) => {
-    if (reason === 'other' && customReason) {
-      return customReason
-    }
-    const reasonObj = ABSENCE_REASONS.find(r => r.id === reason)
-    return reasonObj ? reasonObj.label : 'Motivo não especificado'
-  }
-
-  const formatDatesText = (dates: string[]) => {
-    if (dates.length === 1) {
-      return format(parseISO(dates[0]), "dd/MM/yyyy", { locale: ptBR })
-    } else if (dates.length === 2) {
-      return `${format(parseISO(dates[0]), "dd/MM", { locale: ptBR })} e ${format(parseISO(dates[1]), "dd/MM/yyyy", { locale: ptBR })}`
-    } else {
-      return `${format(parseISO(dates[0]), "dd/MM", { locale: ptBR })} a ${format(parseISO(dates[dates.length - 1]), "dd/MM/yyyy", { locale: ptBR })} (${dates.length} dias)`
-    }
-  }
-
-  const getTimeText = (notification: AbsenceNotification) => {
-    if (notification.departureTime && notification.returnTime) {
-      return ` das ${notification.departureTime} às ${notification.returnTime}`
-    } else if (notification.departureTime) {
-      return ` a partir das ${notification.departureTime}`
-    }
-    return ""
-  }
 
   const markAsRead = () => {
     setUnreadCount(0)
@@ -675,6 +648,12 @@ export function AdminNotifications({ isAdmin }: AdminNotificationsProps) {
           </CardContent>
         </Card>
       )}
+      
+      {/* Popup personalizado */}
+      <CustomNotificationPopup 
+        notification={customPopup}
+        onClose={() => setCustomPopup(null)}
+      />
     </div>
   )
 }

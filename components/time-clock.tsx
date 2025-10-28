@@ -264,7 +264,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         toast({
           variant: "destructive",
           title: "Registro bloqueado",
-          description: `Você não pode registrar horas extras pois chegou fora da janela de tolerância (6:00-9:15). Horário atual: ${currentTime}`
+          description: `Você não pode registrar horas extras pois chegou fora da janela de tolerância (7:00-9:15). Horário atual: ${currentTime}`
         })
         setLoading(false)
         return
@@ -357,12 +357,12 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
     let startWindow: number, endWindow: number
     
     if (shift === "8-17") {
-      // Turno 8-17: tolerância de 6:00 às 9:15 (6h às 9h15)
-      startWindow = 6 * 60 // 6:00 = 360 minutos
+      // Turno 8-17: tolerância de 7:00 às 9:15 (7h às 9h15)
+      startWindow = 7 * 60 // 7:00 = 420 minutos
       endWindow = 9 * 60 + 15 // 9:15 = 555 minutos
     } else {
-      // Turno 9-18: tolerância de 6:00 às 9:15 (mesmo horário)
-      startWindow = 6 * 60 // 6:00 = 360 minutos  
+      // Turno 9-18: tolerância de 7:00 às 9:15 (mesmo horário)
+      startWindow = 7 * 60 // 7:00 = 420 minutos  
       endWindow = 9 * 60 + 15 // 9:15 = 555 minutos
     }
     
@@ -522,10 +522,23 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
 
       const now = new Date()
       const startTime = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`
+      const [hours, minutes] = startTime.split(':').map(Number)
+      const currentMinutes = hours * 60 + minutes
       
-      // Verificar se o horário está dentro da tolerância
+      // Verificar se está antes das 7h - BLOQUEAR COMPLETAMENTE
+      if (currentMinutes < 7 * 60) { // Antes das 7:00
+        setLoading(false)
+        toast({
+          variant: "destructive",
+          title: "Horário não permitido",
+          description: `Não é possível registrar ponto antes das 7:00. Horário atual: ${startTime}`
+        })
+        return
+      }
+      
+      // Verificar se o horário está dentro da tolerância (7:00 às 9:15)
       if (!isWithinTolerance(startTime, user.shift)) {
-        // Horário fora da tolerância - abrir modal para solicitar ponto
+        // Horário fora da tolerância (após 9:15) - abrir modal para solicitar ponto
         setLoading(false)
         setIsMissingTimeDialogOpen(true)
         return
@@ -1326,7 +1339,7 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         <div className="space-y-4">
           <div className="bg-red-50 border border-red-200 rounded-lg p-4">
             <p className="text-sm text-red-700 mb-2">
-              <strong>Você chegou às {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, fora da janela permitida (6:00-9:15).</strong>
+              <strong>Você chegou às {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}, fora da janela permitida (7:00-9:15).</strong>
             </p>
             <p className="text-xs text-red-600">
               Uma solicitação será enviada ao admin para aprovação.
