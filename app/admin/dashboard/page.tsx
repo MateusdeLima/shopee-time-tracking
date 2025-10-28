@@ -8,11 +8,13 @@ import { EmployeeReports } from "@/components/employee-reports"
 import { EmployeeManagement } from "@/components/employee-management"
 import { AdminSummary } from "@/components/admin-summary"
 import { AdminAbsences } from "@/components/admin-absences"
+import { AdminNotifications } from "@/components/admin-notifications"
 import { Sidebar } from "@/components/sidebar"
 import { getCurrentUser, logout, refreshCurrentUser } from "@/lib/auth"
+import { useAdminSession, clearAdminSession } from "@/hooks/use-admin-session"
 import { initializeDb } from "@/lib/db"
 import { Button } from "@/components/ui/button"
-import { FileSpreadsheet } from "lucide-react"
+import { FileSpreadsheet, LogOut } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { getHolidays, getOvertimeRecords, getUserById, getUserHolidayStats, getHolidayById, getEmployeePortalTabs, setEmployeePortalTabs } from "@/lib/db"
 
@@ -20,8 +22,7 @@ export const dynamic = "force-dynamic"
 
 export default function AdminDashboard() {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
-  const [loading, setLoading] = useState(true)
+  const { user, isAdmin, isLoading } = useAdminSession()
   const [activeMainTab, setActiveMainTab] = useState("holidays")
   const [activeHolidayTab, setActiveHolidayTab] = useState("manage")
   const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean }>({ holidays: true, absences: true })
@@ -34,30 +35,22 @@ export default function AdminDashboard() {
     // Inicializar banco de dados
     initializeDb()
 
-    // Verificar autenticação
-    const user = getCurrentUser()
-    if (!user) {
+    // Verificar se não é admin ou não está carregando
+    if (!isLoading && !isAdmin) {
       router.push("/")
       return
     }
-
-    if (user.role !== "admin") {
-      router.push("/")
-      return
-    }
-
-    setUser(user)
-    setLoading(false)
-  }, [router])
+  }, [router, isAdmin, isLoading])
 
   useEffect(() => {
-    if (user && !loading) {
+    if (user && !isLoading) {
       getHolidays().then(holidays => setData((prev: any) => ({ ...prev, holidays })));
       getEmployeePortalTabs().then(setPortalTabs);
     }
-  }, [user, loading]);
+  }, [user, isLoading]);
 
   const handleLogout = () => {
+    clearAdminSession() // Limpar sessão persistente
     logout()
     router.push("/")
   }
@@ -65,12 +58,35 @@ export default function AdminDashboard() {
   const handleProfileUpdate = async () => {
     // Recarregar dados do usuário do banco de dados
     const updatedUser = await refreshCurrentUser()
-    if (updatedUser) {
-      setUser(updatedUser)
-    }
+    // Nota: Com sessão persistente, o user será atualizado automaticamente
   }
 
-  if (loading) {
+  // Listener para mudança de aba via notificação
+  useEffect(() => {
+    const handleTabChange = (event: CustomEvent) => {
+      const { tab } = event.detail
+      console.log('🔔 REDIRECT: Mudando para aba:', tab)
+      setActiveMainTab(tab)
+    }
+
+    // Adicionar listener para evento personalizado
+    window.addEventListener('admin-tab-change', handleTabChange as EventListener)
+
+    // Verificar se há parâmetro de aba na URL ao carregar
+    const urlParams = new URLSearchParams(window.location.search)
+    const tabParam = urlParams.get('tab')
+    if (tabParam && ['dashboard', 'absences', 'employees'].includes(tabParam)) {
+      console.log('🔔 URL: Definindo aba inicial:', tabParam)
+      setActiveMainTab(tabParam)
+    }
+
+    return () => {
+      window.removeEventListener('admin-tab-change', handleTabChange as EventListener)
+    }
+  }, [])
+
+
+  if (isLoading) {
     return <div className="flex items-center justify-center min-h-screen">Carregando...</div>
   }
 
@@ -219,7 +235,7 @@ export default function AdminDashboard() {
       <Sidebar
         activeTab={activeMainTab}
         onTabChange={(newTab) => {
-          console.log("🔥 SIDEBAR: Mudando aba de", activeMainTab, "para", newTab)
+          console.log("🔥 SIDEBAR: Mudança aba de", activeMainTab, "para", newTab)
           setActiveMainTab(newTab)
         }}
         userRole="admin"
@@ -232,7 +248,28 @@ export default function AdminDashboard() {
         onProfileUpdate={handleProfileUpdate}
       />
       
-      <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-0 p-3 sm:p-6">
+      {/* Header com notificações para admin */}
+      <div className="fixed top-0 right-0 z-40 md:left-64 left-0 bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-4">
+          <h1 className="text-lg font-semibold text-gray-900">
+            Dashboard Administrativo
+          </h1>
+        </div>
+        <div className="flex items-center gap-4">
+          <AdminNotifications isAdmin={isAdmin} />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLogout}
+            className="flex items-center gap-2"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="hidden sm:inline">Sair</span>
+          </Button>
+        </div>
+      </div>
+      
+      <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-24 p-3 sm:p-6">
         {renderContent()}
 
         <Dialog open={isHourBankExportModalOpen} onOpenChange={setIsHourBankExportModalOpen}>
