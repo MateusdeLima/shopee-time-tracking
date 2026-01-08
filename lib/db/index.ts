@@ -915,6 +915,39 @@ export async function createAbsenceRecord(
     throw new Error("Falha ao criar registro de ausência")
   }
 
+  // Notificar bot (Fire and forget para não bloquear a resposta, mas logar erro)
+  // Como estamos em uma função que pode rodar no cliente ou server, fetch deve funcionar.
+  // Se rodar no server, URL relativa pode falhar se não tiver base.
+  // Vamos tentar usar URL relativa e catch.
+  try {
+    console.log("🤖 [BOT] Gatilho de ausência acionado. Tentando notificar...")
+    fetch('/api/notify-absence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: record.userId,
+        reason: record.reason,
+        customReason: record.customReason,
+        dates: record.dates,
+        startTime: record.departureTime, // Assumindo mapeamento para departureTime
+        endTime: record.returnTime,     // Assumindo mapeamento para returnTime
+        hasProof: !!record.proofDocument,
+        proofUrl: record.proofDocument   // URL para envio da imagem
+      })
+    })
+      .then(async (res) => {
+        try {
+          const data = await res.json()
+          console.log("🤖 [BOT] Resposta do servidor:", data)
+        } catch (jsonErr) {
+          console.log("🤖 [BOT] Resposta não-JSON do servidor")
+        }
+      })
+      .catch(err => console.error("🤖 [BOT] Erro ao chamar API local:", err))
+  } catch (e) {
+    console.error("🤖 [BOT] Erro ao tentar disparar notificação:", e)
+  }
+
   return convertToCamelCase<AbsenceRecord>(data)
 }
 
@@ -937,7 +970,33 @@ export async function updateAbsenceRecord(id: number, data: Partial<AbsenceRecor
     throw new Error("Falha ao atualizar registro de ausência")
   }
 
-  return convertToCamelCase<AbsenceRecord>(updatedData)
+  const result = convertToCamelCase<AbsenceRecord>(updatedData)
+
+  // ------------------------------------------------------------------
+  // NOTIFICAÇAO DE COMPROVANTE (Se foi anexado agora)
+  // ------------------------------------------------------------------
+  if (data.proofDocument) {
+    try {
+      console.log("🤖 [BOT] Detectado upload de comprovante. Notificando...")
+      // Precisamos do userId e dates que estão no registro atualizado
+      fetch('/api/notify-absence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: result.userId,
+          dates: result.dates,
+          reason: result.reason,
+          customReason: result.customReason,
+          isProofUpdate: true,
+          proofUrl: result.proofDocument // URL para envio da imagem
+        })
+      }).catch(err => console.error("🤖 [BOT] Erro notificações update:", err))
+    } catch (e) {
+      console.error("🤖 [BOT] Erro trigger update:", e)
+    }
+  }
+
+  return result
 }
 
 export async function deleteAbsenceRecord(id: number): Promise<void> {
