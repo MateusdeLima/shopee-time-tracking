@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import { CalendarDays, Calendar, Users, LogOut, FileText, Clock, User, Menu, X, Edit, Upload, Banknote } from "lucide-react"
+import { CalendarDays, Calendar, Users, LogOut, FileText, Clock, User, Menu, X, Edit, Upload, Banknote, Folder } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 
 interface SidebarProps {
@@ -24,12 +24,12 @@ interface SidebarProps {
   customTabs?: Array<{ id: string; label: string; icon?: any }>
 }
 
-export function Sidebar({ 
-  activeTab, 
-  onTabChange, 
-  userRole, 
-  onLogout, 
-  userName, 
+export function Sidebar({
+  activeTab,
+  onTabChange,
+  userRole,
+  onLogout,
+  userName,
   userEmail,
   profilePictureUrl,
   userId,
@@ -48,10 +48,10 @@ export function Sidebar({
     const checkMobile = () => {
       setIsMobile(window.innerWidth < 768)
     }
-    
+
     checkMobile()
     window.addEventListener('resize', checkMobile)
-    
+
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
@@ -59,6 +59,7 @@ export function Sidebar({
     { id: "holidays", label: "Feriados", icon: CalendarDays },
     { id: "absences", label: "Ausências", icon: Calendar },
     { id: "employees", label: "Funcionários", icon: Users },
+    { id: "projects", label: "Projetos", icon: Folder },
     { id: "employee-portal", label: "Portal Funcionário", icon: User },
   ]
 
@@ -190,12 +191,12 @@ export function Sidebar({
         {/* Mobile sidebar overlay */}
         {isMobileMenuOpen && (
           <>
-            <div 
+            <div
               className="fixed inset-0 bg-black bg-opacity-50 z-40"
               onClick={() => setIsMobileMenuOpen(false)}
             />
             <div className="fixed top-0 left-0 w-64 bg-white border-r border-gray-200 flex flex-col h-screen z-50 transform transition-transform">
-              <SidebarContent 
+              <SidebarContent
                 tabs={tabs}
                 activeTab={activeTab}
                 onTabChange={handleTabChange}
@@ -273,7 +274,7 @@ export function Sidebar({
   // Desktop sidebar
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col h-screen fixed left-0 top-0 z-40">
-      <SidebarContent 
+      <SidebarContent
         tabs={tabs}
         activeTab={activeTab}
         onTabChange={handleTabChange}
@@ -287,14 +288,14 @@ export function Sidebar({
         userUsername={userUsername}
         userShift={userShift}
       />
-      
+
       {/* Dialog de visualização e edição da foto */}
       <Dialog open={isPhotoDialogOpen} onOpenChange={setIsPhotoDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Foto de Perfil</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {/* Visualização da foto atual */}
             <div className="flex justify-center">
@@ -310,7 +311,7 @@ export function Sidebar({
                 </div>
               )}
             </div>
-            
+
             {/* Botão para editar foto */}
             <div className="flex flex-col gap-3">
               <Button
@@ -330,7 +331,7 @@ export function Sidebar({
                   </>
                 )}
               </Button>
-              
+
               <input
                 type="file"
                 ref={fileInputRef}
@@ -338,7 +339,7 @@ export function Sidebar({
                 accept="image/jpeg,image/png,image/gif,image/webp"
                 onChange={handleFileChange}
               />
-              
+
               <p className="text-xs text-gray-500 text-center">
                 Formatos aceitos: JPEG, PNG, GIF, WEBP<br />
                 Tamanho máximo: 5MB
@@ -351,14 +352,14 @@ export function Sidebar({
   )
 }
 
-function SidebarContent({ 
-  tabs, 
-  activeTab, 
-  onTabChange, 
-  onLogout, 
-  userName, 
-  userEmail, 
-  profilePictureUrl, 
+function SidebarContent({
+  tabs,
+  activeTab,
+  onTabChange,
+  onLogout,
+  userName,
+  userEmail,
+  profilePictureUrl,
   userRole,
   showHeader,
   onPhotoClick,
@@ -392,7 +393,7 @@ function SidebarContent({
       {(userName || userEmail) && (
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center gap-3">
-            <div 
+            <div
               className="relative cursor-pointer group"
               onClick={onPhotoClick}
               title="Clique para visualizar/editar foto"
@@ -449,8 +450,8 @@ function SidebarContent({
                 variant={activeTab === tab.id ? "default" : "ghost"}
                 className={cn(
                   "w-full justify-start gap-3 h-11",
-                  activeTab === tab.id 
-                    ? "bg-[#EE4D2D] text-white hover:bg-[#D23F20]" 
+                  activeTab === tab.id
+                    ? "bg-[#EE4D2D] text-white hover:bg-[#D23F20]"
                     : "text-gray-700 hover:bg-gray-100"
                 )}
                 onClick={() => onTabChange(tab.id)}

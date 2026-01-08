@@ -13,9 +13,16 @@ import { toast } from "@/components/ui/use-toast"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { Search, Trash2, Download, User, Eye, Mail, Calendar, Hash } from "lucide-react"
-import { getUsers, deleteUser } from "@/lib/db"
+import { getUsers, deleteUser, getProjects, updateUser } from "@/lib/db"
 import { cn } from "@/lib/utils"
 import Image from "next/image"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 // Função utilitária para formatar CPF
 function formatCPF(value: string) {
@@ -33,10 +40,34 @@ export function EmployeeManagement() {
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedEmployee, setSelectedEmployee] = useState<any>(null)
   const [isPhotoDialogOpen, setIsPhotoDialogOpen] = useState(false)
+  const [projects, setProjects] = useState<any[]>([])
 
   useEffect(() => {
     loadEmployees()
+    loadProjects()
   }, [])
+
+  const loadProjects = async () => {
+    const data = await getProjects()
+    setProjects(data)
+  }
+
+  const handleProjectChange = async (userId: string, projectId: string) => {
+    try {
+      await updateUser(userId, { projectId: projectId === "none" ? undefined : projectId })
+      toast({
+        title: "Projeto atualizado",
+        description: "O projeto do funcionário foi atualizado com sucesso.",
+      })
+      loadEmployees() // Reload to reflect changes
+    } catch (error) {
+      toast({
+        title: "Erro",
+        description: "Não foi possível atualizar o projeto.",
+        variant: "destructive",
+      })
+    }
+  }
 
   useEffect(() => {
     if (searchTerm) {
@@ -128,22 +159,22 @@ export function EmployeeManagement() {
 
     // Extrair tipo de arquivo da string base64 ou URL
     let fileName = `foto_${employee.firstName}_${employee.lastName}`
-    
+
     if (employee.profilePictureUrl.startsWith('data:')) {
       // É base64, extrair tipo
       const matches = employee.profilePictureUrl.match(/^data:([A-Za-z-+/]+);base64,(.+)$/)
       if (matches && matches.length === 3) {
         const type = matches[1]
         const base64Data = matches[2]
-        
+
         // Determinar extensão
         let extension = "jpg"
         if (type.includes("png")) extension = "png"
         else if (type.includes("gif")) extension = "gif"
         else if (type.includes("webp")) extension = "webp"
-        
+
         fileName += `.${extension}`
-        
+
         // Converter base64 para blob e fazer download
         const byteCharacters = atob(base64Data)
         const byteNumbers = new Array(byteCharacters.length)
@@ -152,7 +183,7 @@ export function EmployeeManagement() {
         }
         const byteArray = new Uint8Array(byteNumbers)
         const blob = new Blob([byteArray], { type })
-        
+
         const url = URL.createObjectURL(blob)
         const link = document.createElement("a")
         link.href = url
@@ -211,6 +242,7 @@ export function EmployeeManagement() {
                       <TableHead className="min-w-[140px]">CPF</TableHead>
                       <TableHead className="min-w-[140px]">Data de Nascimento</TableHead>
                       <TableHead className="min-w-[120px]">Expediente</TableHead>
+                      <TableHead className="min-w-[200px]">Projeto</TableHead>
                       <TableHead className="min-w-[120px]">Data de Cadastro</TableHead>
                       <TableHead className="min-w-[120px]">Foto de Perfil</TableHead>
                       <TableHead className="text-right min-w-[100px]">Ações</TableHead>
@@ -229,11 +261,29 @@ export function EmployeeManagement() {
                           {employee.birthDate ? formatDate(employee.birthDate) : "-"}
                         </TableCell>
                         <TableCell>{employee.shift ? employee.shift.replace('-', '–') : '-'}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={employee.projectId || "none"}
+                            onValueChange={(value) => handleProjectChange(employee.id, value)}
+                          >
+                            <SelectTrigger className="w-[180px]">
+                              <SelectValue placeholder="Selecione..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sem Projeto</SelectItem>
+                              {projects.map((project) => (
+                                <SelectItem key={project.id} value={project.id}>
+                                  {project.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
                         <TableCell>{formatDate(employee.createdAt)}</TableCell>
                         <TableCell>
                           {employee.profilePictureUrl ? (
                             <div className="flex flex-col items-center gap-2">
-                              <div 
+                              <div
                                 className="relative cursor-pointer group"
                                 onClick={() => handleViewPhoto(employee)}
                                 title="Clique para visualizar foto"
@@ -296,7 +346,7 @@ export function EmployeeManagement() {
                   {/* Foto de perfil */}
                   <div className="flex-shrink-0">
                     {employee.profilePictureUrl ? (
-                      <div 
+                      <div
                         className="relative cursor-pointer group"
                         onClick={() => handleViewPhoto(employee)}
                         title="Clique para visualizar foto"
@@ -331,7 +381,7 @@ export function EmployeeManagement() {
                           <span className="font-mono">{employee.username}</span>
                         </div>
                       </div>
-                      
+
                       {/* Botões de ação */}
                       <div className="flex gap-2 flex-shrink-0">
                         {employee.profilePictureUrl && (
@@ -361,7 +411,7 @@ export function EmployeeManagement() {
                         <Mail className="h-3 w-3 text-gray-500" />
                         <span className="text-gray-700 truncate">{employee.email}</span>
                       </div>
-                      
+
                       {employee.cpf && (
                         <div className="flex items-center gap-1 text-sm">
                           <Badge variant="outline" className="text-xs">
@@ -369,7 +419,7 @@ export function EmployeeManagement() {
                           </Badge>
                         </div>
                       )}
-                      
+
                       <div className="flex flex-wrap gap-2 text-xs">
                         {employee.birthDate && (
                           <Badge variant="secondary" className="text-xs">
@@ -382,6 +432,24 @@ export function EmployeeManagement() {
                             Expediente: {employee.shift.replace('-', '–')}
                           </Badge>
                         )}
+                        <div className="w-full">
+                          <Select
+                            value={employee.projectId || "none"}
+                            onValueChange={(value) => handleProjectChange(employee.id, value)}
+                          >
+                            <SelectTrigger className="w-full h-8 text-xs">
+                              <SelectValue placeholder="Projeto..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">Sem Projeto</SelectItem>
+                              {projects.map((project) => (
+                                <SelectItem key={project.id} value={project.id}>
+                                  {project.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <Badge variant="secondary" className="text-xs">
                           <Calendar className="h-3 w-3 mr-1" />
                           Cadastro: {formatDate(employee.createdAt)}
@@ -402,7 +470,7 @@ export function EmployeeManagement() {
           <DialogHeader>
             <DialogTitle>Foto de Perfil - {selectedEmployee?.firstName} {selectedEmployee?.lastName}</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             {/* Visualização da foto */}
             <div className="flex justify-center">
@@ -420,14 +488,14 @@ export function EmployeeManagement() {
                 </div>
               )}
             </div>
-            
+
             {/* Informações do funcionário */}
             <div className="text-center space-y-1">
               <p className="text-lg font-semibold">{selectedEmployee?.firstName} {selectedEmployee?.lastName}</p>
               <p className="text-sm text-gray-600">{selectedEmployee?.email}</p>
               <p className="text-sm text-gray-500">User: <strong>{selectedEmployee?.username}</strong></p>
             </div>
-            
+
             {/* Botões de ação */}
             <div className="flex gap-3 w-full">
               <Button

@@ -8,13 +8,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import { AlertCircle, ArrowLeft } from "lucide-react"
+import { AlertCircle, ArrowLeft, Upload, X, Eye, EyeOff, Loader2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { authenticateEmployee, setCurrentUser, isEmailRegistered } from "@/lib/auth"
-import { initializeDb } from "@/lib/db"
+import { initializeDb, createUser, getUserByEmail, updateUserProfilePicture, getProjects } from "@/lib/db"
 import type { User } from "@/lib/db"
 import { uploadProfilePicture } from "@/lib/supabase"
 import { LoadingScreen } from "@/components/loading-screen"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 
 enum LoginStep {
   INITIAL = "initial",
@@ -51,7 +58,17 @@ export function EmployeeLoginForm() {
     cpf: "",
     birthDate: "",
     shift: "9-18", // valor padrão
+    password: "",
+    confirmPassword: "",
+    role: "employee" as "admin" | "employee",
+    projectId: "",
   })
+  const [projects, setProjects] = useState<any[]>([])
+
+  useEffect(() => {
+    // Carregar projetos ao iniciar
+    getProjects().then(setProjects)
+  }, [])
 
   useEffect(() => {
     // Inicializar o banco de dados quando o componente for montado
@@ -168,7 +185,7 @@ export function EmployeeLoginForm() {
       // Lógica baseada na etapa atual
       if (currentStep === LoginStep.FIRST_ACCESS) {
         // Validar CPF
-        if (!formData.cpf || formData.cpf.length !== 11) {
+        if (!formData.cpf || formData.cpf.replace(/\D/g, "").length !== 11) {
           setError("Por favor, insira um CPF válido (11 dígitos)")
           setIsLoading(false)
           return
@@ -184,6 +201,13 @@ export function EmployeeLoginForm() {
         // Validar foto de perfil
         if (!profilePicture) {
           setError("Por favor, envie uma foto de perfil 3x4 (obrigatório)")
+          setIsLoading(false)
+          return
+        }
+
+        // Validar projeto
+        if (!formData.projectId) {
+          setError("Por favor, selecione seu projeto")
           setIsLoading(false)
           return
         }
@@ -207,16 +231,16 @@ export function EmployeeLoginForm() {
         }
 
         // Primeiro acesso - criar novo usuário
-        user = await authenticateEmployee(
-          formData.firstName, 
-          formData.lastName, 
-          formData.email, 
-          undefined, 
-          formData.cpf, 
-          formData.birthDate,
-          profilePictureUrl, // Passa a URL da foto
-          formData.shift as "8-17" | "9-18" // Cast explícito para o tipo correto
-        )
+        user = await createUser({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          role: formData.role,
+          cpf: formData.cpf.replace(/\D/g, ""),
+          birthDate: formData.birthDate,
+          profilePictureUrl: profilePictureUrl,
+          projectId: formData.projectId,
+        })
 
         if (!user) {
           throw new Error("Falha ao criar usuário. Tente novamente.")
@@ -242,20 +266,20 @@ export function EmployeeLoginForm() {
 
         if (!user) {
           throw new Error("Falha na autenticação. Tente novamente.")
-      }
+        }
 
         // Salvar usuário e mostrar mensagem de boas-vindas
-      setCurrentUser(user)
-      toast({
-        title: "Login realizado com sucesso",
-        description: `Bem-vindo(a), ${user.firstName}!`,
-        duration: 2000,
-      })
+        setCurrentUser(user)
+        toast({
+          title: "Login realizado com sucesso",
+          description: `Bem-vindo(a), ${user.firstName}!`,
+          duration: 2000,
+        })
       }
 
       // Mostrar tela de carregamento antes de redirecionar
       setShowLoadingScreen(true)
-      
+
       // Simular carregamento por 2 segundos
       setTimeout(() => {
         router.push("/employee/dashboard")
@@ -403,40 +427,40 @@ export function EmployeeLoginForm() {
       case LoginStep.FIRST_ACCESS:
         return (
           <div className="space-y-4">
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="firstName">Nome</Label>
-              <Input
-                id="firstName"
-                name="firstName"
-                placeholder="Digite seu nome"
-                value={formData.firstName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="lastName">Sobrenome</Label>
-              <Input
-                id="lastName"
-                name="lastName"
-                placeholder="Digite seu sobrenome"
-                value={formData.lastName}
-                onChange={handleChange}
-                required
-              />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email Corporativo</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
+            <div className="grid gap-4">
+              <div className="grid gap-2">
+                <Label htmlFor="firstName">Nome</Label>
+                <Input
+                  id="firstName"
+                  name="firstName"
+                  placeholder="Digite seu nome"
+                  value={formData.firstName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="lastName">Sobrenome</Label>
+                <Input
+                  id="lastName"
+                  name="lastName"
+                  placeholder="Digite seu sobrenome"
+                  value={formData.lastName}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="email">Email Corporativo</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
                   placeholder="seuemail@shopeemobile-external.com"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
+                  value={formData.email}
+                  onChange={handleChange}
+                  required
+                />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="cpf">CPF</Label>
@@ -492,6 +516,25 @@ export function EmployeeLoginForm() {
                     className="w-24 h-32 object-cover rounded-md border mt-2"
                   />
                 )}
+              </div>
+
+              <div className="grid gap-2">
+                <Label htmlFor="projectId">Projeto</Label>
+                <Select
+                  value={formData.projectId}
+                  onValueChange={(value) => setFormData({ ...formData, projectId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione seu projeto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

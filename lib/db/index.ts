@@ -1,5 +1,5 @@
-// Banco de dados usando Supabase
 import { supabase, supabaseAdmin } from "@/lib/supabase"
+import { format, differenceInDays, addDays, getDay, parseISO, eachDayOfInterval } from "date-fns"
 
 export interface User {
   id: string
@@ -14,6 +14,13 @@ export interface User {
   shift?: "8-17" | "9-18"
   birthDate?: string
   isFirstAccess?: boolean
+  projectId?: string
+}
+
+export interface Project {
+  id: string
+  name: string
+  createdAt: string
 }
 
 export interface HourBankCompensation {
@@ -35,6 +42,7 @@ export interface Holiday {
   id: number
   name: string
   date?: string // Campo opcional - não usado mais na interface
+  type?: string // 'holiday' or 'bridge'
   active: boolean
   deadline: string
   maxHours: number
@@ -134,12 +142,12 @@ function convertToCamelCase<T>(data: any): T {
     Object.keys(data).forEach((key) => {
       // Converter snake_case para camelCase
       let newKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-      
+
       // Mapeamento específico para campos de banco de horas
       if (key === 'hour_bank_proof') {
         newKey = 'proofImage'
       }
-      
+
       newObj[newKey] = convertToCamelCase(data[key])
     })
 
@@ -178,11 +186,11 @@ export async function initializeDb() {
   try {
     // Teste simples de conectividade
     const { data, error } = await supabase.from("users").select("id").limit(1)
-    
+
     if (error && error.code !== "PGRST116") {
       console.warn("Aviso ao verificar banco de dados:", error)
     }
-    
+
     return true
   } catch (error) {
     console.warn("Aviso ao inicializar banco de dados:", error)
@@ -295,10 +303,10 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
     // Verificar se o username já existe e incrementar contador se necessário
     while (true) {
       const { data: existingUsername } = await supabase
-          .from("users")
-          .select("username")
-          .eq("username", username)
-          .maybeSingle()
+        .from("users")
+        .select("username")
+        .eq("username", username)
+        .maybeSingle()
 
       if (!existingUsername) break
       username = `${baseUsername}${counter}`
@@ -317,6 +325,7 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
         birth_date: user.birthDate,
         is_first_access: true,
         profile_picture_url: user.profilePictureUrl || null,
+        project_id: user.projectId || null,
       },
     ]).select().single()
 
@@ -339,6 +348,51 @@ export async function deleteUser(id: string): Promise<void> {
   if (error) {
     console.error("Erro ao excluir usuário:", error)
     throw new Error("Falha ao excluir usuário")
+  }
+}
+
+export async function updateUser(id: string, data: Partial<User>): Promise<User> {
+  // Converter camelCase para snake_case
+  const userData = convertToSnakeCase({
+    ...data,
+    updatedAt: new Date().toISOString(),
+  })
+
+  // Remover campos que não devem ser atualizados diretamente ou que não existem no banco com esse nome
+  delete userData.created_at
+  delete userData.id
+  delete userData.email // Geralmente não se altera email assim, mas depende da regra de negócio
+  // Garantir que project_id seja processado corretamente (convertToSnakeCase deve lidar com isso se for projectId -> project_id)
+
+  const { data: updatedUser, error } = await supabase
+    .from("users")
+    .update(userData)
+    .eq("id", id)
+    .select()
+    .single()
+
+  if (error) {
+    console.error("Erro ao atualizar usuário:", error)
+    throw new Error("Falha ao atualizar usuário")
+  }
+
+  return convertToCamelCase<User>(updatedUser)
+}
+
+// Funções para projetos
+export async function getProjects(): Promise<Project[]> {
+  try {
+    const { data, error } = await supabase.from("projects").select("*").order("name")
+
+    if (error) {
+      console.error("Erro ao buscar projetos:", error)
+      return []
+    }
+
+    return convertToCamelCase<Project[]>(data || [])
+  } catch (error) {
+    console.error("Erro em getProjects:", error)
+    return []
   }
 }
 
@@ -895,6 +949,59 @@ export async function deleteAbsenceRecord(id: number): Promise<void> {
   }
 }
 
+export async function getProjectVacations(projectId: string): Promise<Date[]> {
+  try {
+    const { data, error } = await supabase
+      .from("absence_records")
+      .select(`
+        id,
+        status,
+        date_range,
+        dates,
+        users!inner (
+          project_id
+        )
+      `)
+      .eq("users.project_id", projectId)
+      .eq("status", "approved")
+
+    if (error) {
+      console.error("Erro ao buscar férias do projeto:", error)
+      return []
+    }
+
+    const unavailableDates: Date[] = []
+
+    data?.forEach((record: any) => {
+      if (record.dates && Array.isArray(record.dates)) {
+        record.dates.forEach((dateString: string) => {
+          unavailableDates.push(parseISO(dateString))
+        })
+      }
+      else if (record.date_range?.start && record.date_range?.end) {
+        try {
+          const start = parseISO(record.date_range.start)
+          const end = parseISO(record.date_range.end)
+          const dates = eachDayOfInterval({ start, end })
+          unavailableDates.push(...dates)
+        } catch (e) {
+          console.error("Erro ao processar intervalo de datas:", e)
+        }
+      }
+    })
+
+    return unavailableDates
+  } catch (error) {
+    console.error("Erro em getProjectVacations:", error)
+    return []
+  }
+}
+
+
+
+
+
+
 // Função para calcular horas extras com base no horário de trabalho
 export function calculateOvertimeHours(
   date: string,
@@ -984,11 +1091,11 @@ export function determineOvertimeOption(
   for (const option of options) {
     const [optStartHour, optStartMin = "00"] = option.id.split("_")[0].replace("h", ":").split(":")
     const [optEndHour, optEndMin = "00"] = option.id.split("_")[1].replace("h", ":").split(":")
-    
-    if (startHour === Number(optStartHour) && 
-        startMin === Number(optStartMin) && 
-        endHour === Number(optEndHour) && 
-        endMin === Number(optEndMin)) {
+
+    if (startHour === Number(optStartHour) &&
+      startMin === Number(optStartMin) &&
+      endHour === Number(optEndHour) &&
+      endMin === Number(optEndMin)) {
       return option
     }
   }
@@ -1343,7 +1450,7 @@ export async function createHourBankCompensation(
         .insert(compensationData)
         .select()
         .single()
-      
+
       data = result.data
       error = result.error
     }
@@ -1431,7 +1538,7 @@ export async function getAllHourBankCompensations(): Promise<HourBankCompensatio
 }
 
 export async function updateHourBankCompensation(
-  id: number, 
+  id: number,
   data: Partial<HourBankCompensation>
 ): Promise<HourBankCompensation> {
   try {
@@ -1515,7 +1622,7 @@ export async function getTimeRequestsByUserId(userId: string): Promise<TimeReque
 export async function getAllTimeRequests(): Promise<TimeRequest[]> {
   console.log("🔥 FUNÇÃO getAllTimeRequests CHAMADA")
   console.log("🔥 Supabase client:", !!supabase)
-  
+
   try {
     console.log("📡 Fazendo query no Supabase...")
     const { data, error } = await supabase
@@ -1530,7 +1637,7 @@ export async function getAllTimeRequests(): Promise<TimeRequest[]> {
 
     console.log("✅ Dados brutos recebidos:", data)
     console.log("📊 Quantidade de registros:", data?.length || 0)
-    
+
     if (!data || data.length === 0) {
       console.log("⚠️ Nenhum dado encontrado na tabela time_requests")
       return []
@@ -1552,7 +1659,7 @@ export async function getAllTimeRequests(): Promise<TimeRequest[]> {
       users: { first_name: "Leonardo", last_name: "Alves", email: "leonardo.alves@shopeemobile-external.com" },
       holidays: { name: "Consciência Negra", date: "2025-11-15" }
     }))
-    
+
     console.log("🎯 Dados finais retornados:", simpleData)
     return simpleData as TimeRequest[]
   } catch (error) {
@@ -1595,10 +1702,10 @@ export async function updateTimeRequest(id: number, data: Partial<TimeRequest>):
     // Se a solicitação foi aprovada e é do tipo "missing_entry", criar registro de ponto
     if (data.status === "approved" && originalRequest.request_type === "missing_entry") {
       console.log("🎯 Criando registro de ponto para solicitação aprovada")
-      
+
       const startTime = data.actualTime || originalRequest.requested_time
       const today = new Date().toISOString().slice(0, 10)
-      
+
       // Criar registro de ponto ativo
       await createTimeClockRecord({
         userId: originalRequest.user_id,
@@ -1609,7 +1716,7 @@ export async function updateTimeRequest(id: number, data: Partial<TimeRequest>):
         status: "active",
         overtimeHours: 0,
       })
-      
+
       console.log("✅ Registro de ponto criado com sucesso")
     }
 
@@ -1640,9 +1747,9 @@ export async function deleteTimeRequest(id: number): Promise<void> {
 // Função para verificar e corrigir solicitações aprovadas sem ponto ativo
 export async function fixApprovedRequests(): Promise<{ fixed: number; errors: string[] }> {
   console.log("🔧 Iniciando correção de solicitações aprovadas...")
-  
+
   const results = { fixed: 0, errors: [] as string[] }
-  
+
   try {
     // Buscar todas as solicitações aprovadas de entrada
     const { data: approvedRequests, error } = await supabase
@@ -1667,7 +1774,7 @@ export async function fixApprovedRequests(): Promise<{ fixed: number; errors: st
     for (const request of approvedRequests) {
       try {
         console.log(`🔍 Verificando solicitação ID ${request.id} do usuário ${request.user_id}`)
-        
+
         // Verificar se já existe um registro de ponto para este usuário/feriado/data
         const today = new Date().toISOString().slice(0, 10)
         const { data: existingClock, error: clockError } = await supabase
@@ -1691,9 +1798,9 @@ export async function fixApprovedRequests(): Promise<{ fixed: number; errors: st
 
         // Não existe ponto ativo, criar um
         console.log(`🎯 Criando ponto ativo para solicitação ${request.id}`)
-        
+
         const startTime = request.actual_time || request.requested_time
-        
+
         await createTimeClockRecord({
           userId: request.user_id,
           holidayId: request.holiday_id,
@@ -1703,10 +1810,10 @@ export async function fixApprovedRequests(): Promise<{ fixed: number; errors: st
           status: "active",
           overtimeHours: 0,
         })
-        
+
         results.fixed++
         console.log(`✅ Ponto ativo criado para solicitação ${request.id} - Entrada: ${startTime}`)
-        
+
       } catch (error: any) {
         console.error(`Erro ao processar solicitação ${request.id}:`, error)
         results.errors.push(`Erro ao processar solicitação ${request.id}: ${error.message}`)

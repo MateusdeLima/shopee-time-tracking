@@ -11,6 +11,7 @@ import { AdminAbsences } from "@/components/admin-absences"
 import { AdminNotifications } from "@/components/admin-notifications"
 import { Sidebar } from "@/components/sidebar"
 import { getCurrentUser, logout, refreshCurrentUser } from "@/lib/auth"
+import { ProjectManagement } from "@/components/admin/project-management"
 import { useAdminSession, clearAdminSession } from "@/hooks/use-admin-session"
 import { initializeDb } from "@/lib/db"
 import { Button } from "@/components/ui/button"
@@ -75,7 +76,7 @@ export default function AdminDashboard() {
     // Verificar se há parâmetro de aba na URL ao carregar
     const urlParams = new URLSearchParams(window.location.search)
     const tabParam = urlParams.get('tab')
-    if (tabParam && ['dashboard', 'absences', 'employees'].includes(tabParam)) {
+    if (tabParam && ['dashboard', 'absences', 'employees', 'projects'].includes(tabParam)) {
       console.log('🔔 URL: Definindo aba inicial:', tabParam)
       setActiveMainTab(tabParam)
     }
@@ -113,21 +114,19 @@ export default function AdminDashboard() {
                 <div className="flex justify-center mb-6">
                   <div className="flex bg-gray-100 rounded-lg p-1">
                     <button
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                        activeHolidayTab === "manage"
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeHolidayTab === "manage"
                           ? "bg-[#EE4D2D] text-white"
                           : "text-gray-600 hover:text-gray-900"
-                      }`}
+                        }`}
                       onClick={() => setActiveHolidayTab("manage")}
                     >
                       Gerenciar Feriados
                     </button>
                     <button
-                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                        activeHolidayTab === "reports"
+                      className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeHolidayTab === "reports"
                           ? "bg-[#EE4D2D] text-white"
                           : "text-gray-600 hover:text-gray-900"
-                      }`}
+                        }`}
                       onClick={() => setActiveHolidayTab("reports")}
                     >
                       Relatórios
@@ -225,6 +224,12 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         )
+      case "projects":
+        return (
+          <div className="space-y-6">
+            <ProjectManagement />
+          </div>
+        )
       default:
         return null
     }
@@ -247,7 +252,7 @@ export default function AdminDashboard() {
         userUsername={user?.username}
         onProfileUpdate={handleProfileUpdate}
       />
-      
+
       {/* Header com notificações para admin */}
       <div className="fixed top-0 right-0 z-40 md:left-64 left-0 bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-4">
@@ -268,7 +273,7 @@ export default function AdminDashboard() {
           </Button>
         </div>
       </div>
-      
+
       <main className="flex-1 min-w-0 md:ml-64 pt-20 md:pt-24 p-3 sm:p-6">
         {renderContent()}
 
