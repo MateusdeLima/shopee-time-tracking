@@ -332,6 +332,21 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         setError("O período selecionado conflita com férias de outro membro do projeto.")
         return
       }
+
+      // Validação de feriados e emendas
+      const hasHoliday = formData.dates.some(date =>
+        holidays.some(h => {
+          if (!h.date) return false
+          // Ajustar data do feriado para evitar problemas de fuso
+          const hDate = new Date(h.date + 'T12:00:00')
+          return format(hDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+        })
+      )
+
+      if (hasHoliday) {
+        setError("Não é permitido selecionar férias em dias de feriado ou emenda.")
+        return
+      }
     }
 
     // Validação específica para Atestado
@@ -1219,16 +1234,12 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           // Comparar com segurança de fuso horário
                           const hDate = parseISO(h.date + 'T12:00:00')
                           const diff = differenceInDays(hDate, date)
+
+                          // Bloquear o próprio feriado (diff === 0)
+                          if (diff === 0) return true
+
                           // Bloquear se estiver a menos de 4 dias ANTES do feriado (exclusivo)
                           // Se diff 1, 2, 3 -> Bloqueia. Se diff 4 -> OK.
-                          // Exemplo: Feriado Sexta (25).
-                          // Diff = 25 - 24 = 1 (Quinta) -> Bloqueia
-                          // Diff = 25 - 23 = 2 (Quarta) -> Bloqueia
-                          // Diff = 25 - 22 = 3 (Terça) -> Bloqueia
-                          // Diff = 25 - 21 = 4 (Segunda) -> OK? "4 dias antes de feriado"
-                          // Regra: "só podendo iniciar as férias 4 dias antes de um feriado" - ou seja, deve haver gap de 4 dias?
-                          // Ou "não pode iniciar NOS 4 dias antes"? 
-                          // Vou assumir "nos 4 dias antes".
                           return diff > 0 && diff < 4
                         })
                       }
