@@ -168,33 +168,14 @@ export async function POST(request: Request) {
                 }
             }
 
+            // 2. Enviar IMAGEM (se houver) -> DESATIVADO
+            // Motivo: O Webhook de Grupo simples do SeaTalk (Incoming Webhook) 
+            // aparentemente não suporta envio direto de imagem via Base64 com os payloads padrões.
+            // Para enviar imagens, seria necessário usar a API completa de Bot (App Access Token),
+            // o que requer autenticação mais complexa que falhou anteriormente.
+
             if (base64Image) {
-                try {
-                    // Enviar payload de Imagem para o Webhook
-                    const imagePayload = {
-                        tag: "image",
-                        image: {
-                            base64: base64Image
-                        }
-                    }
-
-                    const imageResponse = await fetch(WEBHOOK_URL, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(imagePayload)
-                    })
-
-                    if (imageResponse.ok) {
-                        imageResult = await imageResponse.json()
-                        console.log("🤖 [BOT] Imagem enviada com sucesso!")
-                    } else {
-                        const imgErr = await imageResponse.text()
-                        console.error("🤖 [BOT] Falha ao enviar imagem:", imageResponse.status, imgErr)
-                        imageResult = { error: imgErr }
-                    }
-                } catch (sendErr) {
-                    console.error("🤖 [BOT] Erro ao enviar payload de imagem:", sendErr)
-                }
+                console.log("🤖 [BOT] Imagem detectada, mas envio desativado devido a limitações do Webhook.")
             }
         }
 
