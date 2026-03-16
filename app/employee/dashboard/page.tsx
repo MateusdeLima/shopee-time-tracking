@@ -45,11 +45,6 @@ export default function EmployeeDashboard() {
       return
     }
 
-    // Se for o primeiro acesso E não tiver foto de perfil, redireciona para upload obrigatório
-    if (user.isFirstAccess && !user.profilePictureUrl) {
-      router.push("/employee/primeiro-acesso")
-      return
-    }
 
     setUser(user)
     setLoading(false)
@@ -189,25 +184,13 @@ export default function EmployeeDashboard() {
       <Dialog open={isProfileDialogOpen} onOpenChange={setIsProfileDialogOpen}>
         <DialogContent className="sm:max-w-md w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="text-center">Foto de Perfil</DialogTitle>
+            <DialogTitle className="text-center">Minhas Informações</DialogTitle>
           </DialogHeader>
           
           <div className="flex flex-col items-center gap-6 py-4">
-            {/* Foto no formato 3x4 */}
-            <div className="relative w-48 h-64 bg-gray-100 rounded-lg overflow-hidden border-4 border-[#EE4D2D] shadow-lg">
-              {user.profilePictureUrl ? (
-                <Image
-                  src={user.profilePictureUrl}
-                  alt="Foto de perfil"
-                  fill
-                  className="object-cover"
-                  priority
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <User className="h-24 w-24 text-gray-400" />
-                </div>
-              )}
+            {/* Informações do usuário sem foto */}
+            <div className="bg-[#EE4D2D]/10 p-6 rounded-full mb-2">
+              <User className="h-16 w-16 text-[#EE4D2D]" />
             </div>
 
             {/* Informações do usuário */}
@@ -215,74 +198,16 @@ export default function EmployeeDashboard() {
               <p className="text-lg font-semibold">{user.firstName} {user.lastName}</p>
               <p className="text-sm text-gray-600">{user.email}</p>
               <p className="text-sm text-gray-500">User: <strong>{user.username}</strong></p>
+              <p className="text-xs text-blue-600 font-medium">Expediente: {user.shift}</p>
             </div>
 
-            {/* Botões de ação */}
-            <div className="flex gap-3 w-full">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setIsProfileDialogOpen(false)}
-              >
-                <X className="h-4 w-4 mr-2" />
-                Fechar
-              </Button>
-              <Button
-                className="flex-1 bg-[#EE4D2D] hover:bg-[#D23F20]"
-                onClick={() => document.getElementById('profile-picture-upload-dialog')?.click()}
-                disabled={isUpdatingPhoto}
-              >
-                {isUpdatingPhoto ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                    Atualizando...
-                  </>
-                ) : (
-                  <>
-                    <Edit2 className="h-4 w-4 mr-2" />
-                    Editar Foto
-                  </>
-                )}
-              </Button>
-            </div>
-
-            {/* Input de arquivo oculto */}
-            <input
-              id="profile-picture-upload-dialog"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                
-                try {
-                  setIsUpdatingPhoto(true);
-                  const { uploadProfilePicture } = await import('@/lib/supabase');
-                  const { updateUserProfilePicture } = await import('@/lib/db');
-                  
-                  const url = await uploadProfilePicture(user.id, file);
-                  if (!url) throw new Error('Falha ao fazer upload da nova foto.');
-                  
-                  await updateUserProfilePicture(user.id, url);
-                  
-                  // Atualizar o estado do usuário
-                  const updatedUser = { ...user, profilePictureUrl: url };
-                  setUser(updatedUser);
-                  setCurrentUser(updatedUser);
-                  
-                  // Mostrar notificação de sucesso
-                  alert('Foto de perfil atualizada com sucesso!');
-                } catch (err) {
-                  console.error('Erro ao atualizar foto de perfil:', err);
-                  alert('Erro ao atualizar a foto de perfil. Tente novamente.');
-                } finally {
-                  setIsUpdatingPhoto(false);
-                  // Resetar o input para permitir selecionar o mesmo arquivo novamente
-                  e.target.value = '';
-                }
-              }}
-            />
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => setIsProfileDialogOpen(false)}
+            >
+              Fechar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

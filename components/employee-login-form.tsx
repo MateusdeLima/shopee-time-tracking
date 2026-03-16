@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import { AlertCircle, ArrowLeft, Upload, X, Eye, EyeOff, Loader2 } from "lucide-react"
+import { AlertCircle, ArrowLeft, Upload, X, Eye, EyeOff, Loader2, ShieldCheck, Copy, Check } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { authenticateEmployee, setCurrentUser, isEmailRegistered } from "@/lib/auth"
-import { initializeDb, createUser, getUserByEmail, updateUserProfilePicture, getProjects } from "@/lib/db"
+import { initializeDb, createUser, getUserByEmail, updateUser, getProjects } from "@/lib/db"
 import type { User } from "@/lib/db"
 import { uploadProfilePicture } from "@/lib/supabase"
 import { LoadingScreen } from "@/components/loading-screen"
@@ -24,10 +25,7 @@ import {
 } from "@/components/ui/select"
 
 enum LoginStep {
-  INITIAL = "initial",
-  FIRST_ACCESS = "first_access",
-  EMAIL_CHECK = "email_check",
-  USERNAME_INPUT = "username_input",
+  LOGIN = "login",
 }
 
 // Função utilitária para formatar CPF
@@ -44,7 +42,9 @@ export function EmployeeLoginForm() {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [currentStep, setCurrentStep] = useState<LoginStep>(LoginStep.INITIAL)
+  const [currentStep, setCurrentStep] = useState<LoginStep>(LoginStep.LOGIN)
+  const [showFirstAccessModal, setShowFirstAccessModal] = useState(false)
+  const [generatedId, setGeneratedId] = useState("")
   const [dbInitialized, setDbInitialized] = useState(false)
   const [profilePicture, setProfilePicture] = useState<File | null>(null)
   const [profilePicturePreview, setProfilePicturePreview] = useState<string>("")
@@ -105,56 +105,6 @@ export function EmployeeLoginForm() {
     })
   }
 
-  const handleFirstAccess = () => {
-    setCurrentStep(LoginStep.FIRST_ACCESS)
-    setError("")
-  }
-
-  const handleEmailCheck = () => {
-    setCurrentStep(LoginStep.EMAIL_CHECK)
-    setError("")
-  }
-
-  const handleBack = () => {
-    setCurrentStep(LoginStep.INITIAL)
-    setError("")
-  }
-
-  const checkEmail = async () => {
-    if (!dbInitialized) {
-      setError("O sistema ainda está se conectando ao banco de dados. Aguarde um momento e tente novamente.")
-      return
-    }
-
-    setIsLoading(true)
-    setError("")
-
-    // Validar email
-    if (!formData.email.endsWith("@shopeemobile-external.com")) {
-      setError("Por favor, utilize seu email corporativo (@shopeemobile-external.com)")
-      setIsLoading(false)
-      return
-    }
-
-    try {
-      // Verificar se o email já está registrado
-      const emailRegistered = await isEmailRegistered(formData.email)
-
-      if (emailRegistered) {
-        // Se o email estiver registrado, vamos para a etapa de inserir o username
-        setCurrentStep(LoginStep.USERNAME_INPUT)
-      } else {
-        // Se o email não estiver registrado, vamos para a etapa de primeiro acesso
-        setCurrentStep(LoginStep.FIRST_ACCESS)
-      }
-    } catch (error: any) {
-      console.error("Erro ao verificar email:", error)
-      setError(error.message || "Erro ao verificar email. Tente novamente.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
   const handleProfilePictureChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null
     setProfilePicture(file)
@@ -163,6 +113,23 @@ export function EmployeeLoginForm() {
     } else {
       setProfilePicturePreview("")
     }
+  }
+
+  const handleModalClose = async () => {
+    if (formData.email) {
+      // Marcar como não sendo mais o primeiro acesso após ver o modal
+      try {
+        const user = await getUserByEmail(formData.email)
+        if (user) {
+          await updateUser(user.id, { isFirstAccess: false })
+          router.push("/employee/dashboard")
+        }
+      } catch (err) {
+        console.error("Erro ao marcar primeiro acesso:", err)
+        router.push("/employee/dashboard")
+      }
+    }
+    setShowFirstAccessModal(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -180,102 +147,34 @@ export function EmployeeLoginForm() {
       // Inicializar o banco de dados primeiro
       await initializeDb()
 
-      let user: User | undefined
+      // Login com email e opcional username
+      const user = await authenticateEmployee(undefined, undefined, formData.email, formData.username)
 
-      // Lógica baseada na etapa atual
-      if (currentStep === LoginStep.FIRST_ACCESS) {
-        // Validar CPF
-        if (!formData.cpf || formData.cpf.replace(/\D/g, "").length !== 11) {
-          setError("Por favor, insira um CPF válido (11 dígitos)")
-          setIsLoading(false)
-          return
-        }
-
-        // Validar data de nascimento
-        if (!formData.birthDate) {
-          setError("Por favor, insira sua data de nascimento")
-          setIsLoading(false)
-          return
-        }
-
-        // Validar foto de perfil
-        if (!profilePicture) {
-          setError("Por favor, envie uma foto de perfil 3x4 (obrigatório)")
-          setIsLoading(false)
-          return
-        }
-
-        // Validar projeto
-        if (!formData.projectId) {
-          setError("Por favor, selecione seu projeto")
-          setIsLoading(false)
-          return
-        }
-
-        // Upload da foto de perfil
-        let profilePictureUrl = null
-        try {
-          profilePictureUrl = await uploadProfilePicture(
-            formData.email.replace(/[^a-zA-Z0-9]/g, ""),
-            profilePicture
-          )
-          if (!profilePictureUrl) {
-            setError("Falha ao fazer upload da foto de perfil. Tente novamente.")
-            setIsLoading(false)
-            return
-          }
-        } catch (err) {
-          setError("Erro ao fazer upload da foto de perfil.")
-          setIsLoading(false)
-          return
-        }
-
-        // Primeiro acesso - criar novo usuário
-        user = await createUser({
-          firstName: formData.firstName,
-          lastName: formData.lastName,
-          email: formData.email,
-          role: formData.role,
-          cpf: formData.cpf.replace(/\D/g, ""),
-          birthDate: formData.birthDate,
-          profilePictureUrl: profilePictureUrl,
-          projectId: formData.projectId,
-        })
-
-        if (!user) {
-          throw new Error("Falha ao criar usuário. Tente novamente.")
-        }
-
-        // Mostrar o username gerado para o usuário
-        toast({
-          title: "Conta criada com sucesso",
-          description: `Seu user único é: ${user.username}. Guarde-o para futuros acessos.`,
-          duration: 2000,
-        })
-
-        // Salvar usuário e mostrar mensagem de boas-vindas
-        setCurrentUser(user)
-        toast({
-          title: "Login realizado com sucesso",
-          description: `Bem-vindo(a), ${user.firstName}!`,
-          duration: 2000,
-        })
-      } else if (currentStep === LoginStep.USERNAME_INPUT) {
-        // Login com email e username
-        user = await authenticateEmployee(undefined, undefined, formData.email, formData.username)
-
-        if (!user) {
-          throw new Error("Falha na autenticação. Tente novamente.")
-        }
-
-        // Salvar usuário e mostrar mensagem de boas-vindas
-        setCurrentUser(user)
-        toast({
-          title: "Login realizado com sucesso",
-          description: `Bem-vindo(a), ${user.firstName}!`,
-          duration: 2000,
-        })
+      if (!user) {
+        throw new Error("Falha na autenticação. Tente novamente.")
       }
+
+      // Salvar usuário
+      setCurrentUser(user)
+
+      // Se for primeiro acesso, mostrar modal
+      if (user.isFirstAccess) {
+        setGeneratedId(user.username || "")
+        setShowFirstAccessModal(true)
+        return // Não redirecionar ainda
+      }
+
+      toast({
+        title: "Login realizado com sucesso",
+        description: `Bem-vindo(a), ${user.firstName}!`,
+        duration: 2000,
+      })
+
+      // Redirecionar
+      setShowLoadingScreen(true)
+      setTimeout(() => {
+        router.push("/employee/dashboard")
+      }, 2000)
 
       // Mostrar tela de carregamento antes de redirecionar
       setShowLoadingScreen(true)
@@ -318,237 +217,68 @@ export function EmployeeLoginForm() {
     }
   }
 
-  // Renderização baseada na etapa atual
+  // Renderização principal do Login
   const renderStep = () => {
-    switch (currentStep) {
-      case LoginStep.INITIAL:
-        return (
-          <div className="grid gap-4">
-            <div className="flex flex-col gap-4">
-              <Button
-                onClick={handleEmailCheck}
-                className="w-full bg-[#EE4D2D] hover:bg-[#D23F20]"
-                disabled={isLoading || !dbInitialized}
-              >
-                Entrar com Email
-              </Button>
-              <Button
-                onClick={handleFirstAccess}
-                variant="outline"
-                className="w-full"
-                disabled={isLoading || !dbInitialized}
-              >
-                Primeiro Acesso
-              </Button>
+    return (
+      <div className="grid gap-4">
+        <div className="grid gap-2">
+          <Label htmlFor="email">Email Corporativo</Label>
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="seu@email.com"
+            value={formData.email}
+            onChange={handleChange}
+            required
+            autoComplete="email"
+          />
+        </div>
 
-              {!dbInitialized && (
-                <Button
-                  onClick={handleInitializeDatabase}
-                  variant="outline"
-                  className="w-full mt-4"
-                  disabled={isLoading}
-                >
-                  Inicializar Banco de Dados
-                </Button>
-              )}
-            </div>
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between">
+            <Label htmlFor="username">ID (Senha)</Label>
           </div>
-        )
+          <Input
+            id="username"
+            name="username"
+            placeholder="Seu ID único (ex: AG001)"
+            value={formData.username}
+            onChange={handleChange}
+            autoComplete="off"
+          />
+          <p className="text-[10px] text-gray-500 italic">
+            * Se é seu primeiro login, coloque apenas o seu e-mail.
+          </p>
+        </div>
 
-      case LoginStep.EMAIL_CHECK:
-        return (
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email Corporativo</Label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="seu.nome@shopeemobile-external.com"
-                value={formData.email}
-                onChange={handleChange}
-                required
-              />
-            </div>
+        <Button 
+          type="submit" 
+          className="w-full bg-[#EE4D2D] hover:bg-[#D23F20]" 
+          disabled={isLoading || !dbInitialized}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Entrando...
+            </>
+          ) : (
+            "Entrar"
+          )}
+        </Button>
 
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={handleBack} className="w-1/3" disabled={isLoading}>
-                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
-              </Button>
-              <Button
-                type="button"
-                className="w-2/3 bg-[#EE4D2D] hover:bg-[#D23F20]"
-                onClick={checkEmail}
-                disabled={isLoading}
-              >
-                {isLoading ? "Verificando..." : "Verificar Email"}
-              </Button>
-            </div>
-          </div>
-        )
-
-      case LoginStep.USERNAME_INPUT:
-        return (
-          <div className="grid gap-4">
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email Corporativo</Label>
-              <Input id="email" name="email" type="email" value={formData.email} readOnly className="bg-gray-50" />
-            </div>
-
-            <div className="grid gap-2">
-              <Label htmlFor="username">User Único</Label>
-              <Input
-                id="username"
-                name="username"
-                placeholder="Digite seu user único"
-                value={formData.username}
-                onChange={handleChange}
-                required
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setCurrentStep(LoginStep.EMAIL_CHECK)}
-                className="w-1/3"
-                disabled={isLoading}
-              >
-                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
-              </Button>
-              <Button type="submit" className="w-2/3 bg-[#EE4D2D] hover:bg-[#D23F20]" disabled={isLoading}>
-                {isLoading ? "Entrando..." : "Entrar"}
-              </Button>
-            </div>
-          </div>
-        )
-
-      case LoginStep.FIRST_ACCESS:
-        return (
-          <div className="space-y-4">
-            <div className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="firstName">Nome</Label>
-                <Input
-                  id="firstName"
-                  name="firstName"
-                  placeholder="Digite seu nome"
-                  value={formData.firstName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="lastName">Sobrenome</Label>
-                <Input
-                  id="lastName"
-                  name="lastName"
-                  placeholder="Digite seu sobrenome"
-                  value={formData.lastName}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email Corporativo</Label>
-                <Input
-                  id="email"
-                  name="email"
-                  type="email"
-                  placeholder="seuemail@shopeemobile-external.com"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="cpf">CPF</Label>
-                <Input
-                  id="cpf"
-                  name="cpf"
-                  placeholder="000.000.000-00"
-                  value={formatCPF(formData.cpf)}
-                  onChange={e => setFormData({ ...formData, cpf: e.target.value.replace(/\D/g, "") })}
-                  maxLength={14}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="birthDate">Data de Nascimento</Label>
-                <Input
-                  id="birthDate"
-                  name="birthDate"
-                  type="date"
-                  value={formData.birthDate}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="shift">Turno</Label>
-                <select
-                  id="shift"
-                  name="shift"
-                  value={formData.shift}
-                  onChange={handleChange}
-                  required
-                  className="border rounded px-2 py-1"
-                >
-                  <option value="8-17">8h às 17h</option>
-                  <option value="9-18">9h às 18h</option>
-                </select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="profilePicture">Foto de Perfil (3x4, obrigatório)</Label>
-                <Input
-                  id="profilePicture"
-                  name="profilePicture"
-                  type="file"
-                  accept="image/*"
-                  onChange={handleProfilePictureChange}
-                  required
-                />
-                {profilePicturePreview && (
-                  <img
-                    src={profilePicturePreview}
-                    alt="Pré-visualização da foto de perfil"
-                    className="w-24 h-32 object-cover rounded-md border mt-2"
-                  />
-                )}
-              </div>
-
-              <div className="grid gap-2">
-                <Label htmlFor="projectId">Projeto</Label>
-                <Select
-                  value={formData.projectId}
-                  onValueChange={(value) => setFormData({ ...formData, projectId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione seu projeto" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button type="button" variant="outline" onClick={handleBack} className="w-1/3" disabled={isLoading}>
-                <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
-              </Button>
-              <Button type="submit" className="w-2/3 bg-[#EE4D2D] hover:bg-[#D23F20]" disabled={isLoading}>
-                {isLoading ? "Registrando..." : "Registrar"}
-              </Button>
-            </div>
-          </div>
-        )
-    }
+        {!dbInitialized && (
+          <Button
+            onClick={handleInitializeDatabase}
+            variant="outline"
+            className="w-full mt-2"
+            disabled={isLoading}
+          >
+            Inicializar Banco de Dados
+          </Button>
+        )}
+      </div>
+    )
   }
 
   // Se estiver mostrando a tela de carregamento, renderizar apenas ela
@@ -565,7 +295,7 @@ export function EmployeeLoginForm() {
         </Alert>
       )}
 
-      {isLoading && !error && currentStep === LoginStep.INITIAL && (
+      {isLoading && !error && currentStep === LoginStep.LOGIN && (
         <Alert className="mb-4 bg-blue-50 text-blue-800 border-blue-200">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>Conectando ao banco de dados, por favor aguarde...</AlertDescription>
@@ -573,6 +303,41 @@ export function EmployeeLoginForm() {
       )}
 
       {renderStep()}
+
+      <Dialog open={showFirstAccessModal} onOpenChange={setShowFirstAccessModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <div className="mx-auto bg-green-100 p-3 rounded-full w-fit mb-4">
+              <ShieldCheck className="h-8 w-8 text-green-600" />
+            </div>
+            <DialogTitle className="text-center text-xl">Seu Primeiro Acesso!</DialogTitle>
+            <DialogDescription className="text-center">
+              Seja bem-vindo(a). Para sua segurança, geramos um ID único que servirá como sua senha.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-gray-50 p-4 sm:p-6 rounded-lg border-2 border-dashed border-gray-200 my-4 text-center overflow-hidden">
+            <p className="text-xs text-gray-500 mb-2 font-medium uppercase tracking-wider">Seu ID de Acesso</p>
+            <h2 className="text-2xl sm:text-3xl font-bold text-[#EE4D2D] font-mono break-all px-2">
+              {generatedId}
+            </h2>
+          </div>
+          <div className="space-y-4">
+            <div className="bg-amber-50 p-3 rounded-md border border-amber-100">
+              <p className="text-xs text-amber-800 leading-relaxed">
+                <strong>IMPORTANTE:</strong> Guarde este ID em um lugar seguro. Você precisará dele para todos os seus próximos acessos ao sistema.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="mt-6">
+            <Button 
+              className="w-full bg-[#EE4D2D] hover:bg-[#D23F20]" 
+              onClick={handleModalClose}
+            >
+              Entendi, salvar e continuar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   )
 }

@@ -1,188 +1,160 @@
-
 import { NextResponse } from "next/server"
 import { getUserById } from "@/lib/db"
 
-const SOPBOT_API_KEY = "h4ZSnkG287GzFmwQLXjer7X1eCJ10gIq"
-const SOPBOT_CALLBACK_URL = "https://knowledge.alpha.insea.io/s2sapi/sopbot/callback/6597"
+// O Token do Bot do Discord fornecido pelo usuário a partir de variáveis de ambiente
+const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN
+
+async function sendDiscordDM(discordId: string, message: string) {
+  try {
+    // Passo 1: Abrir o canal de DM com o usuário
+    const channelResponse = await fetch("https://discord.com/api/v10/users/@me/channels", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bot ${DISCORD_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        recipient_id: discordId,
+      }),
+    })
+
+    if (!channelResponse.ok) {
+      const errorText = await channelResponse.text()
+      console.error(`[DISCORD] Erro ao abrir DM para ${discordId}:`, errorText)
+      return { success: false, error: "Falha ao abrir canal DM", details: errorText }
+    }
+
+    const channelData = await channelResponse.json()
+    const dmChannelId = channelData.id
+
+    // Passo 2: Enviar a mensagem para o ID do canal criado
+    const messageResponse = await fetch(`https://discord.com/api/v10/channels/${dmChannelId}/messages`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bot ${DISCORD_BOT_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        content: message,
+      }),
+    })
+
+    if (!messageResponse.ok) {
+      const errorText = await messageResponse.text()
+      console.error(`[DISCORD] Erro ao enviar mensagem para canal ${dmChannelId}:`, errorText)
+      return { success: false, error: "Falha ao enviar mensagem DM", details: errorText }
+    }
+
+    console.log(`[DISCORD] Mensagem DM enviada com sucesso para Discord ID: ${discordId}`)
+    return { success: true }
+
+  } catch (error) {
+    console.error(`[DISCORD] Exceção na função sendDiscordDM:`, error)
+    return { success: false, error: "Erro interno no envio DM" }
+  }
+}
 
 export async function POST(request: Request) {
-    try {
-        const body = await request.json()
-        const { userId, reason, dates, customReason, startTime, endTime, hasProof, isProofUpdate, proofUrl } = body
+  try {
+    const body = await request.json()
+    const { userId, reason, dates, customReason, startTime, endTime, hasProof, isProofUpdate, proofUrl } = body
 
-        if (!userId) {
-            return NextResponse.json({ error: "UserId required" }, { status: 400 })
-        }
-
-        // Buscar nome do usuário
-        const user = await getUserById(userId)
-        const userName = user ? `${user.firstName} ${user.lastName}` : "Usuário Desconhecido"
-
-        // Dicionário de motivos
-        const ABSENCE_REASONS: Record<string, string> = {
-            medical: "Consulta Médica",
-            personal: "Energia/Internet",
-            vacation: "Férias",
-            certificate: "Atestado",
-            other: "Outro"
-        }
-
-        // Função auxiliar de formatação de data
-        const formatDate = (d: any) => {
-            if (!d) return ""
-            const dateObj = new Date(d)
-            if (isNaN(dateObj.getTime())) return d
-
-            // Garantir formato DD/MM/YYYY
-            const day = String(dateObj.getUTCDate()).padStart(2, '0')
-            const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0')
-            const year = dateObj.getUTCFullYear()
-            return `${day}/${month}/${year}`
-        }
-
-        // Determinar Início e Fim
-        let startDateStr = ""
-        let endDateStr = ""
-
-        if (Array.isArray(dates) && dates.length > 0) {
-            // Ordenar datas para garantir pegar a primeira e a última corretamente
-            const sortedDates = [...dates].sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
-            startDateStr = formatDate(sortedDates[0])
-            endDateStr = formatDate(sortedDates[sortedDates.length - 1])
-        } else {
-            startDateStr = formatDate(dates)
-            endDateStr = startDateStr
-        }
-
-        // ------------------------------------------------------------------
-        // CENÁRIO 1: Notificação de Comprovante (Atualização)
-        // ------------------------------------------------------------------
-
-        // Traduzir motivo base
-        const baseReason = ABSENCE_REASONS[reason] || reason
-        const reasonText = customReason ? `${baseReason} - ${customReason}` : baseReason
-
-        if (isProofUpdate) {
-            const message = `🔔 *Comprovante Anexado*\n\n👤 *Agente:* ${userName}\n📝 *Referente à Ausência:* ${reasonText} em ${startDateStr}\n✅ *Status:* Comprovante recebido.`
-
-            // Envio via Webhook
-            const WEBHOOK_URL = "https://openapi.seatalk.io/webhook/group/thftc2yBTWqT1LKDa858lw"
-            await fetch(WEBHOOK_URL, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ tag: "text", text: { content: message } })
-            })
-
-            return NextResponse.json({ success: true, type: "proof_update" })
-        }
-
-        // ------------------------------------------------------------------
-        // CENÁRIO 2: Nova Ausência
-        // ------------------------------------------------------------------
-
-        // Formatar Horários
-        const startTimeStr = startTime ? ` às ${startTime}` : ""
-        const endTimeStr = endTime ? ` às ${endTime}` : ""
-
-        // Status do Comprovante
-        const proofStatus = hasProof ? "✅ Anexado" : "⚠️ Pendente (Aguardando envio)"
-
-        // Montar Mensagem Detalhada
-        let message = `🔔 *Nova Ausência Registrada*\n\n`
-        message += `👤 *Agente:* ${userName}\n`
-        message += `📝 *Motivo:* ${reasonText}\n`
-        message += `🚀 *Início:* ${startDateStr}${startTimeStr}\n`
-
-        // Só mostrar fim se for diferente do início ou se tiver horário de fim
-        if (startDateStr !== endDateStr || endTime) {
-            message += `🏁 *Fim:* ${endDateStr}${endTimeStr}\n`
-        }
-
-        message += `📄 *Comprovante:* ${proofStatus}`
-
-
-        // ---------------------------------------------------------
-        // ESTRATÉGIA FINAL: Webhook SeaTalk (Simples e Direto)
-        // ---------------------------------------------------------
-
-        const WEBHOOK_URL = "https://openapi.seatalk.io/webhook/group/thftc2yBTWqT1LKDa858lw"
-
-        console.log("🤖 [BOT] Enviando notificação via Webhook...")
-
-        // 1. Enviar TEXTO
-        const textResponse = await fetch(WEBHOOK_URL, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({
-                tag: "text",
-                text: {
-                    content: message
-                }
-            })
-        })
-
-        if (!textResponse.ok) {
-            const errorText = await textResponse.text()
-            console.error("🤖 [BOT] Falha no Webhook (Texto):", textResponse.status, errorText)
-            return NextResponse.json({ success: false, error: "Falha no Webhook", details: errorText }, { status: 200 })
-        }
-
-        const textData = await textResponse.json()
-        console.log("🤖 [BOT] Sucesso! Webhook respondeu ao texto:", textData)
-
-        // Tentar capturar o message_id para responder em thread (se disponível)
-        // A estrutura de resposta geralmente é { code: 0, message: "success", message_id: "..." }
-        const parentMessageId = textData.message_id || null
-
-        // 2. Enviar IMAGEM (se houver)
-        let imageResult = null
-        // Assegurar que proofUrl é válido e não vazio
-        if (proofUrl && typeof proofUrl === "string") {
-            let base64Image = ""
-
-            if (proofUrl.startsWith("data:")) {
-                // Caso 1: Já é Base64 (Data ID)
-                console.log("🤖 [BOT] Identificado Data URL (Base64). Processando...")
-                // Remover o prefixo "data:image/xxx;base64,"
-                const matches = proofUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/)
-                if (matches && matches.length === 3) {
-                    base64Image = matches[2]
-                } else {
-                    console.error("🤖 [BOT] Formato Data URL inválido")
-                }
-            } else if (proofUrl.startsWith("http")) {
-                // Caso 2: É uma URL HTTP
-                console.log("🤖 [BOT] Identificada URL HTTP. Baixando imagem...")
-                try {
-                    const imageFetch = await fetch(proofUrl)
-                    if (imageFetch.ok) {
-                        const imageBuffer = await imageFetch.arrayBuffer()
-                        base64Image = Buffer.from(imageBuffer).toString('base64')
-                    } else {
-                        console.error("🤖 [BOT] Falha ao baixar imagem:", imageFetch.status)
-                    }
-                } catch (err) {
-                    console.error("🤖 [BOT] Erro ao buscar imagem:", err)
-                }
-            }
-
-            // 2. Enviar IMAGEM (se houver) -> DESATIVADO
-            // Motivo: O Webhook de Grupo simples do SeaTalk (Incoming Webhook) 
-            // aparentemente não suporta envio direto de imagem via Base64 com os payloads padrões.
-            // Para enviar imagens, seria necessário usar a API completa de Bot (App Access Token),
-            // o que requer autenticação mais complexa que falhou anteriormente.
-
-            if (base64Image) {
-                console.log("🤖 [BOT] Imagem detectada, mas envio desativado devido a limitações do Webhook.")
-            }
-        }
-
-        return NextResponse.json({ success: true, webhookResult: textData, imageResult })
-
-    } catch (error) {
-        console.error("Erro interno ao notificar ausência:", error)
-        return NextResponse.json({ success: false, error: "Erro interno" }, { status: 500 })
+    if (!userId) {
+      return NextResponse.json({ error: "UserId required" }, { status: 400 })
     }
+
+    // Buscar dados completos do usuário (incluindo o novo discord_id)
+    const user = await getUserById(userId)
+    const userName = user ? `${user.firstName} ${user.lastName}` : "Agente"
+    
+    // Se o usuário não tiver um discord_id cadastrado, aborta o envio silenciosamente
+    const discordId = user?.discordId
+    console.log('🔍 [NOTIFY] Dados do usuário:', { email: user?.email, discordId })
+
+    if (!discordId) {
+      console.log('⚠️ [NOTIFY] Usuário sem Discord ID:', user?.email)
+      return NextResponse.json({ success: false, error: 'Usuário sem Discord ID cadastrado' })
+    }
+
+    // Dicionário de motivos
+    const ABSENCE_REASONS: Record<string, string> = {
+      medical: "Consulta Médica",
+      personal: "Energia/Internet",
+      vacation: "Férias",
+      certificate: "Atestado",
+      other: "Outro"
+    }
+
+    const formatDate = (d: any) => {
+      if (!d) return ""
+      
+      // Se for string no formato YYYY-MM-DD, tratar manualmente para evitar fuso horário
+      if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+        const [year, month, day] = d.split('T')[0].split('-')
+        return `${day}/${month}/${year}`
+      }
+
+      const dateObj = new Date(d)
+      if (isNaN(dateObj.getTime())) return d
+      
+      // Se caiu aqui, usar UTC para garantir consistência
+      const day = String(dateObj.getUTCDate()).padStart(2, '0')
+      const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0')
+      const year = dateObj.getUTCFullYear()
+      return `${day}/${month}/${year}`
+    }
+
+    let startDateStr = ""
+    let endDateStr = ""
+
+    if (Array.isArray(dates) && dates.length > 0) {
+      const sortedDates = [...dates].sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+      startDateStr = formatDate(sortedDates[0])
+      endDateStr = formatDate(sortedDates[sortedDates.length - 1])
+    } else {
+      startDateStr = formatDate(dates)
+      endDateStr = startDateStr
+    }
+
+    const baseReason = ABSENCE_REASONS[reason] || reason
+    const reasonText = customReason ? `${baseReason} - ${customReason}` : baseReason
+
+    // ------------------------------------------------------------------
+    // CASO 1: Atualização de Comprovante POSTERIOR (anexou depois)
+    // ------------------------------------------------------------------
+    if (isProofUpdate) {
+      const message = `🔔 **Comprovante Anexado com Sucesso**\n\nOlá **${userName}**,\nSeu comprovante referente à ausência por **${reasonText}** (${startDateStr}) foi recebido pelo sistema. ✅`
+      const result = await sendDiscordDM(discordId, message)
+      return NextResponse.json({ success: result.success, type: "proof_update" })
+    }
+
+    // ------------------------------------------------------------------
+    // CASO 2: Nova Ausência Registrada (Requisitos do Usuário)
+    // ------------------------------------------------------------------
+    const startTimeStr = startTime ? ` às ${startTime}` : ""
+    const endTimeStr = endTime ? ` às ${endTime}` : ""
+    let timeInfo = `**Início:** ${startDateStr}${startTimeStr}`
+    
+    if (startDateStr !== endDateStr || endTime) {
+       timeInfo += `\n**Fim:** ${endDateStr}${endTimeStr}`
+    }
+
+    let message = ""
+    
+    if (hasProof) {
+      // Regra 4: ausência + comprovante anexado na hora
+      message = `✅ **Ausência Registrada com Sucesso**\n\nOlá **${userName}**,\nSua ausência por **${reasonText}** foi registrada e seu comprovante já foi processado pelo sistema. Não há pendências.\n\n${timeInfo}`
+    } else {
+      // Regra 5: ausência registrada, mas sem comprovante
+      message = `⚠️ **Ausência Registrada (Aguardando Comprovante)**\n\nOlá **${userName}**,\nSua ausência por **${reasonText}** foi registrada no sistema.\n\n${timeInfo}\n\n🚨 **ATENÇÃO:** O comprovante não foi anexado. Você tem até **2 dias úteis** para anexar este documento no portal correspondente. O não cumprimento do prazo resultará na REJEIÇÃO do registro, sendo considerado falta injustificada.`
+    }
+
+    const dmResult = await sendDiscordDM(discordId, message)
+
+    return NextResponse.json({ success: dmResult.success, result: dmResult })
+
+  } catch (error) {
+    console.error("Erro interno na rota /api/notify-absence:", error)
+    return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
+  }
 }

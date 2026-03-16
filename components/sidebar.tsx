@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import { CalendarDays, Calendar, Users, LogOut, FileText, Clock, User, Menu, X, Edit, Upload, Banknote, Folder } from "lucide-react"
+import { CalendarDays, Calendar, Users, LogOut, FileText, Clock, User, Menu, X, Edit, Upload, Banknote, Folder, ShieldCheck, BarChart3 } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 
 interface SidebarProps {
@@ -56,10 +56,10 @@ export function Sidebar({
   }, [])
 
   const adminTabs = [
+    { id: "dashboard", label: "Dashboard", icon: BarChart3 },
     { id: "holidays", label: "Feriados", icon: CalendarDays },
     { id: "absences", label: "Ausências", icon: Calendar },
-    { id: "employees", label: "Funcionários", icon: Users },
-    { id: "projects", label: "Projetos", icon: Folder },
+    { id: "employees", label: "Controle de acessos", icon: ShieldCheck },
     { id: "employee-portal", label: "Portal Funcionário", icon: User },
   ]
 
@@ -81,89 +81,6 @@ export function Sidebar({
     setIsPhotoDialogOpen(true)
   }
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file || !userId) return
-
-    // Verificar tamanho do arquivo (máximo 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast({
-        title: "Arquivo muito grande",
-        description: "O tamanho máximo permitido é 5MB",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Verificar tipo do arquivo
-    const allowedTypes = ["image/jpeg", "image/png", "image/gif", "image/webp"]
-    if (!allowedTypes.includes(file.type)) {
-      toast({
-        title: "Tipo de arquivo não suportado",
-        description: "Apenas imagens (JPEG, PNG, GIF, WEBP) são permitidas",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      setIsUpdatingPhoto(true)
-
-      // Converter arquivo para base64
-      const reader = new FileReader()
-      reader.onload = async (event) => {
-        try {
-          const base64String = event.target?.result as string
-
-          // Fazer requisição para atualizar a foto
-          const response = await fetch('/api/user/update-profile-picture', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              userId: userId,
-              profilePicture: base64String
-            })
-          })
-
-          if (!response.ok) {
-            throw new Error('Erro ao atualizar foto de perfil')
-          }
-
-          toast({
-            title: "Foto atualizada",
-            description: "Sua foto de perfil foi atualizada com sucesso!",
-          })
-
-          // Chamar callback para atualizar a interface
-          if (onProfileUpdate) {
-            onProfileUpdate()
-          }
-
-          setIsPhotoDialogOpen(false)
-        } catch (error) {
-          console.error('Erro ao atualizar foto:', error)
-          toast({
-            title: "Erro",
-            description: "Ocorreu um erro ao atualizar a foto de perfil",
-            variant: "destructive",
-          })
-        } finally {
-          setIsUpdatingPhoto(false)
-        }
-      }
-      reader.readAsDataURL(file)
-    } catch (error) {
-      console.error('Erro ao processar arquivo:', error)
-      toast({
-        title: "Erro",
-        description: "Ocorreu um erro ao processar o arquivo",
-        variant: "destructive",
-      })
-      setIsUpdatingPhoto(false)
-    }
-  }
 
   // Mobile menu button
   if (isMobile) {
@@ -214,7 +131,7 @@ export function Sidebar({
           </>
         )}
 
-        {/* Dialog de foto para mobile */}
+        {/* Dialog de visualização da foto para mobile */}
         <Dialog open={isPhotoDialogOpen} onOpenChange={setIsPhotoDialogOpen}>
           <DialogContent className="max-w-md">
             <DialogHeader>
@@ -234,36 +151,13 @@ export function Sidebar({
                   </div>
                 )}
               </div>
-              <div className="flex flex-col gap-3">
-                <Button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUpdatingPhoto}
-                  className="bg-[#EE4D2D] hover:bg-[#D23F20] w-full"
-                >
-                  {isUpdatingPhoto ? (
-                    <>
-                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                      Atualizando...
-                    </>
-                  ) : (
-                    <>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Alterar Foto
-                    </>
-                  )}
-                </Button>
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  className="hidden"
-                  accept="image/jpeg,image/png,image/gif,image/webp"
-                  onChange={handleFileChange}
-                />
-                <p className="text-xs text-gray-500 text-center">
-                  Formatos aceitos: JPEG, PNG, GIF, WEBP<br />
-                  Tamanho máximo: 5MB
-                </p>
-              </div>
+              <Button
+                variant="outline"
+                onClick={() => setIsPhotoDialogOpen(false)}
+                className="w-full"
+              >
+                Fechar
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -289,7 +183,7 @@ export function Sidebar({
         userShift={userShift}
       />
 
-      {/* Dialog de visualização e edição da foto */}
+      {/* Dialog de visualização da foto */}
       <Dialog open={isPhotoDialogOpen} onOpenChange={setIsPhotoDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -311,40 +205,13 @@ export function Sidebar({
                 </div>
               )}
             </div>
-
-            {/* Botão para editar foto */}
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUpdatingPhoto}
-                className="bg-[#EE4D2D] hover:bg-[#D23F20] w-full"
-              >
-                {isUpdatingPhoto ? (
-                  <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
-                    Atualizando...
-                  </>
-                ) : (
-                  <>
-                    <Edit className="h-4 w-4 mr-2" />
-                    Alterar Foto
-                  </>
-                )}
-              </Button>
-
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept="image/jpeg,image/png,image/gif,image/webp"
-                onChange={handleFileChange}
-              />
-
-              <p className="text-xs text-gray-500 text-center">
-                Formatos aceitos: JPEG, PNG, GIF, WEBP<br />
-                Tamanho máximo: 5MB
-              </p>
-            </div>
+            <Button
+              variant="outline"
+              onClick={() => setIsPhotoDialogOpen(false)}
+              className="w-full"
+            >
+              Fechar
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -393,27 +260,6 @@ function SidebarContent({
       {(userName || userEmail) && (
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <div className="flex items-center gap-3">
-            <div
-              className="relative cursor-pointer group"
-              onClick={onPhotoClick}
-              title="Clique para visualizar/editar foto"
-            >
-              {profilePictureUrl ? (
-                <img
-                  src={profilePictureUrl}
-                  alt="Foto de perfil"
-                  className="w-10 h-10 rounded-full object-cover border-2 border-[#EE4D2D] group-hover:opacity-80 transition-opacity"
-                />
-              ) : (
-                <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center border-2 border-[#EE4D2D] group-hover:bg-gray-400 transition-colors">
-                  <User className="h-5 w-5 text-gray-600" />
-                </div>
-              )}
-              {/* Ícone de edição no hover */}
-              <div className="absolute inset-0 rounded-full bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Edit className="h-3 w-3 text-white" />
-              </div>
-            </div>
             <div className="flex-1 min-w-0">
               {userName && (
                 <p className="text-sm font-medium text-gray-900 truncate">{userName}</p>

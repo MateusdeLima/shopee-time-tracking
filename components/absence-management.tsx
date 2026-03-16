@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
 import { getAbsenceRecordsByUserId, createAbsenceRecord, updateAbsenceRecord, deleteAbsenceRecord, getProjectVacations, getHolidays, type Holiday } from "@/lib/db"
-import { supabase } from "@/lib/supabase"
+import { supabase, uploadCertificate } from "@/lib/supabase"
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
 import autoTable from 'jspdf-autotable'
@@ -134,6 +134,40 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const loadHolidays = async () => {
     const data = await getHolidays()
     setHolidays(data)
+  }
+
+  const syncAbsenceToSheets = async (action: 'create' | 'update', absence: any) => {
+    try {
+      console.log(`📡 [SHEETS] Sincronizando ausência (${action}):`, absence.id)
+      const res = await fetch('/api/sheets/sync-absence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, absence, user: { 
+          id: user.id, 
+          email: user.email, 
+          firstName: user.firstName, 
+          lastName: user.lastName 
+        } })
+      })
+      const result = await res.json()
+      if (res.ok) {
+        console.log('✅ [SHEETS] Sincronização concluída com sucesso')
+        toast({
+          title: "Planilha atualizada",
+          description: "Os dados foram enviados para o Google Sheets com sucesso.",
+        })
+      } else {
+        console.error('❌ [SHEETS] Erro na sincronização:', result.error)
+        toast({
+          variant: "destructive",
+          title: "Erro na planilha",
+          description: "Não foi possível sincronizar com o Google Sheets: " + (result.error || "Erro desconhecido"),
+        })
+      }
+    } catch (error: any) {
+      console.error('Erro ao sincronizar com Google Sheets:', error)
+      alert("Erro crítico na sincronização: " + error.message)
+    }
   }
 
   const loadAbsences = async () => {
@@ -367,18 +401,37 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
 
     try {
+      // Se houver um documento base64 no formData, fazemos o upload antes de salvar o registro
+      let finalProofUrl = formData.proofDocument;
+      if (formData.proofDocument && formData.proofDocument.startsWith('data:')) {
+        // Converter base64 para Blob para o upload
+        const response = await fetch(formData.proofDocument);
+        const blob = await response.blob();
+        const publicUrl = await uploadCertificate(user.id, blob, "comprovante_inicial.png");
+        
+        if (!publicUrl) {
+          throw new Error("Falha ao gerar link público para o comprovante");
+        }
+        finalProofUrl = publicUrl;
+      }
+
       // Para Energia/Internet sem data de retorno, usar apenas a data de saída
       let formattedDates: string[]
       let endDate: string
 
       if (formData.reason === "personal" && !formData.returnDate) {
-        // Apenas data de saída
-        formattedDates = [format(new Date(formData.departureDate), "yyyy-MM-dd")]
+        // Apenas data de saída - evitar fuso horário usando string ou meio-dia local
+        formattedDates = [formData.departureDate]
         endDate = formData.departureDate
       } else {
         // Calcular todas as datas entre saída e volta
-        const start = new Date(formData.departureDate)
-        const end = new Date(formData.returnDate)
+        // Criar datas ao meio-dia para evitar que o fuso horário mude o dia (ex: 00:00 UTC vira 21:00 do dia anterior no BR)
+        const [startY, startM, startD] = formData.departureDate.split('-').map(Number)
+        const [endY, endM, endD] = formData.returnDate.split('-').map(Number)
+        
+        const start = new Date(startY, startM - 1, startD, 12, 0, 0)
+        const end = new Date(endY, endM - 1, endD, 12, 0, 0)
+        
         const dates = eachDayOfInterval({ start, end })
         formattedDates = dates.map((date) => format(date, "yyyy-MM-dd"))
         endDate = formData.returnDate
@@ -409,7 +462,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         },
         departureTime: formData.reason !== "vacation" ? formData.departureTime : undefined,
         returnTime: (formData.reason !== "vacation" && formData.returnTime && formData.returnDate) ? formData.returnTime : undefined,
-        proofDocument: formData.proofDocument || undefined,
+        proofDocument: finalProofUrl || undefined,
       })
 
       // Atualizar o estado local imediatamente
@@ -429,7 +482,12 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
       // Fechar diálogo
       setIsAddDialogOpen(false)
+
+      // Sincronizar com Google Sheets (segundo plano)
+      syncAbsenceToSheets('create', newAbsence)
     } catch (error: any) {
+      console.error("ERRO NO REGISTRO:", error)
+      alert("ERRO AO SALVAR: " + error.message)
       setError(error.message || "Ocorreu um erro ao registrar a ausência")
     }
   }
@@ -464,19 +522,24 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return
     }
 
-    // Converter arquivo para base64
-    const reader = new FileReader()
-    reader.onload = async (event) => {
+    // Upload do arquivo para o Supabase Storage
+    const uploadFile = async () => {
       if (!selectedAbsence) return
 
       try {
+        const publicUrl = await uploadCertificate(user.id, file, file.name)
+        
+        if (!publicUrl) {
+          throw new Error("Falha ao gerar link público para a imagem")
+        }
+
         const now = new Date()
         const currentDate = format(now, "yyyy-MM-dd")
         const currentTime = format(now, "HH:mm")
 
-        // Preparar dados de atualização
+        // Preparar dados de atualização com a URL pública
         const updateData: any = {
-          proofDocument: event.target?.result as string,
+          proofDocument: publicUrl,
           status: "completed",
         }
 
@@ -520,6 +583,12 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
         // Fechar diálogo
         setIsUploadDialogOpen(false)
+
+        // Sincronizar com Google Sheets (segundo plano) - aqui garantimos que vai o publicUrl
+        syncAbsenceToSheets('update', { 
+          id: selectedAbsence.id, 
+          proofDocument: updateData.proofDocument // Este é o publicUrl
+        })
       } catch (error: any) {
         toast({
           title: "Erro",
@@ -528,7 +597,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         })
       }
     }
-    reader.readAsDataURL(file)
+    
+    uploadFile()
   }
 
   const handleDeleteAbsence = async (absenceId: number) => {

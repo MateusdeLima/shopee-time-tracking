@@ -40,76 +40,38 @@ export async function authenticateEmployee(
     // Inicializar o banco de dados primeiro
     await initializeDb()
 
-    // Verificar se é um login com email e username
-    if (email && username && !firstName && !lastName) {
-      try {
-        const { data: user, error } = await supabase.from("users").select("*").eq("email", email).single()
+    // Verificar se é um login de funcionário (Novo fluxo: Email + Opcional ID)
+    if (email) {
+      const { data: user, error } = await supabase.from("users").select("*").eq("email", email).maybeSingle()
 
-        if (error) {
-          console.error("Erro ao buscar usuário por email:", error)
-          throw new Error("Email não encontrado. Use a opção de primeiro acesso.")
-        }
+      if (error) {
+        console.error("Erro ao buscar usuário por email:", error)
+        throw new Error("Erro ao verificar cadastro. Tente novamente.")
+      }
 
+      if (!user) {
+        throw new Error("E-mail não cadastrado. Entre em contato com o administrador.")
+      }
+
+      // Se o usuário forneceu o ID (username)
+      if (username) {
         if (user.username !== username) {
-          throw new Error("User incorreto para este email.")
+          throw new Error("ID incorreto para este e-mail.")
         }
-
         return convertToCamelCase<User>(user)
-      } catch (error) {
-        console.error("Erro ao autenticar com email e username:", error)
-        throw error
+      }
+
+      // Se o usuário forneceu APENAS o e-mail
+      if (user.is_first_access) {
+        // Primeiro acesso permitido apenas com email
+        return convertToCamelCase<User>(user)
+      } else {
+        // Não é primeiro acesso, ID é obrigatório
+        throw new Error("Este e-mail já foi acessado. Por favor, insira seu ID.")
       }
     }
 
-    // Verificar se é um primeiro acesso ou criação de conta
-    if (firstName && lastName && email) {
-      // cspell:disable-next-line
-      if (!email.endsWith("@shopeemobile-external.com")) {
-        // cspell:disable-next-line
-        throw new Error("Por favor, utilize seu email corporativo (@shopeemobile-external.com)")
-      }
-
-      try {
-        // Verificar se o usuário já existe
-        const { data: existingUser, error: checkError } = await supabase
-          .from("users")
-          .select("*")
-          .eq("email", email)
-          .maybeSingle()
-
-        if (checkError && checkError.code !== "PGRST116") {
-          console.error("Erro ao verificar email existente:", checkError)
-          throw new Error("Erro ao verificar email. Tente novamente.")
-        }
-
-        // Se o usuário não existe, criamos um novo
-        if (!existingUser) {
-          // Criar novo usuário
-          const newUser = await createUser({
-            firstName,
-            lastName,
-            email,
-            role: "employee",
-            cpf: cpf || "",
-            birthDate: birthDate || "",
-            profilePictureUrl: profilePictureUrl || "",
-            shift: shift || "8-17",
-          })
-
-          return newUser
-        } else {
-          // Se o usuário já existe, verificamos se o nome corresponde
-          if (existingUser.first_name !== firstName || existingUser.last_name !== lastName) {
-            throw new Error("Os dados informados não correspondem ao usuário cadastrado")
-          }
-
-          return convertToCamelCase<User>(existingUser)
-        }
-      } catch (error) {
-        console.error("Erro ao verificar/criar usuário:", error)
-        throw error
-      }
-    }
+    // Remoção do fluxo antigo de criação de conta/primeiro acesso manual
 
     throw new Error("Dados de autenticação incompletos")
   } catch (error) {

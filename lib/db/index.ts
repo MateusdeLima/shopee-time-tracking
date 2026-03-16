@@ -15,6 +15,7 @@ export interface User {
   birthDate?: string
   isFirstAccess?: boolean
   projectId?: string
+  discordId?: string
 }
 
 export interface Project {
@@ -147,6 +148,9 @@ function convertToCamelCase<T>(data: any): T {
       if (key === 'hour_bank_proof') {
         newKey = 'proofImage'
       }
+      if (key === 'discord_id') {
+        newKey = 'discordId'
+      }
 
       newObj[newKey] = convertToCamelCase(data[key])
     })
@@ -170,7 +174,13 @@ function convertToSnakeCase(data: any): any {
 
     Object.keys(data).forEach((key) => {
       // Converter camelCase para snake_case
-      const newKey = key.replace(/([A-Z])/g, "_$1").toLowerCase()
+      let newKey = key.replace(/([A-Z])/g, "_$1").toLowerCase()
+      
+      // Mapeamento explícito
+      if (key === 'discordId') {
+        newKey = 'discord_id'
+      }
+      
       newObj[newKey] = convertToSnakeCase(data[key])
     })
 
@@ -240,7 +250,10 @@ export async function getUsers(): Promise<User[]> {
       return []
     }
 
-    return convertToCamelCase<User[]>(data || [])
+    console.log("🔍 [DB] Dados brutos de usuários do Supabase:", data ? data.slice(0, 2) : "vazio")
+    const users = convertToCamelCase<User[]>(data || [])
+    console.log("🔍 [DB] Usuários convertidos (exemplo):", users.length > 0 ? { id: users[0].id, discordId: users[0].discordId } : "vazio")
+    return users
   } catch (error) {
     console.error("Erro em getUsers:", error)
     return []
@@ -337,6 +350,87 @@ export async function createUser(user: Omit<User, "id" | "createdAt" | "username
     return convertToCamelCase<User>(newUser)
   } catch (error) {
     console.error("Erro em createUser:", error)
+    throw error
+  }
+}
+
+// Gerar próximo ID de agente (AG001, AG002, etc)
+export async function generateNextAgentId(): Promise<string> {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("username")
+      .like("username", "AG%")
+      .order("username", { ascending: false })
+      .limit(1)
+
+    if (error) {
+      console.error("Erro ao buscar último ID de agente:", error)
+      return "AG001"
+    }
+
+    if (!data || data.length === 0) {
+      return "AG001"
+    }
+
+    const lastId = data[0].username
+    const match = lastId.match(/AG(\d+)/)
+    
+    if (match) {
+      const nextNumber = parseInt(match[1]) + 1
+      return `AG${nextNumber.toString().padStart(3, "0")}`
+    }
+
+    return "AG001"
+  } catch (error) {
+    console.error("Erro em generateNextAgentId:", error)
+    return "AG001"
+  }
+}
+
+export function normalizeShift(shift: string): string {
+  if (!shift) return "8-17"
+  const s = shift.toString().replace(/\s+/g, "").toLowerCase()
+  
+  // Priorizar detecção do horário de início 09:00 / 9:00
+  if (s.startsWith("9") || s.startsWith("09") || s.includes("09:00") || s.includes("9:00")) {
+    return "9-18"
+  }
+  
+  // Detecção de 08:00 / 8:00
+  if (s.startsWith("8") || s.startsWith("08") || s.includes("08:00") || s.includes("8:00")) {
+    return "8-17"
+  }
+  
+  return "8-17"
+}
+
+export async function batchCreateAgents(agents: Array<{ firstName: string; lastName: string; email: string; shift?: string; discordId?: string }>): Promise<void> {
+  try {
+    for (const agent of agents) {
+      const username = await generateNextAgentId()
+      const normalizedShift = normalizeShift(agent.shift || "8-17")
+      
+      const { error } = await supabase.from("users").insert([
+        {
+          first_name: agent.firstName,
+          last_name: agent.lastName,
+          email: agent.email.trim().toLowerCase(),
+          role: "employee",
+          username,
+          shift: normalizedShift,
+          discord_id: agent.discordId,
+          is_first_access: true,
+        },
+      ])
+
+      if (error) {
+        console.error(`Erro ao criar agente ${agent.email}:`, error.message || error)
+        // Continuar para o próximo mesmo se um falhar
+      }
+    }
+  } catch (error) {
+    console.error("Erro em batchCreateAgents:", error)
     throw error
   }
 }
@@ -891,7 +985,9 @@ export async function createAbsenceRecord(
   record: Omit<AbsenceRecord, "id" | "createdAt" | "expiresAt">,
 ): Promise<AbsenceRecord> {
   // Calcular data de expiração (30 dias após a primeira data)
-  const firstDate = new Date(record.dates[0])
+  // Evitar shift de fuso horário ao criar o objeto Date
+  const [y, m, d] = record.dates[0].split('-').map(Number)
+  const firstDate = new Date(y, m - 1, d, 12, 0, 0)
   const expiresAt = new Date(firstDate)
   expiresAt.setDate(expiresAt.getDate() + 30)
 
@@ -906,6 +1002,8 @@ export async function createAbsenceRecord(
     expiresAt: expiresAt.toISOString(),
     createdAt: new Date().toISOString(),
     dateRange: record.dateRange,
+    departureTime: record.departureTime,
+    returnTime: record.returnTime,
   })
 
   const { data, error } = await supabase.from("absence_records").insert(recordData).select().single()
@@ -938,7 +1036,7 @@ export async function createAbsenceRecord(
       .then(async (res) => {
         try {
           const data = await res.json()
-          console.log("🤖 [BOT] Resposta do servidor:", data)
+          console.log("🤖 [BOT] Resposta detalhada do servidor de notificação:", JSON.stringify(data, null, 2))
         } catch (jsonErr) {
           console.log("🤖 [BOT] Resposta não-JSON do servidor")
         }
@@ -990,7 +1088,16 @@ export async function updateAbsenceRecord(id: number, data: Partial<AbsenceRecor
           isProofUpdate: true,
           proofUrl: result.proofDocument // URL para envio da imagem
         })
-      }).catch(err => console.error("🤖 [BOT] Erro notificações update:", err))
+      })
+      .then(async (res) => {
+        try {
+          const data = await res.json()
+          console.log("🤖 [BOT] Resposta detalhada (Upload Comprovante):", JSON.stringify(data, null, 2))
+        } catch (jsonErr) {
+          console.log("🤖 [BOT] Resposta não-JSON do servidor (Upload Comprovante)")
+        }
+      })
+      .catch(err => console.error("🤖 [BOT] Erro notificações update:", err))
     } catch (e) {
       console.error("🤖 [BOT] Erro trigger update:", e)
     }

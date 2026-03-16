@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { HolidayManagement } from "@/components/holiday-management"
 import { EmployeeReports } from "@/components/employee-reports"
-import { EmployeeManagement } from "@/components/employee-management"
+import { AccessControl } from "@/components/access-control"
 import { AdminSummary } from "@/components/admin-summary"
 import { AdminAbsences } from "@/components/admin-absences"
 import { AdminNotifications } from "@/components/admin-notifications"
 import { Sidebar } from "@/components/sidebar"
 import { getCurrentUser, logout, refreshCurrentUser } from "@/lib/auth"
-import { ProjectManagement } from "@/components/admin/project-management"
+import { AdminAnalytics } from "@/components/admin-analytics"
 import { useAdminSession, clearAdminSession } from "@/hooks/use-admin-session"
 import { initializeDb } from "@/lib/db"
 import { Button } from "@/components/ui/button"
@@ -24,7 +24,7 @@ export const dynamic = "force-dynamic"
 export default function AdminDashboard() {
   const router = useRouter()
   const { user, isAdmin, isLoading } = useAdminSession()
-  const [activeMainTab, setActiveMainTab] = useState("holidays")
+  const [activeMainTab, setActiveMainTab] = useState("dashboard")
   const [activeHolidayTab, setActiveHolidayTab] = useState("manage")
   const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean }>({ holidays: true, absences: true })
   const [isHourBankExportModalOpen, setIsHourBankExportModalOpen] = useState(false)
@@ -98,6 +98,8 @@ export default function AdminDashboard() {
   const renderContent = () => {
     console.log("🔥 DASHBOARD renderContent chamado, activeMainTab:", activeMainTab)
     switch (activeMainTab) {
+      case "dashboard":
+        return <AdminAnalytics />
       case "holidays":
         return (
           <div className="space-y-4 sm:space-y-6">
@@ -175,17 +177,9 @@ export default function AdminDashboard() {
         )
       case "employees":
         return (
-          <Card className="mx-2 sm:mx-0">
-            <CardHeader className="px-4 sm:px-6">
-              <CardTitle className="text-lg sm:text-xl">Gerenciamento de Funcionários</CardTitle>
-              <CardDescription className="text-sm sm:text-base">Visualize, gerencie e exclua funcionários do sistema</CardDescription>
-            </CardHeader>
-            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
-              <div className="w-full overflow-x-auto">
-                <EmployeeManagement />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <AccessControl />
+          </div>
         )
       case "employee-portal":
         return (
@@ -223,12 +217,6 @@ export default function AdminDashboard() {
               </div>
             </CardContent>
           </Card>
-        )
-      case "projects":
-        return (
-          <div className="space-y-6">
-            <ProjectManagement />
-          </div>
         )
       default:
         return null

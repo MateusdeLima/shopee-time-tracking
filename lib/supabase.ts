@@ -84,6 +84,27 @@ export async function uploadProfilePicture(userId: string, file: File): Promise<
   return publicUrlData?.publicUrl || null
 }
 
+// Função para upload de comprovantes (certificados) no Supabase Storage
+export async function uploadCertificate(userId: string, file: File | Blob, fileName?: string): Promise<string | null> {
+  const fileExt = fileName ? fileName.split('.').pop() : 'png'
+  const randomName = Math.random().toString(36).substring(7)
+  const filePath = `${userId}/${Date.now()}_${randomName}.${fileExt}`
+  
+  const { data, error } = await supabase.storage.from('certificates').upload(filePath, file, {
+    upsert: true,
+    contentType: (file as File).type || 'image/png',
+  })
+  
+  if (error) {
+    console.error('Erro ao fazer upload do comprovante:', error)
+    return null
+  }
+  
+  // Gerar URL pública
+  const { data: publicUrlData } = supabase.storage.from('certificates').getPublicUrl(filePath)
+  return publicUrlData?.publicUrl || null
+}
+
 // Função para obter a URL pública da foto de perfil
 export function getProfilePictureUrl(userId: string, ext: string = 'jpg'): string {
   const filePath = `${userId}.${ext}`
