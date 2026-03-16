@@ -54,9 +54,12 @@ async function sendDiscordDM(discordId: string, message: string) {
   }
 }
 
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
+    console.log('🚀 [NOTIFY] Recebido payload:', JSON.stringify(body, null, 2))
+    console.log('🔑 [NOTIFY] Token presente:', !!DISCORD_BOT_TOKEN)
     const { userId, reason, dates, customReason, startTime, endTime, hasProof, isProofUpdate, proofUrl } = body
 
     if (!userId) {
@@ -64,15 +67,21 @@ export async function POST(request: Request) {
     }
 
     // Buscar dados completos do usuário (incluindo o novo discord_id)
-    const user = await getUserById(userId)
+    const userIdStr = String(userId)
+    const user = await getUserById(userIdStr)
     const userName = user ? `${user.firstName} ${user.lastName}` : "Agente"
     
     // Se o usuário não tiver um discord_id cadastrado, aborta o envio silenciosamente
     const discordId = user?.discordId
-    console.log('🔍 [NOTIFY] Dados do usuário:', { email: user?.email, discordId })
+    console.log('🔍 [NOTIFY] Dados do usuário encontrados:', { id: userIdStr, email: user?.email, discordId })
+
+    if (!user) {
+      console.log('❌ [NOTIFY] Usuário não encontrado no DB:', userIdStr)
+      return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 404 })
+    }
 
     if (!discordId) {
-      console.log('⚠️ [NOTIFY] Usuário sem Discord ID:', user?.email)
+      console.log('⚠️ [NOTIFY] Usuário sem Discord ID:', user.email)
       return NextResponse.json({ success: false, error: 'Usuário sem Discord ID cadastrado' })
     }
 
