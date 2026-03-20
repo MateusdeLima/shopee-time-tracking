@@ -1163,15 +1163,23 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                       </>
                     )}
                     {absence.status === "pending" && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 text-xs sm:text-sm"
-                        onClick={() => handleUploadProof(absence.id)}
-                      >
-                        <Upload className="h-3.5 w-3.5 mr-1.5" />
-                        {absence.reason === "personal" ? "Enviar Protocolo" : "Enviar Comprovante"}
-                      </Button>
+                      <div className="flex flex-col items-center">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 text-xs sm:text-sm"
+                          disabled={isDateInFuture(absence.dateRange?.start)}
+                          onClick={() => handleUploadProof(absence.id)}
+                        >
+                          <Upload className="h-3.5 w-3.5 mr-1.5" />
+                          {absence.reason === "personal" ? "Enviar Protocolo" : "Enviar Comprovante"}
+                        </Button>
+                        {isDateInFuture(absence.dateRange?.start) && (
+                          <span className="text-[10px] text-orange-500 font-medium mt-1">
+                            Disponível apenas no dia da ausência
+                          </span>
+                        )}
+                      </div>
                     )}
                   </div>
                 </div>

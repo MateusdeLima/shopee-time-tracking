@@ -1,12 +1,11 @@
 import { NextResponse } from "next/server"
 import { getUserById } from "@/lib/db"
 
-// O Token do Bot do Discord fornecido pelo usuário a partir de variáveis de ambiente
-const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN
-const SEATALK_WEBHOOK_URL = process.env.SEATALK_WEBHOOK_URL
+// O Token do Bot do Discord e Webhook do SeaTalk agora são acessados dentro do handler para evitar cache
 
 async function sendSeaTalkMessage(message: string, isVacation: boolean = false) {
-  if (!SEATALK_WEBHOOK_URL) {
+  const seatalkUrl = process.env.SEATALK_WEBHOOK_URL
+  if (!seatalkUrl) {
     console.warn('[SEATALK] Webhook URL não configurada (.env.local missing SEATALK_WEBHOOK_URL)')
     return { success: false, error: "URL não configurada" }
   }
@@ -14,7 +13,7 @@ async function sendSeaTalkMessage(message: string, isVacation: boolean = false) 
   try {
     const finalMessage = message
 
-    const response = await fetch(SEATALK_WEBHOOK_URL, {
+    const response = await fetch(seatalkUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -41,12 +40,17 @@ async function sendSeaTalkMessage(message: string, isVacation: boolean = false) 
 }
 
 async function sendDiscordDM(discordId: string, message: string) {
+  const botToken = process.env.DISCORD_BOT_TOKEN
+  if (!botToken) {
+    return { success: false, error: "Bot Token não configurado" }
+  }
+
   try {
     // Passo 1: Abrir o canal de DM com o usuário
     const channelResponse = await fetch("https://discord.com/api/v10/users/@me/channels", {
       method: "POST",
       headers: {
-        "Authorization": `Bot ${DISCORD_BOT_TOKEN}`,
+        "Authorization": `Bot ${botToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -67,7 +71,7 @@ async function sendDiscordDM(discordId: string, message: string) {
     const messageResponse = await fetch(`https://discord.com/api/v10/channels/${dmChannelId}/messages`, {
       method: "POST",
       headers: {
-        "Authorization": `Bot ${DISCORD_BOT_TOKEN}`,
+        "Authorization": `Bot ${botToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
@@ -95,8 +99,8 @@ export async function POST(request: Request) {
   try {
     const body = await request.json()
     console.log('🚀 [NOTIFY] Recebido payload:', JSON.stringify(body, null, 2))
-    console.log('🔑 [NOTIFY] Token presente:', !!DISCORD_BOT_TOKEN)
-    console.log('🔗 [NOTIFY] SeaTalk Webhook presente:', !!SEATALK_WEBHOOK_URL)
+    console.log('🔑 [NOTIFY] Token presente:', !!process.env.DISCORD_BOT_TOKEN)
+    console.log('🔗 [NOTIFY] SeaTalk Webhook presente:', !!process.env.SEATALK_WEBHOOK_URL)
 
     const {
       userId,

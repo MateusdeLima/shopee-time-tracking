@@ -158,6 +158,15 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
         })
         return
       }
+
+      const days = interval.length
+      if (days < 10) {
+        toast({
+          title: "Período Curto",
+          description: "As férias devem ter no mínimo 10 dias sugeridos conforme a regra do sistema.",
+          variant: "destructive"
+        })
+      }
     }
 
     setDateRange(range)
@@ -365,7 +374,7 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
 
                 <Button 
                   className="w-full bg-[#EE4D2D] hover:bg-[#D23F20] h-11"
-                  disabled={!dateRange?.from || !dateRange?.to || submitting}
+                  disabled={!dateRange?.from || !dateRange?.to || submitting || (dateRange && eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).length < 10)}
                   onClick={handleSubmit}
                 >
                   {submitting ? (
@@ -373,6 +382,8 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Enviando...
                     </>
+                  ) : dateRange?.from && dateRange?.to && eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).length < 10 ? (
+                    "Mínimo 10 dias obrigatório"
                   ) : (
                     "Confirmar Solicitação"
                   )}
