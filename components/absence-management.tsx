@@ -455,6 +455,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       syncAbsenceToSheets('create', newAbsence)
 
       // Notificar via Discord
+      console.log('📡 [NOTIFY] Enviando notificação de ausência...')
       fetch('/api/notify-absence', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -467,7 +468,14 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           endTime: formData.returnTime,
           hasProof: !!finalProofUrl
         })
-      }).catch(err => console.error('Erro ao enviar notificação Discord:', err))
+      })
+      .then(async res => {
+        const data = await res.json()
+        console.log('✅ [NOTIFY] Resposta da API:', data)
+      })
+      .catch(err => {
+        console.error('❌ [NOTIFY] Erro ao enviar notificação:', err)
+      })
     } catch (error: any) {
       console.error("ERRO NO REGISTRO:", error)
       alert("ERRO AO SALVAR: " + error.message)

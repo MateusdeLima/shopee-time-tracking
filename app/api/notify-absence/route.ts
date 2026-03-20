@@ -96,6 +96,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     console.log('🚀 [NOTIFY] Recebido payload:', JSON.stringify(body, null, 2))
     console.log('🔑 [NOTIFY] Token presente:', !!DISCORD_BOT_TOKEN)
+    console.log('🔗 [NOTIFY] SeaTalk Webhook presente:', !!SEATALK_WEBHOOK_URL)
 
     const {
       userId,
@@ -276,6 +277,7 @@ export async function POST(request: Request) {
 
       const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false }
       
+      console.log('🚩 [NOTIFY] Resultado Feriado:', { discord: discordResult.success, seatalk: seatalkResult.success })
       return NextResponse.json({ 
         success: (discordId ? discordResult.success : true) && (seatalkResult as any).success,
         discord: discordResult,
@@ -293,16 +295,24 @@ export async function POST(request: Request) {
       seaTalkMsg = `📢 Nova Ausência Registrada\n\nAgente: ${userName}\nMotivo: ${finalReasonText}\nPeríodo: ${startDateStr} a ${endDateStr}`
     }
 
-    const seaTalkMsgClean = seaTalkMsg.replace(/\*\*/g, '').replace(/__/g, '')
+    const seaTalkMsgClean = (seaTalkMsg || "").replace(/\*\*/g, '').replace(/__/g, '')
+    console.log('📝 [NOTIFY] Conteúdo final:', { discordMsg, seaTalkMsg: seaTalkMsgClean })
 
-    const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false }
-    const seatalkResult = await sendSeaTalkMessage(seaTalkMsgClean, reason === 'vacation')
+    try {
+      const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false, error: 'Sem Discord ID' }
+      const seatalkResult = await sendSeaTalkMessage(seaTalkMsgClean, reason === 'vacation')
 
-    return NextResponse.json({
-      success: (discordId ? discordResult.success : true) && seatalkResult.success,
-      discord: discordResult,
-      seatalk: seatalkResult
-    })
+      console.log('🏁 [NOTIFY] Resultados finais:', { discord: discordResult, seatalk: seatalkResult })
+
+      return NextResponse.json({
+        success: (discordId ? discordResult.success : true) && seatalkResult.success,
+        discord: discordResult,
+        seatalk: seatalkResult
+      })
+    } catch (sendError: any) {
+      console.error('💥 [NOTIFY] Erro crítico no envio:', sendError)
+      return NextResponse.json({ error: "Erro no envio das notificações", details: sendError.message }, { status: 500 })
+    }
 
   } catch (error) {
     console.error("Erro interno na rota /api/notify-absence:", error)
