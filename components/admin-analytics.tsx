@@ -63,8 +63,8 @@ const MESES = [
 
 const MOTIVOS_AUSENCIA: { [key: string]: string } = {
   medical: "Consulta Médica",
-  personal: "Energia/Internet",
   vacation: "Férias",
+  personal: "Energia/Internet",
   certificate: "Atestado",
   other: "Outro",
 }

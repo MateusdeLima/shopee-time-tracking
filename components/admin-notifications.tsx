@@ -28,7 +28,7 @@ interface AbsenceNotification {
 const ABSENCE_REASONS = [
   { id: "medical", label: "Consulta Médica" },
   { id: "personal", label: "Compromisso Pessoal" },
-  { id: "vacation", label: "Férias" },
+
   { id: "certificate", label: "Atestado" },
   { id: "other", label: "Outro" },
 ]
@@ -366,7 +366,6 @@ export function AdminNotifications({ isAdmin }: AdminNotificationsProps) {
     toast({
       title: "🔔 Nova Ausência Registrada",
       description: fullMessage,
-      duration: 5000,
     })
   }
 

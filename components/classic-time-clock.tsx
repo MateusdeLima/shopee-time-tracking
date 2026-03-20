@@ -10,7 +10,8 @@ import { toast } from "@/components/ui/use-toast"
 import { Clock, Upload, FileImage, Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { createOvertimeRecord, getOvertimeRecordsByUserId } from "@/lib/db"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { generateHolidayPDF } from "@/lib/pdf-utils"
 import Image from "next/image"
 
 interface OvertimeOption {
@@ -63,7 +64,7 @@ function getOvertimeOptionsByShift(shift: "8-17" | "9-18") {
 interface ClassicTimeClockProps {
   user: any
   selectedHoliday: any
-  onUpdate?: () => void
+  onUpdate?: (completed?: boolean) => void
 }
 
 export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTimeClockProps) {
@@ -87,7 +88,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
       
       try {
         const { getUserHolidayStats } = await import("@/lib/db")
-        const stats = await getUserHolidayStats(user.id, selectedHoliday.id)
+        const stats = await getUserHolidayStats(user.id, selectedHoliday.id, true)
         setHolidayStats(stats)
       } catch (error) {
         console.error("Erro ao carregar estatísticas do feriado:", error)
@@ -99,7 +100,8 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
 
   // Filtrar opções baseado nas horas restantes
   const getFilteredOptions = () => {
-    const horasRestantes = holidayStats.max - holidayStats.used
+    // Horas restantes = limite máximo real (original - compensadas) - horas já trabalhadas
+    const horasRestantes = Math.max(0, holidayStats.max - holidayStats.used)
     
     // Se já atingiu ou ultrapassou o limite, não mostrar nenhuma opção
     if (horasRestantes <= 0) {
@@ -107,7 +109,8 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
     }
     
     // Filtrar opções que não ultrapassem as horas restantes
-    return overtimeOptions.filter(opt => opt.value <= horasRestantes)
+    // Importante: Usar uma pequena margem para erros de ponto flutuante (0.01)
+    return overtimeOptions.filter(opt => opt.value <= (horasRestantes + 0.01))
   }
 
   const filteredOptions = getFilteredOptions()
@@ -218,7 +221,7 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
       const [startTime, endTime] = getTimesFromOption(selectedOption)
 
       // Criar registro de horas extras
-      await createOvertimeRecord({
+      const record = await createOvertimeRecord({
         userId: user.id,
         holidayId: selectedHoliday.id,
         holidayName: selectedHoliday.name,
@@ -232,23 +235,87 @@ export function ClassicTimeClock({ user, selectedHoliday, onUpdate }: ClassicTim
         proofImage: "Não anexado",
       })
 
+      // Sincronização com Planilha movida para após a atualização dos stats
+
+      // 1. Recarregar estatísticas do feriado (FORCE REFRESH) para saber o novo estado
+      const { getUserHolidayStats } = await import("@/lib/db")
+      const oldStats = { ...holidayStats }
+      const updatedStats = await getUserHolidayStats(user.id, selectedHoliday.id, true)
+      setHolidayStats(updatedStats)
+
+      // 2. Calcular flags para o WhatsApp/Discord/SeaTalk
+      const isFirst = oldStats.used === 0
+      // É o último se atingiu a meta e antes não tinha atingido
+      const isLast = updatedStats.used >= updatedStats.max && oldStats.used < oldStats.max
+
+      // 3. Notificar via Discord/SeaTalk
+      fetch('/api/notify-absence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          reason: 'holiday',
+          customReason: selectedHoliday.name,
+          startTime: startTime,
+          endTime: endTime,
+          stats: updatedStats,
+          isFirst,
+          isLast
+        })
+      }).catch(err => console.error('Erro ao enviar notificação Discord/SeaTalk (holiday):', err))
+
+      // 3.1 Sincronizar com Planilha (Consolidado)
+      fetch('/api/sheets/sync-registration', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: 'create',
+          type: 'holiday',
+          data: {
+            ...record,
+            horasFeitas: updatedStats.used,
+            horasRestantes: Math.max(0, updatedStats.max - updatedStats.used),
+            horasTotais: updatedStats.max,
+            concluido: updatedStats.used >= updatedStats.max ? 'SIM' : 'NÃO'
+          },
+          user 
+        }),
+      }).catch(err => console.error('Erro ao sincronizar planilha (holiday):', err))
+
+      // 4. Download automático e Modal se for o último registro
+      if (isLast) {
+        try {
+          // Buscar todos os registros deste usuário para este feriado para gerar o PDF completo
+          const allRecords = await getOvertimeRecordsByUserId(user.id)
+          const holidayRecords = allRecords.filter(r => r.holidayId === selectedHoliday.id)
+          
+          generateHolidayPDF(
+            { firstName: user.firstName, lastName: user.lastName, email: user.email },
+            { id: selectedHoliday.id, name: selectedHoliday.name },
+            holidayRecords
+          )
+          // Download automático do PDF e sinalização de conclusão
+        } catch (pdfErr) {
+          console.error('Erro ao gerar PDF automático:', pdfErr)
+        }
+      }
+
       toast({
-        title: "Horas extras registradas!",
-        description: `Horário ${option.label} registrado e aprovado automaticamente.`
+        title: isLast ? "Feriado concluído!" : "Horas extras registradas!",
+        description: isLast 
+          ? "Você completou as 8h deste feriado. O PDF foi gerado."
+          : `Horário ${option.label} registrado e aprovado automaticamente.`
       })
 
       // Reset form
       setSelectedOption("")
       
-      // Recarregar estatísticas do feriado
-      const { getUserHolidayStats } = await import("@/lib/db")
-      const updatedStats = await getUserHolidayStats(user.id, selectedHoliday.id)
-      setHolidayStats(updatedStats)
+      // Stats já foram atualizados acima
       
       // Pequeno delay para garantir que o banco foi atualizado
       await new Promise(resolve => setTimeout(resolve, 100))
       
-      if (onUpdate) onUpdate()
+      if (onUpdate) onUpdate(isLast)
 
     } catch (error: any) {
       setError(error.message || "Falha ao registrar horas extras. Tente novamente!")

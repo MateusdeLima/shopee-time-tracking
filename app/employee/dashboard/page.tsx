@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Sidebar } from "@/components/sidebar"
-import { User, Edit2, X } from "lucide-react"
+import { User, Edit2, X, Clock, Calendar, CalendarDays } from "lucide-react"
 import { getCurrentUser, logout, setCurrentUser, refreshCurrentUser } from "@/lib/auth"
-import { initializeDb, getEmployeePortalTabs } from "@/lib/db"
+import { getEmployeePortalTabs } from "@/lib/db"
 import Image from "next/image"
 import { getProfilePictureUrl } from "@/lib/supabase"
 
@@ -16,6 +16,7 @@ import { getProfilePictureUrl } from "@/lib/supabase"
 const SimpleHolidaySelection = lazy(() => import("@/components/simple-holiday-selection").then(module => ({ default: module.SimpleHolidaySelection })))
 const EmployeeHistory = lazy(() => import("@/components/employee-history").then(module => ({ default: module.EmployeeHistory })))
 const AbsenceManagement = lazy(() => import("@/components/absence-management").then(module => ({ default: module.AbsenceManagement })))
+const VacationCalendar = lazy(() => import("@/components/vacation-calendar").then(module => ({ default: module.VacationCalendar })))
 
 export const dynamic = "force-dynamic"
 
@@ -23,16 +24,13 @@ export default function EmployeeDashboard() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [activeMainTab, setActiveMainTab] = useState("holidays")
-  const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean }>({ holidays: true, absences: true })
+  const [activeMainTab, setActiveMainTab] = useState("vacation")
+  const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean; vacations: boolean }>({ holidays: true, absences: true, vacations: true })
   const [activeHolidayTab, setActiveHolidayTab] = useState("register")
   const [isProfileDialogOpen, setIsProfileDialogOpen] = useState(false)
   const [isUpdatingPhoto, setIsUpdatingPhoto] = useState(false)
 
   useEffect(() => {
-    // Inicializar banco de dados
-    initializeDb()
-
     // Verificar autenticação
     const user = getCurrentUser()
     if (!user) {
@@ -48,23 +46,44 @@ export default function EmployeeDashboard() {
 
     setUser(user)
     setLoading(false)
+    
+    // Recarregar dados do banco para garantir que o projeto esteja atualizado
+    refreshCurrentUser().then(updatedUser => {
+      if (updatedUser) setUser(updatedUser)
+    })
   }, [router])
 
   useEffect(() => {
     getEmployeePortalTabs().then((tabs) => {
       // Regras: sempre ao menos uma ativa; definir principal
-      const safeTabs = { holidays: !!tabs.holidays, absences: !!tabs.absences }
-      if (!safeTabs.holidays && !safeTabs.absences) safeTabs.absences = true
+      const safeTabs = { 
+        holidays: !!tabs.holidays, 
+        absences: !!tabs.absences, 
+        vacations: !!tabs.vacations 
+      }
+      if (!safeTabs.holidays && !safeTabs.absences && !safeTabs.vacations) safeTabs.vacations = true
       setPortalTabs(safeTabs)
-      if (safeTabs.holidays && safeTabs.absences) setActiveMainTab("holidays")
+      
+      // Determinar aba ativa inicial
+      if (safeTabs.vacations) setActiveMainTab("vacation")
       else if (safeTabs.holidays) setActiveMainTab("holidays")
       else setActiveMainTab("absences")
     })
   }, [])
 
   useEffect(() => {
-    if (activeMainTab === "holidays" && !portalTabs.holidays) setActiveMainTab("absences")
-    if (activeMainTab === "absences" && !portalTabs.absences) setActiveMainTab("holidays")
+    if (activeMainTab === "holidays" && !portalTabs.holidays) {
+      if (portalTabs.vacations) setActiveMainTab("vacation")
+      else setActiveMainTab("absences")
+    }
+    if (activeMainTab === "absences" && !portalTabs.absences) {
+      if (portalTabs.vacations) setActiveMainTab("vacation")
+      else setActiveMainTab("holidays")
+    }
+    if (activeMainTab === "vacation" && !portalTabs.vacations) {
+      if (portalTabs.holidays) setActiveMainTab("holidays")
+      else setActiveMainTab("absences")
+    }
   }, [portalTabs, activeMainTab])
 
   const handleLogout = () => {
@@ -151,6 +170,22 @@ export default function EmployeeDashboard() {
             </CardContent>
           </Card>
         )
+      case "vacation":
+        return (
+          <Card className="mx-2 sm:mx-0">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="text-lg sm:text-xl">Planejamento de Férias</CardTitle>
+              <CardDescription className="text-sm sm:text-base">Organize seu descanso com inteligência</CardDescription>
+            </CardHeader>
+            <CardContent className="px-4 sm:px-6 pb-4 sm:pb-6">
+              <div className="overflow-x-auto">
+                <Suspense fallback={<div className="flex items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#EE4D2D]"></div></div>}>
+                  <VacationCalendar user={user} />
+                </Suspense>
+              </div>
+            </CardContent>
+          </Card>
+        )
       default:
         return null
     }
@@ -171,8 +206,9 @@ export default function EmployeeDashboard() {
         userShift={user?.shift}
         onProfileUpdate={handleProfileUpdate}
         customTabs={[
-          ...(portalTabs.holidays ? [{ id: 'holidays', label: 'Feriados' }] as any : []),
-          ...(portalTabs.absences ? [{ id: 'absences', label: 'Ausências' }] as any : []),
+          ...(portalTabs.holidays ? [{ id: 'holidays', label: 'Feriados', icon: Clock }] as any : []),
+          ...(portalTabs.vacations ? [{ id: 'vacation', label: 'Férias', icon: CalendarDays }] as any : []),
+          ...(portalTabs.absences ? [{ id: 'absences', label: 'Ausências', icon: Calendar }] as any : []),
         ]}
       />
       

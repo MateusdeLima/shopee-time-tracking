@@ -5,10 +5,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { toast } from "@/components/ui/use-toast"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { AlertCircle, Calendar, Clock } from "lucide-react"
+import { AlertCircle, Calendar, Clock, CheckCircle, Timer, TrendingUp } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
+import { Button } from "@/components/ui/button"
 import { ClassicTimeClock } from "@/components/classic-time-clock"
 import { getActiveHolidays, getOvertimeRecordsByUserId } from "@/lib/db"
 
@@ -22,6 +24,7 @@ export function SimpleHolidaySelection({ user }: SimpleHolidaySelectionProps) {
   const [error, setError] = useState("")
   const [userRecords, setUserRecords] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [isCompletionModalOpen, setIsCompletionModalOpen] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -57,8 +60,11 @@ export function SimpleHolidaySelection({ user }: SimpleHolidaySelectionProps) {
     }
   }
 
-  const handleUpdate = () => {
+  const handleUpdate = (completed?: boolean) => {
     loadData() // Recarregar dados após registro
+    if (completed) {
+      setIsCompletionModalOpen(true)
+    }
   }
 
   // Função para calcular o progresso do feriado
@@ -100,8 +106,50 @@ export function SimpleHolidaySelection({ user }: SimpleHolidaySelectionProps) {
       total: effectiveMaxHours,
       bankHours: bankHours,
       originalTotal: maxHours,
-      percentage: Math.round(percentage)
+      percentage: Math.round(percentage),
+      remaining: Math.max(0, effectiveMaxHours - normalHours)
     }
+  }
+
+  // Função para calcular estimativa de conclusão
+  const getCompletionEstimation = (hoursRemaining: number, deadline: string) => {
+    if (hoursRemaining <= 0) return null;
+
+    const dailyRate = 0.5;
+    const businessDaysNeeded = Math.ceil(hoursRemaining / dailyRate);
+
+    // Data estimada pulando fins de semana
+    let estimatedDate = new Date();
+    let daysAdded = 0;
+    while (daysAdded < businessDaysNeeded) {
+      estimatedDate.setDate(estimatedDate.getDate() + 1);
+      const day = estimatedDate.getDay();
+      if (day !== 0 && day !== 6) {
+        daysAdded++;
+      }
+    }
+
+    // Calcular dias úteis entre a data estimada e o prazo limite
+    const deadlineDate = new Date(deadline + 'T23:59:59');
+    let diffBusinessDays = 0;
+    
+    if (estimatedDate < deadlineDate) {
+      let tempDate = new Date(estimatedDate);
+      while (tempDate < deadlineDate) {
+        tempDate.setDate(tempDate.getDate() + 1);
+        const day = tempDate.getDay();
+        if (day !== 0 && day !== 6) {
+          diffBusinessDays++;
+        }
+      }
+    }
+
+    return {
+      estimatedDate,
+      deadlineDate,
+      diffBusinessDays,
+      isOnTime: estimatedDate <= deadlineDate
+    };
   }
 
   if (loading) {
@@ -234,6 +282,45 @@ export function SimpleHolidaySelection({ user }: SimpleHolidaySelectionProps) {
                         </p>
                       )}
                     </div>
+
+                    {/* Estimativa de Conclusão */}
+                    {progress.percentage < 100 && holiday.deadline && (
+                      <div className="pt-2 border-t border-gray-100 flex flex-col gap-2">
+                        <div className="flex items-center gap-2 text-xs text-gray-500">
+                          <AlertCircle className="h-3.5 w-3.5" />
+                          <span>Prazo limite para registro: <strong>{format(parseISO(holiday.deadline), "dd/MM/yyyy")}</strong></span>
+                        </div>
+                        
+                        {(() => {
+                          const estimation = getCompletionEstimation(progress.remaining, holiday.deadline);
+                          if (!estimation) return null;
+                          
+                          return (
+                            <div className="bg-gray-50 rounded-md p-2 space-y-1.5">
+                              <div className="flex items-center justify-between text-[11px] sm:text-xs">
+                                <div className="flex items-center gap-1.5 text-blue-700">
+                                  <Timer className="h-3.5 w-3.5" />
+                                  <span>Estimativa (30min/dia):</span>
+                                </div>
+                                <span className="font-semibold text-blue-900 border-b border-blue-200">
+                                  {format(estimation.estimatedDate, "dd/MM/yyyy")}
+                                </span>
+                              </div>
+                              
+                              <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
+                                <TrendingUp className={`h-3.5 w-3.5 ${estimation.isOnTime ? 'text-green-600' : 'text-red-600'}`} />
+                                <span className={estimation.isOnTime ? 'text-green-700' : 'text-red-700'}>
+                                  {estimation.isOnTime 
+                                    ? `Terminará ${estimation.diffBusinessDays} dias úteis antes do prazo`
+                                    : `Atenção: A estimativa ultrapassa o prazo limite!`
+                                  }
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </div>
                 </div>
               )
@@ -262,6 +349,31 @@ export function SimpleHolidaySelection({ user }: SimpleHolidaySelectionProps) {
           )}
         </>
       )}
+      {/* Modal de Conclusão de Feriado */}
+      <Dialog open={isCompletionModalOpen} onOpenChange={setIsCompletionModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle className="h-6 w-6 text-green-500" />
+              Feriado Concluído com Sucesso!
+            </DialogTitle>
+            <DialogDescription className="text-base text-foreground pt-4 leading-relaxed">
+              O histórico de horas foi finalizado, a gestão já está a par da situação. 
+              <br /><br />
+              O arquivo de PDF foi baixado automaticamente. <strong>Envie o arquivo para o PIC da sua tarefa</strong> para que o mesmo possa conferir.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="sm:justify-center">
+            <Button 
+              type="button" 
+              className="bg-[#EE4D2D] hover:bg-[#EE4D2D]/90 px-8"
+              onClick={() => setIsCompletionModalOpen(false)}
+            >
+              Entendido
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

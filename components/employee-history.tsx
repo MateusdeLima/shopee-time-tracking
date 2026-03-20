@@ -153,19 +153,55 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
       await deleteOvertimeRecord(recordToDelete)
       const updatedUserRecords = records.filter((record) => record.id !== recordToDelete)
       setRecords(updatedUserRecords)
-      // Atualizar mapa de horas
+      // Atualizar mapa de horas e sincronizar planilha se for feriado
       const deletedRecord = records.find((record) => record.id === recordToDelete)
       if (deletedRecord) {
-        const holidayId = deletedRecord.holidayId
-        const currentHoursInfo = holidayHoursMap[holidayId]
-        if (currentHoursInfo) {
-          setHolidayHoursMap({
-            ...holidayHoursMap,
-            [holidayId]: {
-              ...currentHoursInfo,
-              used: currentHoursInfo.used - deletedRecord.hours,
-            },
-          })
+        if (deletedRecord.holidayId) {
+          const holidayId = deletedRecord.holidayId
+          const currentHoursInfo = holidayHoursMap[holidayId]
+          
+          let newUsed = 0;
+          if (currentHoursInfo) {
+            newUsed = currentHoursInfo.used - deletedRecord.hours;
+            setHolidayHoursMap({
+              ...holidayHoursMap,
+              [holidayId]: {
+                ...currentHoursInfo,
+                used: newUsed,
+              },
+            })
+          }
+
+          // Sincronizar com Planilha (Consolidado) após exclusão
+          // Buscamos as estatísticas reais do DB para maior precisão
+          try {
+            const { getUserHolidayStats } = await import("@/lib/db")
+            const updatedStats = await getUserHolidayStats(user.id, holidayId, true)
+            
+            // Buscar o nome do feriado da lista carregada no componente
+            const holidayObj = holidays.find(h => h.id === holidayId)
+            const holidayName = holidayObj?.name || deletedRecord.holidayName || "Feriado"
+
+            fetch('/api/sheets/sync-registration', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ 
+                action: 'create', // Usamos create porque o Apps Script faz upsert
+                type: 'holiday',
+                data: {
+                  holidayId: holidayId,
+                  holidayName: holidayName,
+                  horasFeitas: updatedStats.used,
+                  horasRestantes: Math.max(0, updatedStats.max - updatedStats.used),
+                  horasTotais: updatedStats.max,
+                  concluido: updatedStats.used >= updatedStats.max ? 'SIM' : 'NÃO'
+                },
+                user 
+              }),
+            })
+          } catch (syncErr) {
+            console.error('Erro ao sincronizar planilha após exclusão:', syncErr)
+          }
         }
       }
       toast({

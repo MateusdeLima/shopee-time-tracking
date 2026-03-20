@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "@/components/ui/use-toast"
-import { CalendarDays, Calendar, Users, LogOut, FileText, Clock, User, Menu, X, Edit, Upload, Banknote, Folder, ShieldCheck, BarChart3 } from "lucide-react"
+import { CalendarDays, Calendar, Users, LogOut, FileText, Clock, User, Menu, X, Edit, Upload, Banknote, Folder, ShieldCheck, BarChart3, Palmtree } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
 
 interface SidebarProps {
@@ -59,12 +59,14 @@ export function Sidebar({
     { id: "dashboard", label: "Dashboard", icon: BarChart3 },
     { id: "holidays", label: "Feriados", icon: CalendarDays },
     { id: "absences", label: "Ausências", icon: Calendar },
+    { id: "vacations", label: "Férias", icon: Palmtree },
     { id: "employees", label: "Controle de acessos", icon: ShieldCheck },
     { id: "employee-portal", label: "Portal Funcionário", icon: User },
   ]
 
   const employeeTabs = [
     { id: "holidays", label: "Feriados", icon: Clock },
+    { id: "vacation", label: "Férias", icon: CalendarDays },
     { id: "absences", label: "Ausências", icon: Calendar },
   ]
 

@@ -3,6 +3,42 @@ import { getUserById } from "@/lib/db"
 
 // O Token do Bot do Discord fornecido pelo usuário a partir de variáveis de ambiente
 const DISCORD_BOT_TOKEN = process.env.DISCORD_BOT_TOKEN
+const SEATALK_WEBHOOK_URL = process.env.SEATALK_WEBHOOK_URL
+
+async function sendSeaTalkMessage(message: string, isVacation: boolean = false) {
+  if (!SEATALK_WEBHOOK_URL) {
+    console.warn('[SEATALK] Webhook URL não configurada (.env.local missing SEATALK_WEBHOOK_URL)')
+    return { success: false, error: "URL não configurada" }
+  }
+
+  try {
+    const finalMessage = message
+
+    const response = await fetch(SEATALK_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tag: "text",
+        text: {
+          content: finalMessage,
+          at_all: isVacation // SeaTalk suporte para menção geral
+        }
+      })
+    })
+
+    if (!response.ok) {
+      const err = await response.text()
+      console.error('[SEATALK] Erro ao enviar webhook:', err)
+      return { success: false, error: err }
+    }
+
+    console.log('[SEATALK] Mensagem enviada com sucesso')
+    return { success: true }
+  } catch (error: any) {
+    console.error('[SEATALK] Exceção:', error)
+    return { success: false, error: error.message }
+  }
+}
 
 async function sendDiscordDM(discordId: string, message: string) {
   try {
@@ -60,29 +96,83 @@ export async function POST(request: Request) {
     const body = await request.json()
     console.log('🚀 [NOTIFY] Recebido payload:', JSON.stringify(body, null, 2))
     console.log('🔑 [NOTIFY] Token presente:', !!DISCORD_BOT_TOKEN)
-    const { userId, reason, dates, customReason, startTime, endTime, hasProof, isProofUpdate, proofUrl } = body
+
+    const {
+      userId,
+      userName: bodyUserName,
+      discordId: bodyDiscordId,
+      type,
+      reason,
+      dates,
+      customReason,
+      startTime,
+      endTime,
+      hasProof,
+      isProofUpdate,
+      proofUrl,
+      status,
+      timeInfo: bodyTimeInfo,
+      reasonText: customReasonText,
+      details,
+      userEmail,
+      stats,
+      isFirst,
+      isLast
+    } = body
 
     if (!userId) {
       return NextResponse.json({ error: "UserId required" }, { status: 400 })
     }
 
-    // Buscar dados completos do usuário (incluindo o novo discord_id)
-    const userIdStr = String(userId)
-    const user = await getUserById(userIdStr)
-    const userName = user ? `${user.firstName} ${user.lastName}` : "Agente"
-    
-    // Se o usuário não tiver um discord_id cadastrado, aborta o envio silenciosamente
-    const discordId = user?.discordId
-    console.log('🔍 [NOTIFY] Dados do usuário encontrados:', { id: userIdStr, email: user?.email, discordId })
-
-    if (!user) {
-      console.log('❌ [NOTIFY] Usuário não encontrado no DB:', userIdStr)
-      return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 404 })
-    }
+    // Buscar dados do usuário do DB
+    const user = await getUserById(String(userId))
+    const userName = bodyUserName || (user ? `${user.firstName} ${user.lastName}` : "Agente")
+    const discordId = bodyDiscordId || user?.discordId
 
     if (!discordId) {
-      console.log('⚠️ [NOTIFY] Usuário sem Discord ID:', user.email)
-      return NextResponse.json({ success: false, error: 'Usuário sem Discord ID cadastrado' })
+      console.log('⚠️ [NOTIFY] Usuário sem Discord ID:', userEmail || user?.email || 'N/A')
+      // Se não tem Discord ID, ainda podemos tentar enviar SeaTalk se a URL estiver configurada
+    }
+
+    // 1. Lidar com atualizações de status (Aprovação/Rejeição)
+    if (status) {
+      const statusIcon = status === 'approved' ? '✅' : '❌'
+      const statusText = status === 'approved' ? 'APROVADA' : 'REJEITADA'
+
+      const discordMsg = reason === 'vacation' && status === 'approved'
+        ? "férias aprovadas!!! 🥳🥳🏖️☀️"
+        : `${statusIcon} **Atualização de Solicitação**\n\nOlá **${userName}**,\nSua solicitação de **${reason === 'vacation' ? 'Férias' : 'Ausência'}** foi **${statusText}** pela administração.`
+
+      const seaTalkMsg = `${statusIcon} Status de Solicitação Atualizado\n\nAgente: ${userName}\nTipo: ${reason === 'vacation' ? 'Férias' : 'Ausência'}\nNovo Status: ${statusText}`
+
+      const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false, error: 'Sem Discord ID' }
+
+      // Não enviar para SeaTalk se for aprovação de férias
+      if (!(reason === 'vacation' && status === 'approved')) {
+        await sendSeaTalkMessage(seaTalkMsg, reason === 'vacation')
+      }
+      return NextResponse.json({ success: discordResult.success, type: "status_update" })
+    }
+
+    // 2. Novos tipos de eventos (Ponto, Banco de Horas, etc)
+    if (type === 'clock_in' || type === 'clock_out' || type === 'time_request' || type === 'hour_bank') {
+      let title = ""
+      let emoji = ""
+
+      switch (type) {
+        case 'clock_in': title = "Ponto de Entrada Registrado"; emoji = "📥"; break;
+        case 'clock_out': title = "Ponto de Saída Registrado"; emoji = "📤"; break;
+        case 'time_request': title = "Solicitação de Alteração de Ponto"; emoji = "📝"; break;
+        case 'hour_bank': title = "Comprovante de Banco de Horas Enviado"; emoji = "📸"; break;
+      }
+
+      const discordMsg = `${emoji} **${title}**\n\nOlá **${userName}**,\nSeu registro de **${title}** foi processado com sucesso em ${new Date().toLocaleString('pt-BR')}.`
+      const seaTalkMsg = `${emoji} Novo Evento de Agente\n\nAgente: ${userName}\nEvento: ${title}\nDetalhes: ${details || 'N/A'}\nData/Hora: ${new Date().toLocaleString('pt-BR')}`
+
+      const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false, error: 'Sem Discord ID' }
+      const seatalkResult = await sendSeaTalkMessage(seaTalkMsg)
+
+      return NextResponse.json({ success: seatalkResult.success, type, discord: discordResult })
     }
 
     // Dicionário de motivos
@@ -90,23 +180,19 @@ export async function POST(request: Request) {
       medical: "Consulta Médica",
       personal: "Energia/Internet",
       vacation: "Férias",
+      holiday: "Trabalho em Feriado",
       certificate: "Atestado",
       other: "Outro"
     }
 
     const formatDate = (d: any) => {
       if (!d) return ""
-      
-      // Se for string no formato YYYY-MM-DD, tratar manualmente para evitar fuso horário
       if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
         const [year, month, day] = d.split('T')[0].split('-')
         return `${day}/${month}/${year}`
       }
-
       const dateObj = new Date(d)
       if (isNaN(dateObj.getTime())) return d
-      
-      // Se caiu aqui, usar UTC para garantir consistência
       const day = String(dateObj.getUTCDate()).padStart(2, '0')
       const month = String(dateObj.getUTCMonth() + 1).padStart(2, '0')
       const year = dateObj.getUTCFullYear()
@@ -126,44 +212,100 @@ export async function POST(request: Request) {
     }
 
     const baseReason = ABSENCE_REASONS[reason] || reason
-    const reasonText = customReason ? `${baseReason} - ${customReason}` : baseReason
+    const finalReasonText = customReasonText || (customReason ? `${baseReason} - ${customReason}` : baseReason)
 
     // ------------------------------------------------------------------
-    // CASO 1: Atualização de Comprovante POSTERIOR (anexou depois)
+    // CASO 3: Atualização de Comprovante POSTERIOR
     // ------------------------------------------------------------------
     if (isProofUpdate) {
-      const message = `🔔 **Comprovante Anexado com Sucesso**\n\nOlá **${userName}**,\nSeu comprovante referente à ausência por **${reasonText}** (${startDateStr}) foi recebido pelo sistema. ✅`
-      const result = await sendDiscordDM(discordId, message)
-      return NextResponse.json({ success: result.success, type: "proof_update" })
+      const discordMsg = `🔔 **Comprovante Anexado com Sucesso**\n\nOlá **${userName}**,\nSeu comprovante referente à ausência por **${finalReasonText}** (${startDateStr}) foi recebido pelo sistema. ✅`
+      const seaTalkMsg = `🔔 Novo Comprovante Anexado\n\nAgente: ${userName}\nMotivo: ${finalReasonText}\nData: ${startDateStr}\nLink: ${proofUrl || 'Anexo'}`
+
+      const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false }
+      await sendSeaTalkMessage(seaTalkMsg)
+      return NextResponse.json({ success: discordResult.success, type: "proof_update" })
     }
 
     // ------------------------------------------------------------------
-    // CASO 2: Nova Ausência Registrada (Requisitos do Usuário)
+    // CASO 4: Nova Ausência/Férias/Feriado Registrada
     // ------------------------------------------------------------------
     const startTimeStr = startTime ? ` às ${startTime}` : ""
     const endTimeStr = endTime ? ` às ${endTime}` : ""
-    let timeInfo = `**Início:** ${startDateStr}${startTimeStr}`
-    
-    if (startDateStr !== endDateStr || endTime) {
-       timeInfo += `\n**Fim:** ${endDateStr}${endTimeStr}`
+    let timeInfo = bodyTimeInfo || `**Início:** ${startDateStr}${startTimeStr}`
+
+    if (!bodyTimeInfo && (startDateStr !== endDateStr || endTime)) {
+      timeInfo += `\n**Fim:** ${endDateStr}${endTimeStr}`
     }
 
-    let message = ""
-    
-    if (hasProof) {
-      // Regra 4: ausência + comprovante anexado na hora
-      message = `✅ **Ausência Registrada com Sucesso**\n\nOlá **${userName}**,\nSua ausência por **${reasonText}** foi registrada e seu comprovante já foi processado pelo sistema. Não há pendências.\n\n${timeInfo}`
+    let discordMsg = ""
+    let seaTalkMsg = ""
+
+    if (reason === 'vacation') {
+      discordMsg = `📅 **Solicitação de Férias Registrada**\n\nOlá **${userName}**,\nSua solicitação de férias foi registrada e aguarda aprovação da administração.\n\n${timeInfo}\n\n🚨 **ATENÇÃO:** Você tem até **5 dias úteis** para anexar o comprovante (print do portal/e-mail) para que sua solicitação seja processada. O não cumprimento do prazo resultará no cancelamento da solicitação.`
+      seaTalkMsg = `📅 Nova Solicitação de Férias\n\nAgente: ${userName}\nPeríodo: ${startDateStr} a ${endDateStr}\nStatus: Aguardando Aprovação`
+      const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false }
+      const seatalkResult = await sendSeaTalkMessage(seaTalkMsg, true) // Always send for vacation
+      
+      return NextResponse.json({ 
+        success: (discordId ? discordResult.success : true) && seatalkResult.success,
+        discord: discordResult,
+        seatalk: seatalkResult
+      })
+    } else if (reason === 'holiday') {
+      const remaining = stats ? Math.max(0, stats.max - stats.used) : 0
+      
+      // Discord DM (Sempre enviado)
+      let discordMsg = `🚩 **Registro de Feriado Confirmado**\n\nOlá **${userName}**,\nSeu horário para o feriado de **${customReason || 'hoje'}** foi registrado com sucesso.\n\n**Horário Selecionado:** ${startTime} até ${endTime}\n`
+      
+      if (remaining > 0) {
+        discordMsg += `\nFaltam **${remaining}h** para completar sua meta de hoje.`
+      } else {
+        discordMsg += `\n✅ **Parabéns!** Você concluiu todas as horas do feriado.`
+      }
+      discordMsg += `\n\nBom trabalho! 🚀`
+
+      // SeaTalk (Apenas no primeiro ou no último registro)
+      let seatalkResult = { success: true }
+      if (isFirst || isLast) {
+        const title = isLast ? "Fim do registro de Feriado" : "Início do registro de Feriado"
+        const seaTalkMsg = `🚩 ${title}\nAgente: ${userName}\nFeriado: ${customReason || 'N/A'}\nInicio: ${startTime} - ${endTime}`
+        // Para o Fim, podemos opcionalmente mudar o último campo para "Fim" se preferir, 
+        // mas o usuário pediu "Inicio: [data/hora]" no exemplo para ambos.
+        seatalkResult = await sendSeaTalkMessage(seaTalkMsg)
+      }
+
+      const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false }
+      
+      return NextResponse.json({ 
+        success: (discordId ? discordResult.success : true) && (seatalkResult as any).success,
+        discord: discordResult,
+        seatalk: seatalkResult
+      })
     } else {
-      // Regra 5: ausência registrada, mas sem comprovante
-      message = `⚠️ **Ausência Registrada (Aguardando Comprovante)**\n\nOlá **${userName}**,\nSua ausência por **${reasonText}** foi registrada no sistema.\n\n${timeInfo}\n\n🚨 **ATENÇÃO:** O comprovante não foi anexado. Você tem até **2 dias úteis** para anexar este documento no portal correspondente. O não cumprimento do prazo resultará na REJEIÇÃO do registro, sendo considerado falta injustificada.`
+      // ------------------------------------------------------------------
+      // CASO 5: Ausências Genéricas (Médica, Pessoal, Atestado, Outro)
+      // ------------------------------------------------------------------
+      const proofInfo = hasProof 
+        ? "Seu comprovante foi recebido e anexado ao registro. ✅" 
+        : "⚠️ **Lembrete:** Não esqueça de anexar o comprovante no sistema para que sua ausência seja validada pela administração."
+      
+      discordMsg = `✅ **Registro concluído com sucesso**\n\nOlá **${userName}**,\nSua ausência por **${finalReasonText}** foi registrada com sucesso.\n\n${timeInfo}\n\n${proofInfo}`
+      seaTalkMsg = `📢 Nova Ausência Registrada\n\nAgente: ${userName}\nMotivo: ${finalReasonText}\nPeríodo: ${startDateStr} a ${endDateStr}`
     }
 
-    const dmResult = await sendDiscordDM(discordId, message)
+    const seaTalkMsgClean = seaTalkMsg.replace(/\*\*/g, '').replace(/__/g, '')
 
-    return NextResponse.json({ success: dmResult.success, result: dmResult })
+    const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false }
+    const seatalkResult = await sendSeaTalkMessage(seaTalkMsgClean, reason === 'vacation')
+
+    return NextResponse.json({
+      success: (discordId ? discordResult.success : true) && seatalkResult.success,
+      discord: discordResult,
+      seatalk: seatalkResult
+    })
 
   } catch (error) {
     console.error("Erro interno na rota /api/notify-absence:", error)
-    return NextResponse.json({ success: false, error: "Erro interno do servidor" }, { status: 500 })
+    return NextResponse.json({ error: "Internal Server Error", details: error instanceof Error ? error.message : "Desconhecido" }, { status: 500 })
   }
 }

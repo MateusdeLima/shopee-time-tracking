@@ -407,6 +407,20 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         reason,
         status: "pending"
       })
+
+      // Notificar Admin via SeaTalk
+      fetch('/api/notify-absence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userName: `${user.firstName} ${user.lastName}`,
+          type: 'time_request',
+          details: `Solicitação de Ponto de Entrada para às ${requestedTime}. Motivo: ${reason}`,
+          userEmail: user.email,
+          discordId: user.discordId
+        })
+      }).catch(err => console.error("Erro ao enviar notificação SeaTalk:", err))
       
       toast({
         title: "Solicitação enviada",
@@ -483,6 +497,20 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
         reason: `Funcionário quer sair fora da tolerância. Horário solicitado: ${requestedExitTime}. Motivo: ${exitReason}`,
         status: "pending"
       })
+
+      // Notificar Admin via SeaTalk
+      fetch('/api/notify-absence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userName: `${user.firstName} ${user.lastName}`,
+          type: 'time_request',
+          details: `Solicitação de Saída fora da tolerância para às ${requestedExitTime}. Motivo: ${exitReason}`,
+          userEmail: user.email,
+          discordId: user.discordId
+        })
+      }).catch(err => console.error("Erro ao enviar notificação SeaTalk:", err))
       
       toast({
         title: "Solicitação enviada",
@@ -558,6 +586,21 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
       const opts = buildSuggestedEnds(startTime)
       setSuggestedEndOptions(opts)
       setSelectedSuggestedEnd(opts[0]?.endTime || "")
+
+      // Notificar Admin via SeaTalk
+      fetch('/api/notify-absence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userName: `${user.firstName} ${user.lastName}`,
+          type: 'clock_in',
+          details: `Início do expediente extra para o feriado ${selectedHoliday.name} às ${startTime}`,
+          userEmail: user.email,
+          discordId: user.discordId
+        })
+      }).catch(err => console.error("Erro ao enviar notificação SeaTalk:", err))
+
       toast({ title: "Ponto de entrada registrado", description: `Início: ${startTime}` })
     } catch (e: any) {
       toast({ variant: "destructive", title: "Erro ao iniciar ponto", description: e.message || "Tente novamente." })
@@ -611,6 +654,21 @@ export function TimeClock({ user, selectedHoliday, onOvertimeCalculated }: TimeC
 
       setActiveClock(updatedClock)
       setIsFinishDialogOpen(false)
+
+      // Notificar Admin via SeaTalk
+      fetch('/api/notify-absence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userName: `${user.firstName} ${user.lastName}`,
+          type: 'clock_out',
+          details: `Finalização do expediente extra para o feriado ${selectedHoliday.name} às ${endTime}. Total: ${overtime}h extras`,
+          userEmail: user.email,
+          discordId: user.discordId
+        })
+      }).catch(err => console.error("Erro ao enviar notificação SeaTalk:", err))
+
       toast({ title: "Saída registrada", description: `Fim: ${endTime}. Horas extras: ${overtime}h` })
       await refreshHolidayStats()
     } catch (e: any) {

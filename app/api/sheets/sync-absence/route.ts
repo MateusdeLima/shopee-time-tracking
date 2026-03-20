@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server'
 const MOTIVOS_MAP: { [key: string]: string } = {
   medical: "Consulta Médica",
   personal: "Energia/Internet",
-  vacation: "Férias",
+
   certificate: "Atestado",
   other: "Outro",
 }

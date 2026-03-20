@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/components/ui/use-toast"
 import { Search, Trash2, User, Mail, Plus, Upload, FileSpreadsheet, Edit, Check, X } from "lucide-react"
-import { getUsers, deleteUser, getProjects, updateUser, batchCreateAgents, normalizeShift } from "@/lib/db"
+import { getUsers, deleteUser, getProjects, updateUser, batchCreateAgents, normalizeShift, getOrCreateProjectByName, deleteAllEmployees } from "@/lib/db"
 import {
   Select,
   SelectContent,
@@ -25,7 +25,6 @@ const DiscordIdCell = ({ employee, onSave }: { employee: any, onSave: (id: strin
   const [isChanged, setIsChanged] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
 
-  // Sincronizar estado local se o employee mudar (ex: após loadEmployees)
   useEffect(() => {
     setValue(employee.discordId || "")
     setIsChanged(false)
@@ -38,7 +37,6 @@ const DiscordIdCell = ({ employee, onSave }: { employee: any, onSave: (id: strin
       await onSave(value)
       setIsChanged(false)
     } catch (err) {
-      // O toast de erro já é disparado pelo pai, apenas paramos o loading
     } finally {
       setIsLoading(false)
     }
@@ -90,24 +88,86 @@ const DiscordIdCell = ({ employee, onSave }: { employee: any, onSave: (id: strin
   )
 }
 
+const ProjectCell = ({ employee, projects, onSave }: { employee: any, projects: any[], onSave: (id: string) => Promise<void> }) => {
+  const currentProject = projects.find(p => p.id === employee.projectId)
+  const [value, setValue] = useState(currentProject?.name || "")
+  const [isChanged, setIsChanged] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+
+  useEffect(() => {
+    setValue(currentProject?.name || "")
+    setIsChanged(false)
+  }, [employee.projectId, projects])
+
+  const handleSave = async () => {
+    if (isLoading) return
+    setIsLoading(true)
+    try {
+      const projectId = await getOrCreateProjectByName(value)
+      await onSave(projectId)
+      setIsChanged(false)
+    } catch (err) {
+      toast({ title: "Erro ao salvar projeto", variant: "destructive" })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <Input
+        list={`projects-list-${employee.id}`}
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value)
+          setIsChanged(e.target.value !== (currentProject?.name || ""))
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') handleSave()
+        }}
+        placeholder="Projeto..."
+        className={`h-8 max-w-[140px] text-xs transition-all ${isChanged ? 'border-orange-500 ring-1 ring-orange-500/20' : ''}`}
+      />
+      <datalist id={`projects-list-${employee.id}`}>
+        {projects.map(p => (
+          <option key={p.id} value={p.name} />
+        ))}
+      </datalist>
+      {isChanged && (
+        <Button 
+          size="icon" 
+          variant="ghost" 
+          className="h-7 w-7 text-green-600"
+          onClick={handleSave}
+          disabled={isLoading}
+        >
+          <Check className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  )
+}
+
 export function AccessControl() {
   const [employees, setEmployees] = useState<any[]>([])
   const [filteredEmployees, setFilteredEmployees] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState("")
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [projects, setProjects] = useState<any[]>([])
 
   const [newName, setNewName] = useState("")
   const [newEmail, setNewEmail] = useState("")
   const [newDiscordId, setNewDiscordId] = useState("")
   const [newShift, setNewShift] = useState<"8-17" | "9-18">("8-17")
+  const [newProjectName, setNewProjectName] = useState("")
   const [pendingImportData, setPendingImportData] = useState<any[] | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadEmployees()
+    loadProjects()
   }, [])
-
 
   const loadEmployees = async () => {
     try {
@@ -119,6 +179,15 @@ export function AccessControl() {
       }
     } catch (error) {
       console.error("Error loading employees:", error)
+    }
+  }
+
+  const loadProjects = async () => {
+    try {
+      const allProjects = await getProjects()
+      setProjects(allProjects || [])
+    } catch (error) {
+      console.error("Error loading projects:", error)
     }
   }
 
@@ -136,6 +205,21 @@ export function AccessControl() {
       setFilteredEmployees(employees)
     }
   }, [searchTerm, employees])
+
+  const handleDeleteAll = async () => {
+    if (confirm("⚠️ ATENÇÃO: Isso apagará TODOS os agentes cadastrados. Esta ação é irreversível. Deseja continuar?")) {
+      setIsLoading(true)
+      try {
+        await deleteAllEmployees()
+        toast({ title: "Agentes removidos", description: "Todos os agentes foram excluídos." })
+        loadEmployees()
+      } catch (error: any) {
+        toast({ title: "Erro", description: error.message, variant: "destructive" })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+  }
 
   const handleDeleteEmployee = async (employeeId: string) => {
     if (confirm(`Tem certeza que deseja excluir este agente?`)) {
@@ -160,15 +244,29 @@ export function AccessControl() {
       const names = newName.trim().split(" ")
       const firstName = names[0]
       const lastName = names.slice(1).join(" ") || ""
+
+      let projectId = undefined
+      if (newProjectName.trim()) {
+        projectId = await getOrCreateProjectByName(newProjectName)
+      }
       
-      await batchCreateAgents([{ firstName, lastName, email: newEmail.trim(), shift: newShift, discordId: newDiscordId.trim() || undefined }])
+      await batchCreateAgents([{ 
+        firstName, 
+        lastName, 
+        email: newEmail.trim(), 
+        shift: newShift, 
+        discordId: newDiscordId.trim() || undefined,
+        projectId: projectId
+      }])
       
       toast({ title: "Agente adicionado", description: "O agente foi criado com sucesso." })
       setIsAddModalOpen(false)
       setNewName("")
       setNewEmail("")
       setNewDiscordId("")
+      setNewProjectName("")
       loadEmployees()
+      loadProjects()
     } catch (error: any) {
       toast({ title: "Erro", description: error.message, variant: "destructive" })
     } finally {
@@ -187,28 +285,63 @@ export function AccessControl() {
         const wb = XLSX.read(bstr, { type: "binary" })
         const wsname = wb.SheetNames[0]
         const ws = wb.Sheets[wsname]
-        const data = XLSX.utils.sheet_to_json(ws, { header: "A" }) as any[]
+        const data = XLSX.utils.sheet_to_json(ws) as any[]
+        
+        if (data.length === 0) {
+          toast({ title: "Arquivo vazio", description: "O arquivo não contém dados.", variant: "destructive" })
+          return
+        }
 
-        // Espera-se: A=Nome, B=Email, C=Horario (ex: 8-17 ou 9-18), D=Discord ID Opcional
-        const agentsToCreate = data.slice(1).map(row => {
-          const fullName = row.A || ""
-          const names = fullName.trim().split(" ")
+        const headers = Object.keys(data[0])
+        const findCol = (terms: string[]) => headers.find(h => 
+          terms.some(t => h.toLowerCase().includes(t.toLowerCase()))
+        )
+
+        const colName = findCol(["nome do agente", "nome", "name"])
+        const colEmail = findCol(["e-mail", "email"])
+        const colShift = findCol(["horário", "horario", "shift", "periodo", "período"])
+        const colDiscord = findCol(["discord id", "discord"])
+        const colProject = findCol(["time/projeto", "time", "projeto", "project", "team"])
+
+        // 1. Identificar todos os projetos únicos
+        const uniqueProjectNames = Array.from(new Set(
+          data.map(row => String(row[colProject || ""] || "").trim()).filter(Boolean)
+        ))
+
+        // 2. Resolver todos os projetos (criar se necessário) sequencialmente ou com cache
+        const projectMap: Record<string, string> = {}
+        for (const name of uniqueProjectNames) {
+          projectMap[name] = await getOrCreateProjectByName(name)
+        }
+
+        // 3. Mapear agentes com os IDs resolvidos
+        const agentsToCreate = data.map((row) => {
+          const fullName = String(row[colName || ""] || "").trim()
+          if (!fullName) return null
+
+          const names = fullName.split(" ")
+          const projectName = String(row[colProject || ""] || "").trim()
+          
           return {
             firstName: names[0],
             lastName: names.slice(1).join(" ") || "",
-            email: (row.B || "").toString().trim(),
-            shift: normalizeShift((row.C || "8-17").toString().trim()),
-            discordId: row.D ? String(row.D).trim() : undefined
+            email: String(row[colEmail || ""] || "").trim(),
+            shift: normalizeShift(String(row[colShift || ""] || "8-17").trim()),
+            discordId: row[colDiscord || ""] ? String(row[colDiscord || ""]).trim() : undefined,
+            projectId: projectName ? projectMap[projectName] : undefined,
+            projectName: projectName
           }
-        }).filter(a => a.firstName && a.email)
+        })
+        
+        const filteredAgents = agentsToCreate.filter((a: any) => a && a.firstName && a.email)
 
-        if (agentsToCreate.length === 0) {
+        if (filteredAgents.length === 0) {
           toast({ title: "Arquivo inválido", description: "Nenhum dado válido encontrado.", variant: "destructive" })
           return
         }
 
-        setPendingImportData(agentsToCreate)
-        setIsAddModalOpen(false) // Fecha o modal de adição para mostrar o de preview
+        setPendingImportData(filteredAgents)
+        setIsAddModalOpen(false)
       } catch (error: any) {
         toast({ title: "Erro no import", description: error.message, variant: "destructive" })
       } finally {
@@ -227,6 +360,7 @@ export function AccessControl() {
       toast({ title: "Importação concluída", description: `${pendingImportData.length} agentes foram importados.` })
       setPendingImportData(null)
       loadEmployees()
+      loadProjects()
     } catch (error: any) {
       toast({ title: "Erro ao importar", description: error.message, variant: "destructive" })
     } finally {
@@ -244,6 +378,16 @@ export function AccessControl() {
     }
   }
 
+  const handleProjectChange = async (userId: string, projectId: string) => {
+    try {
+      await updateUser(userId, { projectId: projectId === "none" ? null : projectId } as any)
+      toast({ title: "Projeto atualizado" })
+      loadEmployees()
+    } catch (error) {
+      toast({ title: "Erro ao atualizar projeto", variant: "destructive" })
+    }
+  }
+
   return (
     <div className="space-y-6">
       <Card className="bg-white shadow-sm border-gray-200">
@@ -252,13 +396,24 @@ export function AccessControl() {
             <CardTitle className="text-xl font-bold text-gray-800">Adicionar Agentes</CardTitle>
             <CardDescription>Adicione agentes manualmente ou importe via planilha</CardDescription>
           </div>
-          <Button 
-            className="bg-[#EE4D2D] hover:bg-[#D23F20] text-white"
-            onClick={() => setIsAddModalOpen(true)}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Adicionar Agentes
-          </Button>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline"
+              className="border-red-200 text-red-500 hover:bg-red-50"
+              onClick={handleDeleteAll}
+              disabled={isLoading || employees.length === 0}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Limpar Banco (Teste)
+            </Button>
+            <Button 
+              className="bg-[#EE4D2D] hover:bg-[#D23F20] text-white"
+              onClick={() => setIsAddModalOpen(true)}
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar Agentes
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
            <div className="flex items-center gap-4 mt-2">
@@ -288,6 +443,7 @@ export function AccessControl() {
                   <TableHead className="font-semibold text-gray-700">ID</TableHead>
                   <TableHead className="font-semibold text-gray-700">E-mail</TableHead>
                   <TableHead className="font-semibold text-gray-700">Discord ID</TableHead>
+                  <TableHead className="font-semibold text-gray-700">Time/Projeto</TableHead>
                   <TableHead className="font-semibold text-gray-700">Horário</TableHead>
                   <TableHead className="font-semibold text-gray-700 text-right">Ações</TableHead>
                 </TableRow>
@@ -316,11 +472,21 @@ export function AccessControl() {
                             try {
                               await updateUser(emp.id, { discordId: newId })
                               toast({ title: "Discord ID salvo", description: `O ID para ${emp.firstName} foi atualizado.` })
-                              loadEmployees() // Recarregar para sincronizar o estado
+                              loadEmployees()
                             } catch (error: any) {
                               toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" })
-                              throw error // Repassar para o componente tratar o loading
+                              throw error
                             }
+                          }} 
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <ProjectCell 
+                          employee={emp} 
+                          projects={projects} 
+                          onSave={async (projectId) => {
+                            await handleProjectChange(emp.id, projectId)
+                            loadProjects()
                           }} 
                         />
                       </TableCell>
@@ -390,6 +556,20 @@ export function AccessControl() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-gray-500">Time/Projeto</label>
+                  <Input 
+                    list="new-agent-projects"
+                    value={newProjectName} 
+                    onChange={(e) => setNewProjectName(e.target.value)} 
+                    placeholder="Digite ou selecione..." 
+                  />
+                  <datalist id="new-agent-projects">
+                    {projects.map(p => (
+                      <option key={p.id} value={p.name} />
+                    ))}
+                  </datalist>
+                </div>
               </div>
               <Button 
                 className="w-full bg-[#EE4D2D] hover:bg-[#D23F20]" 
@@ -412,7 +592,7 @@ export function AccessControl() {
             <div className="space-y-4">
               <h4 className="text-sm font-medium leading-none">Importar XLSX</h4>
               <p className="text-xs text-gray-500">
-                O arquivo deve conter as colunas: <strong>A: Nome, B: E-mail, C: Horário (8-17 ou 9-18), D: Discord ID (Opcional)</strong>
+                O arquivo deve conter cabeçalhos como: <strong>nome do agente, e-mail, horário, discord ID, time/projeto</strong>
               </p>
               <input 
                 type="file" 
@@ -451,6 +631,7 @@ export function AccessControl() {
                   <TableHead>Nome</TableHead>
                   <TableHead>E-mail</TableHead>
                   <TableHead>Discord ID</TableHead>
+                  <TableHead>Time/Projeto</TableHead>
                   <TableHead>Horário</TableHead>
                 </TableRow>
               </TableHeader>
@@ -460,6 +641,7 @@ export function AccessControl() {
                     <TableCell className="py-2 text-sm">{agent.firstName} {agent.lastName}</TableCell>
                     <TableCell className="py-2 text-sm">{agent.email}</TableCell>
                     <TableCell className="py-2 text-sm font-mono text-gray-500">{agent.discordId || "-"}</TableCell>
+                    <TableCell className="py-2 text-sm text-gray-500">{agent.projectName || "-"}</TableCell>
                     <TableCell className="py-2 text-sm">
                       <Badge variant="outline" className="font-normal">{agent.shift}</Badge>
                     </TableCell>

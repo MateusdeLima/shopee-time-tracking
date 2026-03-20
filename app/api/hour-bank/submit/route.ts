@@ -62,6 +62,35 @@ export async function POST(request: NextRequest) {
 
     console.log("Registro pendente criado:", overtimeRecord)
 
+    // Enviar notificação para o SeaTalk via API interna
+    try {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+      const notifyUrl = `${appUrl}/api/notify-absence`
+      
+      console.log("Enviando notificação para:", notifyUrl)
+      
+      const notifyResponse = await fetch(notifyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: userId,
+          userName: `${user.firstName} ${user.lastName}`,
+          type: 'hour_bank',
+          details: `Compensação de banco de horas submetida para o feriado ${holiday.name} (${declaredHoursFloat}h). Aguardando aprovação.`,
+          userEmail: user.email,
+          discordId: user.discordId
+        })
+      })
+      
+      if (!notifyResponse.ok) {
+        console.error("Falha ao enviar notificação para notify-absence:", await notifyResponse.text())
+      } else {
+        console.log("Notificação SeaTalk enviada com sucesso")
+      }
+    } catch (err) {
+      console.error("Erro ao tentar disparar notificação SeaTalk:", err)
+    }
+
     console.log("=== SUBMISSÃO CONCLUÍDA COM SUCESSO ===")
     console.log("Resultado final:", {
       declaredHours: declaredHoursFloat,

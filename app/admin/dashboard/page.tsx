@@ -8,12 +8,12 @@ import { EmployeeReports } from "@/components/employee-reports"
 import { AccessControl } from "@/components/access-control"
 import { AdminSummary } from "@/components/admin-summary"
 import { AdminAbsences } from "@/components/admin-absences"
-import { AdminNotifications } from "@/components/admin-notifications"
+import { AdminVacations } from "@/components/admin-vacations"
+
 import { Sidebar } from "@/components/sidebar"
 import { getCurrentUser, logout, refreshCurrentUser } from "@/lib/auth"
 import { AdminAnalytics } from "@/components/admin-analytics"
 import { useAdminSession, clearAdminSession } from "@/hooks/use-admin-session"
-import { initializeDb } from "@/lib/db"
 import { Button } from "@/components/ui/button"
 import { FileSpreadsheet, LogOut } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -26,16 +26,13 @@ export default function AdminDashboard() {
   const { user, isAdmin, isLoading } = useAdminSession()
   const [activeMainTab, setActiveMainTab] = useState("dashboard")
   const [activeHolidayTab, setActiveHolidayTab] = useState("manage")
-  const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean }>({ holidays: true, absences: true })
+  const [portalTabs, setPortalTabs] = useState<{ holidays: boolean; absences: boolean; vacations: boolean }>({ holidays: true, absences: true, vacations: true })
   const [isHourBankExportModalOpen, setIsHourBankExportModalOpen] = useState(false)
   const [selectedExportHolidays, setSelectedExportHolidays] = useState<string[]>([])
   const [isExporting, setIsExporting] = useState(false)
   const [data, setData] = useState<any>({ holidays: [] }) // garantir array padrão
 
   useEffect(() => {
-    // Inicializar banco de dados
-    initializeDb()
-
     // Verificar se não é admin ou não está carregando
     if (!isLoading && !isAdmin) {
       router.push("/")
@@ -62,29 +59,7 @@ export default function AdminDashboard() {
     // Nota: Com sessão persistente, o user será atualizado automaticamente
   }
 
-  // Listener para mudança de aba via notificação
-  useEffect(() => {
-    const handleTabChange = (event: CustomEvent) => {
-      const { tab } = event.detail
-      console.log('🔔 REDIRECT: Mudando para aba:', tab)
-      setActiveMainTab(tab)
-    }
 
-    // Adicionar listener para evento personalizado
-    window.addEventListener('admin-tab-change', handleTabChange as EventListener)
-
-    // Verificar se há parâmetro de aba na URL ao carregar
-    const urlParams = new URLSearchParams(window.location.search)
-    const tabParam = urlParams.get('tab')
-    if (tabParam && ['dashboard', 'absences', 'employees', 'projects'].includes(tabParam)) {
-      console.log('🔔 URL: Definindo aba inicial:', tabParam)
-      setActiveMainTab(tabParam)
-    }
-
-    return () => {
-      window.removeEventListener('admin-tab-change', handleTabChange as EventListener)
-    }
-  }, [])
 
 
   if (isLoading) {
@@ -175,6 +150,8 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
         )
+      case "vacations":
+        return <AdminVacations />
       case "employees":
         return (
           <div className="space-y-6">
@@ -196,7 +173,7 @@ export default function AdminDashboard() {
                     <p className="text-xs text-gray-500">Controla a aba de feriados no portal</p>
                   </div>
                   <label className="inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only" checked={portalTabs.holidays} onChange={async (e) => { let next = { ...portalTabs, holidays: e.target.checked }; if (!next.holidays && !next.absences) { next.absences = true } setPortalTabs(next); try { await setEmployeePortalTabs(next); } catch { /* ignore */ } }} />
+                    <input type="checkbox" className="sr-only" checked={portalTabs.holidays} onChange={async (e) => { let next = { ...portalTabs, holidays: e.target.checked }; if (!next.holidays && !next.absences && !next.vacations) { next.absences = true } setPortalTabs(next); try { await setEmployeePortalTabs(next); } catch { /* ignore */ } }} />
                     <span className={`w-10 h-6 flex items-center bg-gray-200 rounded-full p-1 transition-colors ${portalTabs.holidays ? 'bg-green-500' : 'bg-gray-300'}`}>
                       <span className={`bg-white w-4 h-4 rounded-full transform transition-transform ${portalTabs.holidays ? 'translate-x-4' : ''}`}></span>
                     </span>
@@ -208,9 +185,21 @@ export default function AdminDashboard() {
                     <p className="text-xs text-gray-500">Controla a aba de ausências no portal</p>
                   </div>
                   <label className="inline-flex items-center cursor-pointer">
-                    <input type="checkbox" className="sr-only" checked={portalTabs.absences} onChange={async (e) => { let next = { ...portalTabs, absences: e.target.checked }; if (!next.holidays && !next.absences) { next.holidays = true } setPortalTabs(next); try { await setEmployeePortalTabs(next); } catch { /* ignore */ } }} />
+                    <input type="checkbox" className="sr-only" checked={portalTabs.absences} onChange={async (e) => { let next = { ...portalTabs, absences: e.target.checked }; if (!next.holidays && !next.absences && !next.vacations) { next.holidays = true } setPortalTabs(next); try { await setEmployeePortalTabs(next); } catch { /* ignore */ } }} />
                     <span className={`w-10 h-6 flex items-center bg-gray-200 rounded-full p-1 transition-colors ${portalTabs.absences ? 'bg-green-500' : 'bg-gray-300'}`}>
                       <span className={`bg-white w-4 h-4 rounded-full transform transition-transform ${portalTabs.absences ? 'translate-x-4' : ''}`}></span>
+                    </span>
+                  </label>
+                </div>
+                <div className="flex items-center justify-between p-3 border rounded-md">
+                  <div>
+                    <p className="font-medium">Férias</p>
+                    <p className="text-xs text-gray-500">Controla a aba de férias no portal</p>
+                  </div>
+                  <label className="inline-flex items-center cursor-pointer">
+                    <input type="checkbox" className="sr-only" checked={portalTabs.vacations} onChange={async (e) => { let next = { ...portalTabs, vacations: e.target.checked }; if (!next.holidays && !next.absences && !next.vacations) { next.vacations = true } setPortalTabs(next); try { await setEmployeePortalTabs(next); } catch { /* ignore */ } }} />
+                    <span className={`w-10 h-6 flex items-center bg-gray-200 rounded-full p-1 transition-colors ${portalTabs.vacations ? 'bg-green-500' : 'bg-gray-300'}`}>
+                      <span className={`bg-white w-4 h-4 rounded-full transform transition-transform ${portalTabs.vacations ? 'translate-x-4' : ''}`}></span>
                     </span>
                   </label>
                 </div>
@@ -249,7 +238,7 @@ export default function AdminDashboard() {
           </h1>
         </div>
         <div className="flex items-center gap-4">
-          <AdminNotifications isAdmin={isAdmin} />
+
           <Button
             variant="ghost"
             size="sm"

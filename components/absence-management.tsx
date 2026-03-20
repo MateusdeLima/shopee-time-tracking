@@ -21,7 +21,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DialogTrigger, DialogFooter } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
-import { getAbsenceRecordsByUserId, createAbsenceRecord, updateAbsenceRecord, deleteAbsenceRecord, getProjectVacations, getHolidays, type Holiday } from "@/lib/db"
+import { getAbsenceRecordsByUserId, createAbsenceRecord, updateAbsenceRecord, deleteAbsenceRecord, getHolidays, type Holiday } from "@/lib/db"
 import { supabase, uploadCertificate } from "@/lib/supabase"
 import jsPDF from 'jspdf'
 import 'jspdf-autotable'
@@ -30,7 +30,6 @@ import autoTable from 'jspdf-autotable'
 const ABSENCE_REASONS = [
   { id: "medical", label: "Consulta Médica" },
   { id: "personal", label: "Energia/Internet" },
-  { id: "vacation", label: "Férias" },
   { id: "certificate", label: "Atestado" },
   { id: "other", label: "Outro" },
 ]
@@ -52,7 +51,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false)
   const [selectedMonthForReport, setSelectedMonthForReport] = useState<string>("all")
-  const [unavailableDates, setUnavailableDates] = useState<Date[]>([])
+
   const [holidays, setHolidays] = useState<Holiday[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -114,10 +113,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     checkIfMobile()
     window.addEventListener('resize', checkIfMobile)
 
-    // Carregar férias do projeto para bloquear datas
-    if (user.projectId) {
-      loadProjectVacations()
-    }
+
 
     return () => {
       channel.unsubscribe()
@@ -125,29 +121,30 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
   }, [user.id, user.projectId])
 
-  const loadProjectVacations = async () => {
-    if (!user.projectId) return
-    const dates = await getProjectVacations(user.projectId)
-    setUnavailableDates(dates)
-  }
+
 
   const loadHolidays = async () => {
     const data = await getHolidays()
     setHolidays(data)
   }
 
-  const syncAbsenceToSheets = async (action: 'create' | 'update', absence: any) => {
+  const syncAbsenceToSheets = async (action: 'create' | 'update' | 'update_proof' | 'update_status', absence: any) => {
     try {
       console.log(`📡 [SHEETS] Sincronizando ausência (${action}):`, absence.id)
-      const res = await fetch('/api/sheets/sync-absence', {
+      const res = await fetch('/api/sheets/sync-registration', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, absence, user: { 
-          id: user.id, 
-          email: user.email, 
-          firstName: user.firstName, 
-          lastName: user.lastName 
-        } })
+        body: JSON.stringify({
+          action,
+          type: 'absence',
+          data: absence,
+          user: {
+            id: user.id,
+            email: user.email,
+            firstName: user.firstName,
+            lastName: user.lastName
+          }
+        })
       })
       const result = await res.json()
       if (res.ok) {
@@ -174,9 +171,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     try {
       const userAbsences = await getAbsenceRecordsByUserId(user.id)
       if (Array.isArray(userAbsences)) {
-        // Filtrar ausências com createdAt válido e ordenar por data (mais recentes primeiro)
+        // Filtrar ausências: 
+        // 1. Deve ter createdAt válido
+        // 2. NÃO deve ser do tipo 'vacation' (pois estas ficam na aba de Férias)
         const validAbsences = userAbsences.filter(absence => {
           if (!absence.createdAt) return false
+          if (absence.reason === 'vacation') return false // Esconder férias desta aba
+          
           try {
             const date = parseISO(absence.createdAt)
             return !isNaN(date.getTime())
@@ -354,35 +355,6 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       }
     }
 
-    // Validação de conflito de férias
-    if (formData.reason === "vacation" && user.projectId) {
-      const isOverlap = formData.dates.some(date =>
-        unavailableDates.some(unavailable =>
-          format(unavailable, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
-        )
-      )
-
-      if (isOverlap) {
-        setError("O período selecionado conflita com férias de outro membro do projeto.")
-        return
-      }
-
-      // Validação de feriados e emendas
-      const hasHoliday = formData.dates.some(date =>
-        holidays.some(h => {
-          if (!h.date) return false
-          // Ajustar data do feriado para evitar problemas de fuso
-          const hDate = new Date(h.date + 'T12:00:00')
-          return format(hDate, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
-        })
-      )
-
-      if (hasHoliday) {
-        setError("Não é permitido selecionar férias em dias de feriado ou emenda.")
-        return
-      }
-    }
-
     // Validação específica para Atestado
     if (formData.reason === "certificate") {
       const today = startOfDay(new Date())
@@ -439,9 +411,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
       // Determinar o status inicial
       let initialStatus: "pending" | "completed" | "approved"
-      if (formData.reason === "vacation") {
-        initialStatus = "pending" // Férias aguardam aprovação
-      } else if (formData.reason === "personal" && !formData.returnDate) {
+      if (formData.reason === "personal" && !formData.returnDate) {
         initialStatus = "pending" // Energia/Internet sem retorno aguarda protocolo
       } else if (formData.proofDocument) {
         initialStatus = "completed" // Com comprovante
@@ -460,8 +430,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           start: formData.departureDate,
           end: endDate,
         },
-        departureTime: formData.reason !== "vacation" ? formData.departureTime : undefined,
-        returnTime: (formData.reason !== "vacation" && formData.returnTime && formData.returnDate) ? formData.returnTime : undefined,
+        departureTime: formData.departureTime || undefined,
+        returnTime: (formData.returnTime && formData.returnDate) ? formData.returnTime : undefined,
         proofDocument: finalProofUrl || undefined,
       })
 
@@ -471,13 +441,11 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       toast({
         title: "Ausência registrada",
         description:
-          formData.reason === "vacation"
-            ? "Sua solicitação de férias foi registrada e está aguardando aprovação"
-            : formData.reason === "certificate"
-              ? "Seu atestado foi registrado com sucesso"
-              : formData.reason === "personal" && !formData.returnDate
-                ? "Ausência registrada. Envie o protocolo para registrar o horário de retorno automaticamente"
-                : "Sua ausência foi registrada com sucesso",
+          formData.reason === "certificate"
+            ? "Seu atestado foi registrado com sucesso"
+            : formData.reason === "personal" && !formData.returnDate
+              ? "Ausência registrada. Envie o protocolo para registrar o horário de retorno automaticamente"
+              : "Sua ausência foi registrada com sucesso",
       })
 
       // Fechar diálogo
@@ -485,6 +453,21 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
       // Sincronizar com Google Sheets (segundo plano)
       syncAbsenceToSheets('create', newAbsence)
+
+      // Notificar via Discord
+      fetch('/api/notify-absence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          reason: formData.reason,
+          dates: formattedDates,
+          customReason: formData.reason === "other" ? formData.customReason : undefined,
+          startTime: formData.departureTime,
+          endTime: formData.returnTime,
+          hasProof: !!finalProofUrl
+        })
+      }).catch(err => console.error('Erro ao enviar notificação Discord:', err))
     } catch (error: any) {
       console.error("ERRO NO REGISTRO:", error)
       alert("ERRO AO SALVAR: " + error.message)
@@ -585,10 +568,23 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         setIsUploadDialogOpen(false)
 
         // Sincronizar com Google Sheets (segundo plano) - aqui garantimos que vai o publicUrl
-        syncAbsenceToSheets('update', { 
+        syncAbsenceToSheets('update_proof', { 
           id: selectedAbsence.id, 
           proofDocument: updateData.proofDocument // Este é o publicUrl
         })
+
+        // Notificar via Discord sobre a atualização do comprovante
+        fetch('/api/notify-absence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: user.id,
+            reason: selectedAbsence.reason,
+            dates: selectedAbsence.dates,
+            isProofUpdate: true,
+            proofUrl: publicUrl
+          })
+        }).catch(err => console.error('Erro ao enviar notificação Discord (update):', err))
       } catch (error: any) {
         toast({
           title: "Erro",
@@ -703,13 +699,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           {absence.reason === "personal" ? "Protocolo Enviado" : "Comprovante Enviado"}
         </Badge>
       )
-    } else if (absence.reason === "vacation") {
-      return (
-        <Badge className="bg-yellow-100 text-yellow-700 border-yellow-200 flex items-center gap-1 w-fit">
-          <AlertCircle className="h-3 w-3" />
-          Aguardando Aprovação
-        </Badge>
-      )
+
     } else if (absence.reason === "personal" && absence.status === "pending") {
       return (
         <Badge className="bg-orange-100 text-orange-700 border-orange-200 flex items-center gap-1 w-fit">
@@ -724,9 +714,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
   const formatDateRange = (absence: any) => {
     try {
-      // Verificar se tem horários (não é férias)
-      const hasTime = absence.departureTime && absence.returnTime &&
-        absence.reason !== "vacation"
+      // Verificar se tem horários
+      const hasTime = absence.departureTime && absence.returnTime
 
       if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
         const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
@@ -936,7 +925,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             formatDateRange(absence),
             absence.status === "approved" ? "Aprovado" :
               absence.status === "completed" ? "Comprovante Enviado" :
-                absence.reason === "vacation" ? "Aguardando Aprovação" : "Pendente"
+                "Pendente"
           ]
         })
 
@@ -1165,7 +1154,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                         </Button>
                       </>
                     )}
-                    {absence.status === "pending" && absence.reason !== "vacation" && (
+                    {absence.status === "pending" && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -1225,168 +1214,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             )}
 
             {/* Seleção de Data: Calendar para Férias, Inputs para outros */}
-            {formData.reason === "vacation" ? (
-              <div className="space-y-2">
-                <Label>Selecione o período de férias</Label>
-                <div className="border rounded-md p-4 flex justify-center bg-white">
-                  <Calendar
-                    mode="range"
-                    locale={ptBR}
-                    formatters={{
-                      formatWeekdayName: (date) => format(date, "EEEEE", { locale: ptBR }).toUpperCase()
-                    }}
-                    selected={{
-                      from: formData.dateRange.start || undefined,
-                      to: formData.dateRange.end || undefined
-                    }}
-                    onSelect={(range) => {
-                      // Se o usuário clicar em uma data desabilitada, o onSelect geralmente não é chamado,
-                      // mas mantemos a validação defensiva aqui caso a UI permita.
-                      const start = range?.from
-                      if (start) {
-                        const dayOfWeek = getDay(start)
-                        if ([3, 4, 5].includes(dayOfWeek)) {
-                          // Feedback redundante pois a data estará desabilitada visualmente
-                          return
-                        }
-
-                        // Validação redundante de feriado
-                        const isTooClose = holidays.some(h => {
-                          if (!h.date) return false
-                          const hDate = parseISO(h.date + 'T12:00:00') // Forçar meio-dia
-                          const diff = differenceInDays(hDate, start)
-                          return diff > 0 && diff < 4
-                        })
-                        if (isTooClose) return
-                      }
-
-                      if (range) {
-                        const start = range.from || null
-                        const end = range.to || null
-
-                        let dates: Date[] = []
-                        if (start && end) {
-                          try {
-                            dates = eachDayOfInterval({ start, end })
-                          } catch (e) {
-                            dates = [start]
-                          }
-                        } else if (start) {
-                          dates = [start]
-                        }
-
-                        setFormData({
-                          ...formData,
-                          dateRange: { start, end },
-                          dates: dates,
-                          departureDate: start ? format(start, 'yyyy-MM-dd') : '',
-                          returnDate: end ? format(end, 'yyyy-MM-dd') : '',
-                          departureTime: "00:00",
-                          returnTime: "23:59"
-                        })
-                      } else {
-                        setFormData({
-                          ...formData,
-                          dateRange: { start: null, end: null },
-                          dates: [],
-                          departureDate: '',
-                          returnDate: ''
-                        })
-                      }
-                    }}
-                    disabled={[
-                      { before: new Date() },
-                      ...unavailableDates,
-                      { dayOfWeek: [3, 4, 5] }, // Quarta, Quinta, Sexta
-                      (date) => {
-                        return holidays.some(h => {
-                          if (!h.date) return false
-                          // Comparar com segurança de fuso horário
-                          const hDate = parseISO(h.date + 'T12:00:00')
-                          const diff = differenceInDays(hDate, date)
-
-                          // Bloquear o próprio feriado (diff === 0)
-                          if (diff === 0) return true
-
-                          // Bloquear se estiver a menos de 4 dias ANTES do feriado (exclusivo)
-                          // Se diff 1, 2, 3 -> Bloqueia. Se diff 4 -> OK.
-                          return diff > 0 && diff < 4
-                        })
-                      }
-                    ]}
-                    modifiers={{
-                      unavailable: unavailableDates,
-                      holiday: holidays.filter(h => h.type !== 'bridge').map(h => parseISO(h.date ? h.date + 'T12:00:00' : '')),
-                      bridge: holidays.filter(h => h.type === 'bridge').map(h => parseISO(h.date ? h.date + 'T12:00:00' : ''))
-                    }}
-                    modifiersStyles={{
-                      unavailable: {
-                        color: '#EF4444',
-                        fontWeight: 'bold',
-                        textDecoration: 'line-through',
-                        opacity: 0.5
-                      },
-                      selected: {
-                        backgroundColor: '#EE4D2D'
-                      },
-                      holiday: {
-                        backgroundColor: '#FF00FF', // Magenta
-                        color: '#FFFFFF',
-                        fontWeight: 'bold',
-                      },
-                      bridge: {
-                        backgroundColor: '#FF9900', // Orange
-                        color: '#FFFFFF',
-                        fontWeight: 'bold'
-                      },
-                      outside: {
-                        color: '#9CA3AF', // gray-400
-                        opacity: 0.5
-                      }
-                    }}
-                    className="rounded-md border shadow-sm p-4 w-fit mx-auto"
-                    classNames={{
-                      month: "space-y-4",
-                      caption: "flex justify-center pt-1 relative items-center",
-                      caption_label: "text-sm font-medium",
-                      nav: "space-x-1 flex items-center",
-                      nav_button: "h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100",
-                      nav_button_previous: "absolute left-1",
-                      nav_button_next: "absolute right-1",
-                      table: "border-collapse space-y-1",
-                      head_row: "flex justify-between w-full",
-                      head_cell: "text-muted-foreground rounded-md w-9 font-normal text-[0.8rem]",
-                      row: "flex w-full mt-2 justify-between",
-                      cell: "text-center text-sm p-0 relative [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                      day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100",
-                      day_outside: "text-gray-400 opacity-50"
-                    }}
-                  />
-                </div>
-                <div className="flex gap-4 text-sm">
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 bg-[#EE4D2D] rounded-full"></div>
-                    <span>Selecionado</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 bg-red-500 rounded-full opacity-50"></div>
-                    <span>Indisponível (Outro membro do projeto)</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <div className="w-3 h-3 bg-gray-200 rounded-full"></div>
-                    <span>Disponível</span>
-                  </div>
-                </div>
-                {formData.dateRange.start && formData.dateRange.end && (
-                  <p className="text-sm font-medium mt-2">
-                    Período: {format(formData.dateRange.start, 'dd/MM/yyyy')} até {format(formData.dateRange.end, 'dd/MM/yyyy')}
-                    ({formData.dates.length} dias)
-                  </p>
-                )}
-              </div>
-            ) : (
-              // Inputs normais para outros motivos
-              <>
+            {/* Seleção de Data e Hora */}
+            <div className="space-y-4">
                 <div className="space-y-2">
                   <Label className="text-base font-semibold">Data e Hora de Saída</Label>
                   <div className="grid gap-3 grid-cols-2">
@@ -1448,8 +1277,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     </div>
                   </div>
                 </div>
-              </>
-            )}
+            </div>
 
             {/* Notas adicionais */}
 
@@ -1534,14 +1362,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
               </div>
             )}
 
-            {formData.reason === "vacation" && (
-              <Alert className="bg-blue-50 border-blue-200">
-                <AlertCircle className="h-4 w-4 text-blue-500" />
-                <AlertDescription className="text-blue-700">
-                  Solicitações de férias precisam ser aprovadas pelo administrador.
-                </AlertDescription>
-              </Alert>
-            )}
+
 
             <div className="flex justify-end space-x-2 pt-4">
               <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>

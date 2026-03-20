@@ -208,8 +208,39 @@ export async function initializeDb() {
     return true
   }
 }
+
+// Buscar todas as férias de um projeto para evitar sobreposição
+export async function getProjectVacations(projectId: string) {
+  try {
+    // 1. Buscar todos os usuários do projeto
+    const { data: projectUsers, error: usersError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("project_id", projectId)
+
+    if (usersError) throw usersError
+    if (!projectUsers || projectUsers.length === 0) return []
+
+    const userIds = projectUsers.map(u => u.id)
+
+    // 2. Buscar registros de ausência do tipo 'vacation' para esses usuários
+    const { data: vacations, error: vacationsError } = await supabase
+      .from("absence_records")
+      .select("*")
+      .eq("reason", "vacation")
+      .in("user_id", userIds)
+      .in("status", ["pending", "approved"]) // Considerar pendentes e aprovados para bloqueio
+
+    if (vacationsError) throw vacationsError
+
+    return vacations || []
+  } catch (error) {
+    console.error("Erro ao buscar férias do projeto:", error)
+    return []
+  }
+}
 // ================= Portal Settings =================
-export type EmployeePortalTabs = { holidays: boolean; absences: boolean }
+export type EmployeePortalTabs = { holidays: boolean; absences: boolean; vacations: boolean }
 
 export async function getEmployeePortalTabs(): Promise<EmployeePortalTabs> {
   const { data, error } = await supabase
@@ -220,10 +251,14 @@ export async function getEmployeePortalTabs(): Promise<EmployeePortalTabs> {
 
   if (error) {
     console.error('Erro ao carregar portal_settings:', error)
-    return { holidays: true, absences: true }
+    return { holidays: true, absences: true, vacations: true }
   }
-  const value = (data as any)?.value || { holidays: true, absences: true }
-  return { holidays: !!value.holidays, absences: !!value.absences }
+  const value = (data as any)?.value || { holidays: true, absences: true, vacations: true }
+  return { 
+    holidays: !!value.holidays, 
+    absences: !!value.absences,
+    vacations: !!value.vacations
+  }
 }
 
 export async function setEmployeePortalTabs(tabs: EmployeePortalTabs): Promise<void> {
@@ -405,7 +440,7 @@ export function normalizeShift(shift: string): string {
   return "8-17"
 }
 
-export async function batchCreateAgents(agents: Array<{ firstName: string; lastName: string; email: string; shift?: string; discordId?: string }>): Promise<void> {
+export async function batchCreateAgents(agents: Array<{ firstName: string; lastName: string; email: string; shift?: string; discordId?: string; projectId?: string }>): Promise<void> {
   try {
     for (const agent of agents) {
       const username = await generateNextAgentId()
@@ -420,6 +455,7 @@ export async function batchCreateAgents(agents: Array<{ firstName: string; lastN
           username,
           shift: normalizedShift,
           discord_id: agent.discordId,
+          project_id: agent.projectId,
           is_first_access: true,
         },
       ])
@@ -442,6 +478,14 @@ export async function deleteUser(id: string): Promise<void> {
   if (error) {
     console.error("Erro ao excluir usuário:", error)
     throw new Error("Falha ao excluir usuário")
+  }
+}
+
+export async function deleteAllEmployees(): Promise<void> {
+  const { error } = await supabase.from("users").delete().eq("role", "employee")
+  if (error) {
+    console.error("Erro ao excluir todos os agentes:", error)
+    throw new Error("Falha ao excluir todos os agentes")
   }
 }
 
@@ -487,6 +531,49 @@ export async function getProjects(): Promise<Project[]> {
   } catch (error) {
     console.error("Erro em getProjects:", error)
     return []
+  }
+}
+
+export async function getOrCreateProjectByName(name: string): Promise<string> {
+  const trimmedName = name.trim()
+  if (!trimmedName) throw new Error("Nome do projeto inválido")
+
+  try {
+    // 1. Tentar buscar projeto existente
+    const { data: existing, error: searchError } = await supabase
+      .from("projects")
+      .select("id")
+      .ilike("name", trimmedName)
+      .maybeSingle()
+
+    if (searchError) throw searchError
+    if (existing) return existing.id
+
+    // 2. Criar novo projeto
+    const { data: newProject, error: createError } = await supabase
+      .from("projects")
+      .insert({ name: trimmedName })
+      .select("id")
+      .single()
+
+    if (createError) {
+      // Se houver erro de chave duplicada (23505 ou 409 Conflict), tentar buscar novamente
+      if (createError.code === "23505" || createError.message?.includes("duplicate key")) {
+        const { data: secondSearch, error: secondSearchError } = await supabase
+          .from("projects")
+          .select("id")
+          .ilike("name", trimmedName)
+          .maybeSingle()
+
+        if (secondSearchError) throw secondSearchError
+        if (secondSearch) return secondSearch.id
+      }
+      throw createError
+    }
+    return newProject.id
+  } catch (error) {
+    console.error("Erro em getOrCreateProjectByName:", error)
+    throw error
   }
 }
 
@@ -1013,38 +1100,7 @@ export async function createAbsenceRecord(
     throw new Error("Falha ao criar registro de ausência")
   }
 
-  // Notificar bot (Fire and forget para não bloquear a resposta, mas logar erro)
-  // Como estamos em uma função que pode rodar no cliente ou server, fetch deve funcionar.
-  // Se rodar no server, URL relativa pode falhar se não tiver base.
-  // Vamos tentar usar URL relativa e catch.
-  try {
-    console.log("🤖 [BOT] Gatilho de ausência acionado. Tentando notificar...")
-    fetch('/api/notify-absence', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: record.userId,
-        reason: record.reason,
-        customReason: record.customReason,
-        dates: record.dates,
-        startTime: record.departureTime, // Assumindo mapeamento para departureTime
-        endTime: record.returnTime,     // Assumindo mapeamento para returnTime
-        hasProof: !!record.proofDocument,
-        proofUrl: record.proofDocument   // URL para envio da imagem
-      })
-    })
-      .then(async (res) => {
-        try {
-          const data = await res.json()
-          console.log("🤖 [BOT] Resposta detalhada do servidor de notificação:", JSON.stringify(data, null, 2))
-        } catch (jsonErr) {
-          console.log("🤖 [BOT] Resposta não-JSON do servidor")
-        }
-      })
-      .catch(err => console.error("🤖 [BOT] Erro ao chamar API local:", err))
-  } catch (e) {
-    console.error("🤖 [BOT] Erro ao tentar disparar notificação:", e)
-  }
+  // Notificar bot (Removido daqui pois os componentes agora chamam a API diretamente para evitar duplicidade)
 
   return convertToCamelCase<AbsenceRecord>(data)
 }
@@ -1070,38 +1126,7 @@ export async function updateAbsenceRecord(id: number, data: Partial<AbsenceRecor
 
   const result = convertToCamelCase<AbsenceRecord>(updatedData)
 
-  // ------------------------------------------------------------------
-  // NOTIFICAÇAO DE COMPROVANTE (Se foi anexado agora)
-  // ------------------------------------------------------------------
-  if (data.proofDocument) {
-    try {
-      console.log("🤖 [BOT] Detectado upload de comprovante. Notificando...")
-      // Precisamos do userId e dates que estão no registro atualizado
-      fetch('/api/notify-absence', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: result.userId,
-          dates: result.dates,
-          reason: result.reason,
-          customReason: result.customReason,
-          isProofUpdate: true,
-          proofUrl: result.proofDocument // URL para envio da imagem
-        })
-      })
-      .then(async (res) => {
-        try {
-          const data = await res.json()
-          console.log("🤖 [BOT] Resposta detalhada (Upload Comprovante):", JSON.stringify(data, null, 2))
-        } catch (jsonErr) {
-          console.log("🤖 [BOT] Resposta não-JSON do servidor (Upload Comprovante)")
-        }
-      })
-      .catch(err => console.error("🤖 [BOT] Erro notificações update:", err))
-    } catch (e) {
-      console.error("🤖 [BOT] Erro trigger update:", e)
-    }
-  }
+  // Notificaçao de comprovante (Removido daqui para evitar duplicidade, componentes chamam a API)
 
   return result
 }
@@ -1115,53 +1140,7 @@ export async function deleteAbsenceRecord(id: number): Promise<void> {
   }
 }
 
-export async function getProjectVacations(projectId: string): Promise<Date[]> {
-  try {
-    const { data, error } = await supabase
-      .from("absence_records")
-      .select(`
-        id,
-        status,
-        date_range,
-        dates,
-        users!inner (
-          project_id
-        )
-      `)
-      .eq("users.project_id", projectId)
-      .eq("status", "approved")
 
-    if (error) {
-      console.error("Erro ao buscar férias do projeto:", error)
-      return []
-    }
-
-    const unavailableDates: Date[] = []
-
-    data?.forEach((record: any) => {
-      if (record.dates && Array.isArray(record.dates)) {
-        record.dates.forEach((dateString: string) => {
-          unavailableDates.push(parseISO(dateString))
-        })
-      }
-      else if (record.date_range?.start && record.date_range?.end) {
-        try {
-          const start = parseISO(record.date_range.start)
-          const end = parseISO(record.date_range.end)
-          const dates = eachDayOfInterval({ start, end })
-          unavailableDates.push(...dates)
-        } catch (e) {
-          console.error("Erro ao processar intervalo de datas:", e)
-        }
-      }
-    })
-
-    return unavailableDates
-  } catch (error) {
-    console.error("Erro em getProjectVacations:", error)
-    return []
-  }
-}
 
 
 
@@ -1378,9 +1357,9 @@ export async function getUserHolidayStats(userId: string, holidayId: number, for
     }
 
     // Buscar todos os registros de horas extras do usuário para este feriado
-    const { data, error } = await supabase
+    const { data: rawData, error } = await supabase
       .from("overtime_records")
-      .select("hours, status")
+      .select("*") // Selecionar tudo para garantir mapeamento correto
       .eq("user_id", userId)
       .eq("holiday_id", holidayId)
 
@@ -1389,28 +1368,34 @@ export async function getUserHolidayStats(userId: string, holidayId: number, for
       return { used: 0, max: holiday.maxHours, compensated: 0 }
     }
 
-    // Filtrar apenas registros que devem ser contabilizados:
-    // - Registros sem status (antigos, manuais) 
-    // - Registros aprovados (status = "approved")
-    // EXCLUIR: rejected_admin, pending_admin
+    // Converter para camelCase para consistência com o restante do sistema
+    const data = convertToCamelCase<any[]>(rawData)
+
+    // Filtrar registros válidos (null ou approved)
     const validRecords = data.filter((record: any) => {
       const status = record.status
       return status === null || status === "approved"
     })
 
-    // Debug: Log dos registros para entender o problema
-    console.log(`[getUserHolidayStats] Usuário ${userId}, Feriado ${holidayId}:`)
-    console.log(`- Total de registros encontrados: ${data.length}`)
-    console.log(`- Registros válidos (null ou approved): ${validRecords.length}`)
-    data.forEach((record: any, index: number) => {
-      console.log(`  Registro ${index + 1}: ${record.hours}h, status: ${record.status || 'null'}`)
-    })
+    // Separar horas trabalhadas de horas de banco
+    // Banco de horas tem optionId 'manual_bank_hours' ou 'ai_bank_hours'
+    const workedRecords = validRecords.filter(r => 
+      r.optionId !== "manual_bank_hours" && r.optionId !== "ai_bank_hours"
+    )
+    const bankRecords = validRecords.filter(r => 
+      r.optionId === "manual_bank_hours" || r.optionId === "ai_bank_hours"
+    )
 
-    // Calcular total de horas usadas (apenas registros válidos)
-    const hoursUsed = validRecords.reduce((total: number, record: any) => total + record.hours, 0)
-    console.log(`- Horas usadas (contabilizadas): ${hoursUsed}h`)
+    // Horas trabalhadas efetivamente
+    const hoursUsed = workedRecords.reduce((total: number, record: any) => total + record.hours, 0)
+    
+    // Horas extraídas do banco de horas (dentro da tabela overtime_records)
+    const bankHoursFromOvertime = bankRecords.reduce((total: number, record: any) => total + record.hours, 0)
 
-    // Buscar horas compensadas do banco de horas para este usuário e feriado
+    console.log(`- Horas trabalhadas: ${hoursUsed}h`)
+    console.log(`- Horas de banco (na tabela overtime): ${bankHoursFromOvertime}h`)
+
+    // Buscar horas compensadas na tabela específica hour_bank_compensations (se houver)
     const { data: compensationsData, error: compensationsError } = await supabase
       .from("hour_bank_compensations")
       .select("detected_hours")
@@ -1418,21 +1403,22 @@ export async function getUserHolidayStats(userId: string, holidayId: number, for
       .eq("holiday_id", holidayId)
       .eq("status", "approved")
 
-    let compensatedHours = 0
+    let compensatedHoursTable = 0
     if (!compensationsError && compensationsData) {
-      compensatedHours = compensationsData.reduce((total: number, comp: any) => total + (comp.detected_hours || 0), 0)
-      console.log(`Horas compensadas encontradas para usuário ${userId} no feriado ${holidayId}:`, compensatedHours)
-    } else if (compensationsError) {
-      console.error("Erro ao buscar compensações:", compensationsError)
+      compensatedHoursTable = compensationsData.reduce((total: number, comp: any) => total + (comp.detected_hours || 0), 0)
+      console.log(`- Horas compensadas (tabela específica): ${compensatedHoursTable}h`)
     }
 
-    // O máximo efetivo é o máximo original menos as horas compensadas
-    const effectiveMax = Math.max(0, holiday.maxHours - compensatedHours)
+    // Total de horas compensadas (Soma das duas fontes)
+    const totalCompensated = bankHoursFromOvertime + compensatedHoursTable
+
+    // O máximo efetivo é o máximo original menos as horas compensadas totais
+    const effectiveMax = Math.max(0, holiday.maxHours - totalCompensated)
 
     const result = {
       used: hoursUsed,
       max: effectiveMax,
-      compensated: compensatedHours
+      compensated: totalCompensated
     }
 
     // Armazenar no cache

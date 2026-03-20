@@ -12,7 +12,7 @@ import { AlertCircle, ArrowLeft, Upload, X, Eye, EyeOff, Loader2, ShieldCheck, C
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
 import { authenticateEmployee, setCurrentUser, isEmailRegistered } from "@/lib/auth"
-import { initializeDb, createUser, getUserByEmail, updateUser, getProjects } from "@/lib/db"
+import { createUser, getUserByEmail, updateUser, getProjects } from "@/lib/db"
 import type { User } from "@/lib/db"
 import { uploadProfilePicture } from "@/lib/supabase"
 import { LoadingScreen } from "@/components/loading-screen"
@@ -45,7 +45,6 @@ export function EmployeeLoginForm() {
   const [currentStep, setCurrentStep] = useState<LoginStep>(LoginStep.LOGIN)
   const [showFirstAccessModal, setShowFirstAccessModal] = useState(false)
   const [generatedId, setGeneratedId] = useState("")
-  const [dbInitialized, setDbInitialized] = useState(false)
   const [profilePicture, setProfilePicture] = useState<File | null>(null)
   const [profilePicturePreview, setProfilePicturePreview] = useState<string>("")
   const [showLoadingScreen, setShowLoadingScreen] = useState(false)
@@ -68,34 +67,6 @@ export function EmployeeLoginForm() {
   useEffect(() => {
     // Carregar projetos ao iniciar
     getProjects().then(setProjects)
-  }, [])
-
-  useEffect(() => {
-    // Inicializar o banco de dados quando o componente for montado
-    async function initialize() {
-      try {
-        setIsLoading(true)
-        setError("")
-        console.log("Iniciando inicialização do banco de dados...")
-
-        // Tentar inicializar o banco de dados
-        const success = await initializeDb()
-        if (success) {
-          console.log("Banco de dados inicializado com sucesso!")
-          setDbInitialized(true)
-        } else {
-          console.error("Falha ao inicializar o banco de dados.")
-          setError("Falha ao conectar ao banco de dados. Tente novamente mais tarde.")
-        }
-      } catch (error) {
-        console.error("Erro ao inicializar banco de dados:", error)
-        setError("Erro ao conectar ao banco de dados. Tente novamente mais tarde.")
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    initialize()
   }, [])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -135,18 +106,10 @@ export function EmployeeLoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!dbInitialized) {
-      setError("O sistema ainda está se conectando ao banco de dados. Aguarde um momento e tente novamente.")
-      return
-    }
-
     setIsLoading(true)
     setError("")
 
     try {
-      // Inicializar o banco de dados primeiro
-      await initializeDb()
-
       // Login com email e opcional username
       const user = await authenticateEmployee(undefined, undefined, formData.email, formData.username)
 
@@ -191,31 +154,7 @@ export function EmployeeLoginForm() {
     }
   }
 
-  const handleInitializeDatabase = async () => {
-    try {
-      setIsLoading(true)
-      setError("")
 
-      // Chamar a API para inicializar o banco de dados
-      const response = await fetch("/api/init-db")
-      const data = await response.json()
-
-      if (data.success) {
-        toast({
-          title: "Banco de dados inicializado",
-          description: "Banco de dados inicializado com sucesso!",
-        })
-        setDbInitialized(true)
-      } else {
-        setError(data.message || "Falha ao inicializar o banco de dados.")
-      }
-    } catch (error) {
-      console.error("Erro ao inicializar banco de dados:", error)
-      setError("Erro ao inicializar o banco de dados. Tente novamente mais tarde.")
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Renderização principal do Login
   const renderStep = () => {
@@ -255,7 +194,7 @@ export function EmployeeLoginForm() {
         <Button 
           type="submit" 
           className="w-full bg-[#EE4D2D] hover:bg-[#D23F20]" 
-          disabled={isLoading || !dbInitialized}
+          disabled={isLoading}
         >
           {isLoading ? (
             <>
@@ -267,16 +206,7 @@ export function EmployeeLoginForm() {
           )}
         </Button>
 
-        {!dbInitialized && (
-          <Button
-            onClick={handleInitializeDatabase}
-            variant="outline"
-            className="w-full mt-2"
-            disabled={isLoading}
-          >
-            Inicializar Banco de Dados
-          </Button>
-        )}
+
       </div>
     )
   }
@@ -295,12 +225,6 @@ export function EmployeeLoginForm() {
         </Alert>
       )}
 
-      {isLoading && !error && currentStep === LoginStep.LOGIN && (
-        <Alert className="mb-4 bg-blue-50 text-blue-800 border-blue-200">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Conectando ao banco de dados, por favor aguarde...</AlertDescription>
-        </Alert>
-      )}
 
       {renderStep()}
 

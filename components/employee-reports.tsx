@@ -241,14 +241,50 @@ export function EmployeeReports() {
   const handleDeleteRecord = async () => {
     if (recordToDelete === null) return
     try {
+      // Identificar o registro antes de excluir para saber de quem é e qual feriado
+      const recordObj = detailRecords.find(r => r.id === recordToDelete)
+      
       await deleteOvertimeRecord(recordToDelete)
+      
       if (selectedDetails) {
         const updatedRecords = await getOvertimeRecordsByUserId(selectedDetails.employeeId)
         const holidayRecords = updatedRecords.filter((record) => record.holidayId === selectedDetails.holidayId)
         setDetailRecords(holidayRecords)
+        
         // Atualizar também a lista principal
         const allRecords = await getOvertimeRecords()
         setRecords(allRecords)
+
+        // Sincronizar com Planilha se for feriado
+        if (recordObj && recordObj.holidayId) {
+          try {
+            const { getUserHolidayStats, getUserById } = await import("@/lib/db")
+            const userData = await getUserById(recordObj.userId)
+            const updatedStats = await getUserHolidayStats(recordObj.userId, recordObj.holidayId, true)
+            
+            if (userData) {
+              fetch('/api/sheets/sync-registration', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                  action: 'create',
+                  type: 'holiday',
+                  data: {
+                    holidayId: recordObj.holidayId,
+                    holidayName: recordObj.holidayName,
+                    horasFeitas: updatedStats.used,
+                    horasRestantes: Math.max(0, updatedStats.max - updatedStats.used),
+                    horasTotais: updatedStats.max,
+                    concluido: updatedStats.used >= updatedStats.max ? 'SIM' : 'NÃO'
+                  },
+                  user: userData 
+                }),
+              })
+            }
+          } catch (syncErr) {
+            console.error('Erro ao sincronizar planilha após exclusão (reports):', syncErr)
+          }
+        }
       }
       toast({
         title: "Registro excluído",

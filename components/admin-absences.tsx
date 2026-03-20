@@ -26,7 +26,7 @@ export function AdminAbsences() {
   const [absences, setAbsences] = useState<any[]>([])
   const [employees, setEmployees] = useState<any[]>([])
   const [isDetailsOpen, setIsDetailsOpen] = useState(false)
-  const [isApprovalDialogOpen, setIsApprovalDialogOpen] = useState(false)
+
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [selectedAbsence, setSelectedAbsence] = useState<any>(null)
   const [filters, setFilters] = useState({
@@ -71,7 +71,8 @@ export function AdminAbsences() {
       )
 
       setEmployees(employeesData)
-      setAbsences(allAbsences)
+      // Filtrar para remover registros de férias da aba geral de ausências
+      setAbsences(allAbsences.filter(record => record.reason !== 'vacation'))
     } catch (error) {
       console.error("Erro ao carregar ausências:", error)
       setAbsences([])
@@ -119,39 +120,7 @@ export function AdminAbsences() {
     setIsDetailsOpen(true)
   }
 
-  const handleApproveAbsence = (absence: any) => {
-    setSelectedAbsence(absence)
-    setIsApprovalDialogOpen(true)
-  }
 
-  const confirmApproval = async () => {
-    try {
-      // Atualizar o status da ausência para "approved"
-      await updateAbsenceRecord(selectedAbsence.id, {
-        status: "approved",
-      })
-
-      // Atualizar a lista de ausências
-      loadAbsences()
-
-      // Fechar o diálogo
-      setIsApprovalDialogOpen(false)
-      setIsDetailsOpen(false)
-
-      // Mostrar mensagem de sucesso
-      toast({
-        title: "Ausência aprovada",
-        description: "Ausência aprovada com sucesso!",
-      })
-    } catch (error) {
-      console.error("Erro ao aprovar ausência:", error)
-      toast({
-        title: "Erro",
-        description: "Ocorreu um erro ao aprovar a ausência. Tente novamente mais tarde.",
-        variant: "destructive",
-      })
-    }
-  }
 
   const handleDownloadProof = () => {
     if (!selectedAbsence || !selectedAbsence.proofDocument) return
@@ -232,8 +201,6 @@ export function AdminAbsences() {
 
   const getReasonText = (absence: any) => {
     if (absence.reason === "medical") return "Consulta Médica"
-    if (absence.reason === "personal") return "Energia/Internet"
-    if (absence.reason === "vacation") return "Férias"
     if (absence.reason === "certificate") return "Atestado"
     if (absence.reason === "other") return absence.customReason || "Outro"
     return absence.customReason || "Outro"
@@ -367,8 +334,7 @@ export function AdminAbsences() {
   const exportToGoogleSheets = async () => {
     try {
       setIsExporting(true)
-      // Filtrar ausências excluindo férias
-      const absencesToExport = filteredAbsences.filter(absence => absence.reason !== "vacation")
+      const absencesToExport = filteredAbsences
       
       if (absencesToExport.length === 0) {
         toast({
@@ -505,9 +471,8 @@ export function AdminAbsences() {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Todos os motivos</SelectItem>
-              <SelectItem value="medical">Consulta Médica</SelectItem>
               <SelectItem value="personal">Compromisso Pessoal</SelectItem>
-              <SelectItem value="vacation">Férias</SelectItem>
+
               <SelectItem value="other">Outro</SelectItem>
             </SelectContent>
           </Select>
@@ -647,10 +612,7 @@ export function AdminAbsences() {
                           </Badge>
                         ) : absence.status === "completed" ? (
                           <Badge className="bg-blue-100 text-blue-700 border-blue-200">Comprovante Enviado</Badge>
-                        ) : absence.reason === "vacation" ? (
-                          <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                            Aguardando Aprovação
-                          </Badge>
+
                         ) : (
                           <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
                             Pendente
@@ -670,17 +632,7 @@ export function AdminAbsences() {
                             <span className="sr-only">Ver detalhes</span>
                           </Button>
 
-                          {absence.reason === "vacation" && absence.status === "pending" && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-green-600"
-                              onClick={() => handleApproveAbsence(absence)}
-                            >
-                              <Check className="h-4 w-4" />
-                              <span className="sr-only">Aprovar</span>
-                            </Button>
-                          )}
+
                         </div>
                       </TableCell>
                     </TableRow>
@@ -744,10 +696,7 @@ export function AdminAbsences() {
                         </Badge>
                       ) : selectedAbsence.status === "completed" ? (
                         <Badge className="bg-blue-100 text-blue-700 border-blue-200">Comprovante Enviado</Badge>
-                      ) : selectedAbsence.reason === "vacation" ? (
-                        <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                          Aguardando Aprovação
-                        </Badge>
+
                       ) : (
                         <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
                           Pendente
@@ -781,33 +730,12 @@ export function AdminAbsences() {
                       </Button>
                     </div>
                   </div>
-                ) : selectedAbsence.reason === "vacation" && selectedAbsence.status === "pending" ? (
-                  <Alert className="bg-yellow-50 text-yellow-700 border-yellow-200">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>Esta solicitação de férias está aguardando sua aprovação.</AlertDescription>
-                  </Alert>
-                ) : selectedAbsence.reason === "vacation" && selectedAbsence.status === "approved" ? (
-                  <Alert className="bg-green-50 text-green-700 border-green-200">
-                    <Check className="h-4 w-4" />
-                    <AlertDescription>Esta solicitação de férias foi aprovada.</AlertDescription>
-                  </Alert>
+
                 ) : (
                   <Alert className="bg-yellow-50 text-yellow-700 border-yellow-200">
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>Nenhum comprovante foi enviado para esta ausência.</AlertDescription>
                   </Alert>
-                )}
-
-                {selectedAbsence.reason === "vacation" && selectedAbsence.status === "pending" && (
-                  <div className="flex justify-end mt-4">
-                    <Button
-                      className="bg-green-600 hover:bg-green-700 text-white"
-                      onClick={() => handleApproveAbsence(selectedAbsence)}
-                    >
-                      <Check className="h-4 w-4 mr-2" />
-                      Aprovar Férias
-                    </Button>
-                  </div>
                 )}
               </>
             )}
@@ -865,34 +793,7 @@ export function AdminAbsences() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal de Confirmação de Aprovação */}
-      <Dialog open={isApprovalDialogOpen} onOpenChange={setIsApprovalDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Aprovar Solicitação de Férias</DialogTitle>
-          </DialogHeader>
 
-          <div className="py-4">
-            <p>
-              Você está prestes a aprovar a solicitação de férias de{" "}
-              <strong>{selectedAbsence && getEmployeeName(selectedAbsence.userId)}</strong> para o período{" "}
-              <strong>{selectedAbsence && formatDateRange(selectedAbsence)}</strong>.
-            </p>
-
-            <p className="mt-4">Deseja confirmar esta aprovação?</p>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsApprovalDialogOpen(false)}>
-              Cancelar
-            </Button>
-            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={confirmApproval}>
-              <Check className="h-4 w-4 mr-2" />
-              Confirmar Aprovação
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }
