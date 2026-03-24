@@ -111,8 +111,8 @@ export function AdminVacations() {
           user: {
             id: request.userId,
             email: request.userEmail,
-            firstName: request.userName.split(' ')[0],
-            lastName: request.userName.split(' ').slice(1).join(' ')
+            firstName: (request.userName || "").split(' ')[0] || "Agente",
+            lastName: (request.userName || "").split(' ').slice(1).join(' ') || ""
           }
         }),
       }).catch(err => console.error('Erro ao sincronizar planilha (vacation status):', err))
@@ -124,11 +124,11 @@ export function AdminVacations() {
 
       // Atualizar lista local
       setRequests(prev => prev.map(r => r.id === request.id ? { ...r, status: decision } : r))
-    } catch (error) {
-      console.error('Erro ao processar decisão:', error)
+    } catch (error: any) {
+      console.error('Erro detalhado ao processar decisão:', error)
       toast({
         title: "Erro",
-        description: "Não foi possível processar a decisão.",
+        description: error.message || error.details || "Não foi possível processar a decisão.",
         variant: "destructive",
       })
     }
@@ -205,8 +205,8 @@ export function AdminVacations() {
           user: {
             id: selectedRequest.userId,
             email: selectedRequest.userEmail,
-            firstName: selectedRequest.userName.split(' ')[0],
-            lastName: selectedRequest.userName.split(' ').slice(1).join(' ')
+            firstName: (selectedRequest.userName || "").split(' ')[0] || "Agente",
+            lastName: (selectedRequest.userName || "").split(' ').slice(1).join(' ') || ""
           }
         }),
       }).catch(err => console.error('Erro ao sincronizar planilha:', err))
