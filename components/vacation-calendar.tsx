@@ -37,10 +37,10 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
   }, [user])
 
   useEffect(() => {
-    if (activeTab === "consultar" && user?.id) {
+    if (user?.id) {
       loadMyVacations()
     }
-  }, [activeTab, user])
+  }, [user])
 
   const loadMyVacations = async () => {
     try {
@@ -120,7 +120,31 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
     }
   }
 
-  // Obter todas as datas bloqueadas (já ocupadas por outros do time)
+  const getVacationsThisYear = () => {
+    const currentYear = new Date().getFullYear()
+    const thisYearVacs = myVacations.filter(v => {
+      if (!v.dateRange?.start) return false
+      const startDate = new Date(v.dateRange.start)
+      return startDate.getFullYear() === currentYear && v.status !== "rejected"
+    })
+
+    const totalDays = thisYearVacs.reduce((acc, v) => {
+      if (!v.dates) return acc
+      return acc + (Array.isArray(v.dates) ? v.dates.length : 0)
+    }, 0)
+
+    return {
+      list: thisYearVacs,
+      totalDays
+    }
+  }
+
+  const { list: vacationsThisYear, totalDays: totalDaysUsedThisYear } = getVacationsThisYear()
+  const isFirstVacationOfYear = vacationsThisYear.length === 0
+  const minDaysRequired = isFirstVacationOfYear ? 14 : 10
+  const remainingDays = 30 - totalDaysUsedThisYear
+
+  // Obter todas as datas bloqueadas
   const blockedDates = teamVacations
     .filter(v => v.user_id !== user.id) // Ignorar as próprias férias na listagem de bloqueios do time (o shadcn já bloqueia overlapping nas validações)
     .flatMap(v => {
@@ -159,11 +183,28 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
         return
       }
 
+      if (vacationsThisYear.length >= 3) {
+        toast({
+          title: "Limite de Períodos",
+          description: "Você já atingiu o limite de 3 períodos de férias para este ano.",
+          variant: "destructive"
+        })
+        return
+      }
+
       const days = interval.length
-      if (days < 10) {
+      if (days < minDaysRequired) {
         toast({
           title: "Período Curto",
-          description: "As férias devem ter no mínimo 10 dias sugeridos conforme a regra do sistema.",
+          description: `O ${isFirstVacationOfYear ? 'primeiro' : 'próximo'} período de férias deve ter no mínimo ${minDaysRequired} dias.`,
+          variant: "destructive"
+        })
+      }
+
+      if (totalDaysUsedThisYear + days > 30) {
+        toast({
+          title: "Limite de Dias Excedido",
+          description: `Sua seleção de ${days} dias ultrapassa o limite anual de 30 dias. Saldo disponível: ${remainingDays} dias.`,
           variant: "destructive"
         })
       }
@@ -177,6 +218,36 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
       toast({
         title: "Seleção incompleta",
         description: "Por favor, selecione um intervalo de datas para suas férias.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (vacationsThisYear.length >= 3) {
+      toast({
+        title: "Limite atingido",
+        description: "Você já utilizou os 3 períodos de férias permitidos para este ano.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    const interval = eachDayOfInterval({ start: dateRange.from, end: dateRange.to })
+    const daysRequested = interval.length
+
+    if (daysRequested < minDaysRequired) {
+      toast({
+        title: "Período Curto",
+        description: `O ${isFirstVacationOfYear ? 'primeiro' : 'próximo'} período de férias deve ter no mínimo ${minDaysRequired} dias.`,
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (totalDaysUsedThisYear + daysRequested > 30) {
+      toast({
+        title: "Limite de Dias Excedido",
+        description: `Esta solicitação excede os 30 dias anuais permitidos. Saldo disponível: ${remainingDays} dias.`,
         variant: "destructive"
       })
       return
@@ -230,7 +301,10 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
       })
       
       setDateRange(undefined)
-      loadTeamVacations() // Recarregar para mostrar as novas datas (pendentes também bloqueiam)
+      await Promise.all([
+        loadTeamVacations(),
+        loadMyVacations()
+      ])
     } catch (error) {
       console.error("Erro ao solicitar férias:", error)
       toast({
@@ -329,13 +403,15 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
                   head_row: "flex w-full justify-center gap-1 mb-4",
                   head_cell: "text-gray-500 rounded-md w-14 font-bold text-sm uppercase text-center",
                   row: "flex w-full justify-center gap-1 mt-2",
-                  cell: "h-14 w-14 text-center text-lg p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-xl [&:has([aria-selected].day-outside)]:bg-transparent [&:has([aria-selected])]:bg-orange-50 first:[&:has([aria-selected])]:rounded-l-xl last:[&:has([aria-selected])]:rounded-r-xl focus-within:relative focus-within:z-20",
-                  day: "h-14 w-14 p-0 font-semibold aria-selected:opacity-100 rounded-xl transition-all hover:scale-105 active:scale-95",
-                  day_today: "bg-gray-100 text-[#EE4D2D] ring-2 ring-[#EE4D2D]/20",
-                  day_selected: "bg-[#EE4D2D] text-white hover:bg-[#D23F20] focus:bg-[#EE4D2D] shadow-md z-10",
-                  day_disabled: "text-red-800 bg-red-100 border border-red-200 cursor-not-allowed disabled:opacity-100 relative after:absolute after:inset-0 after:flex after:items-center after:justify-center after:content-['/'] after:text-red-300 after:text-2xl after:font-light z-10",
-                  disabled: "text-red-800 bg-red-100 border border-red-200 cursor-not-allowed disabled:opacity-100 relative after:absolute after:inset-0 after:flex after:items-center after:justify-center after:content-['/'] after:text-red-300 after:text-2xl after:font-light z-10",
-                  day_range_middle: "bg-orange-50 text-[#EE4D2D] aria-selected:bg-orange-50 aria-selected:text-[#EE4D2D] rounded-none",
+                  cell: "h-14 w-14 text-center text-lg p-0 relative [&:has([aria-selected])]:bg-gray-100 first:[&:has([aria-selected])]:rounded-l-full last:[&:has([aria-selected])]:rounded-r-full focus-within:relative focus-within:z-20",
+                  day: "h-14 w-14 p-0 font-semibold aria-selected:opacity-100 rounded-full transition-all hover:bg-gray-200 active:scale-95",
+                  day_today: "text-[#EE4D2D] font-bold ring-2 ring-[#EE4D2D]/20",
+                  day_selected: "bg-[#222222] text-white hover:bg-[#333333] focus:bg-[#222222] shadow-md z-10",
+                  day_range_start: "bg-[#222222] text-white rounded-full",
+                  day_range_end: "bg-[#222222] text-white rounded-full",
+                  day_range_middle: "bg-gray-100 text-gray-900 rounded-none",
+                  day_disabled: "text-red-800 bg-red-50 border border-red-100 cursor-not-allowed disabled:opacity-100 relative after:absolute after:inset-0 after:flex after:items-center after:justify-center after:content-['/'] after:text-red-200 after:text-2xl after:font-light z-10",
+                  disabled: "text-red-800 bg-red-50 border border-red-100 cursor-not-allowed disabled:opacity-100 relative after:absolute after:inset-0 after:flex after:items-center after:justify-center after:content-['/'] after:text-red-200 after:text-2xl after:font-light z-10",
                   day_outside: "day-outside text-gray-200 opacity-20 aria-selected:bg-transparent aria-selected:text-gray-200 pointer-events-none",
                 }}
                 modifiersClassNames={{
@@ -374,7 +450,7 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
 
                 <Button 
                   className="w-full bg-[#EE4D2D] hover:bg-[#D23F20] h-11"
-                  disabled={!dateRange?.from || !dateRange?.to || submitting || (dateRange && eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).length < 10)}
+                  disabled={!dateRange?.from || !dateRange?.to || submitting || vacationsThisYear.length >= 3 || (dateRange && eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).length < minDaysRequired)}
                   onClick={handleSubmit}
                 >
                   {submitting ? (
@@ -382,12 +458,53 @@ export function VacationCalendar({ user }: VacationCalendarProps) {
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                       Enviando...
                     </>
-                  ) : dateRange?.from && dateRange?.to && eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).length < 10 ? (
-                    "Mínimo 10 dias obrigatório"
+                  ) : vacationsThisYear.length >= 3 || totalDaysUsedThisYear >= 30 ? (
+                    "Limite atingido"
+                  ) : dateRange?.from && dateRange?.to && eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).length < minDaysRequired ? (
+                    `Mínimo ${minDaysRequired} dias obrigatório`
+                  ) : dateRange?.from && dateRange?.to && totalDaysUsedThisYear + eachDayOfInterval({ start: dateRange.from, end: dateRange.to }).length > 30 ? (
+                    "Excede saldo de 30 dias"
                   ) : (
                     "Confirmar Solicitação"
                   )}
                 </Button>
+              </div>
+
+              <div className="p-4 rounded-lg bg-orange-50 border border-orange-100 mb-4">
+                <h4 className="text-xs font-bold text-orange-800 uppercase mb-2">Utilização de Férias {new Date().getFullYear()}:</h4>
+                <div className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-[10px] mb-1">
+                      <span className="text-gray-600">Dias usados:</span>
+                      <span className="font-bold">{totalDaysUsedThisYear}/30 dias</span>
+                    </div>
+                    <div className="flex-1 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all ${
+                          totalDaysUsedThisYear >= 30 ? 'bg-red-500' : 'bg-[#EE4D2D]'
+                        }`}
+                        style={{ width: `${(totalDaysUsedThisYear / 30) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-[10px] mb-1">
+                      <span className="text-gray-600">Períodos usados:</span>
+                      <span className="font-bold">{vacationsThisYear.length}/3 períodos</span>
+                    </div>
+                    <div className="flex-1 bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all ${
+                          vacationsThisYear.length >= 3 ? 'bg-red-500' : 'bg-[#EE4D2D]'
+                        }`}
+                        style={{ width: `${(vacationsThisYear.length / 3) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-2 font-medium">
+                  * 1º período: min 14 dias | Outros: min 10 dias
+                </p>
               </div>
 
               <div className="p-4 rounded-lg bg-blue-50 border border-blue-100">
