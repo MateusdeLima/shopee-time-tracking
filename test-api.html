@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Teste API Banco de Horas</title>
+</head>
+<body>
+    <h1>Teste API Banco de Horas</h1>
+    <button onclick="debugAPI()">Debug API</button>
+    <button onclick="testarAPI()">Testar API Save</button>
+    <button onclick="listarCompensacoes()">Listar Compensações</button>
+    <div id="resultado"></div>
+
+    <script>
+        async function testarAPI() {
+            const resultado = document.getElementById('resultado');
+            resultado.innerHTML = '<p>Testando...</p>';
+
+            try {
+                const response = await fetch('/api/hour-bank/save', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        userId: 'test-user-123',
+                        holidayId: 1,
+                        declaredHours: 2.0,
+                        detectedHours: 2.0,
+                        confidence: 85,
+                        reason: 'Teste da API',
+                        proofImage: 'data:image/jpeg;base64,test'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultado.innerHTML = `
+                        <h3 style="color: green;">✅ SUCESSO!</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultado.innerHTML = `
+                        <h3 style="color: red;">❌ ERRO!</h3>
+                        <p>Status: ${response.status}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultado.innerHTML = `
+                    <h3 style="color: red;">❌ ERRO DE REDE!</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+
+        async function listarCompensacoes() {
+            const resultado = document.getElementById('resultado');
+            resultado.innerHTML = '<p>Listando compensações...</p>';
+
+            try {
+                const response = await fetch('/api/hour-bank/list');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultado.innerHTML = `
+                        <h3 style="color: green;">✅ COMPENSAÇÕES ENCONTRADAS!</h3>
+                        <p><strong>Total:</strong> ${data.count}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultado.innerHTML = `
+                        <h3 style="color: red;">❌ ERRO AO LISTAR!</h3>
+                        <p>Status: ${response.status}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultado.innerHTML = `
+                    <h3 style="color: red;">❌ ERRO DE REDE!</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+
+        async function debugAPI() {
+            const resultado = document.getElementById('resultado');
+            resultado.innerHTML = '<p>Executando debug...</p>';
+
+            try {
+                const response = await fetch('/api/hour-bank/debug', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        test: 'debug'
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    resultado.innerHTML = `
+                        <h3 style="color: green;">✅ DEBUG PASSOU!</h3>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                } else {
+                    resultado.innerHTML = `
+                        <h3 style="color: red;">❌ DEBUG FALHOU!</h3>
+                        <p>Status: ${response.status}</p>
+                        <p>Etapa que falhou: ${data.step}</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                resultado.innerHTML = `
+                    <h3 style="color: red;">❌ ERRO DE REDE NO DEBUG!</h3>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
