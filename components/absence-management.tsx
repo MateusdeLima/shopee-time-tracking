@@ -61,6 +61,15 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [isLoading, setIsLoading] = useState(false)
   const [isCertificateMultiDay, setIsCertificateMultiDay] = useState<boolean | null>(null)
   const [certificateDays, setCertificateDays] = useState<number>(1)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [absenceToEdit, setAbsenceToEdit] = useState<any>(null)
+  const [editFormData, setEditFormData] = useState({
+    departureDate: "",
+    departureTime: "",
+    returnDate: "",
+    returnTime: "",
+    editReason: ""
+  })
 
   const [holidays, setHolidays] = useState<Holiday[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -704,6 +713,109 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
   }
 
+  const handleEditClick = (absence: any) => {
+    setAbsenceToEdit(absence)
+    let depDate = ""
+    let retDate = ""
+    if (absence.dateRange && absence.dateRange.start) {
+      depDate = absence.dateRange.start
+      retDate = absence.dateRange.end || absence.dateRange.start
+    } else if (absence.dates && absence.dates.length > 0) {
+      depDate = absence.dates[0]
+      retDate = absence.dates[absence.dates.length - 1]
+    }
+    setEditFormData({
+      departureDate: depDate,
+      departureTime: absence.departureTime || "",
+      returnDate: retDate,
+      returnTime: absence.returnTime || "",
+      editReason: ""
+    })
+    setIsEditDialogOpen(true)
+  }
+
+  const confirmEditAbsence = async () => {
+    if (!absenceToEdit) return
+    if (!editFormData.editReason.trim()) {
+      toast({
+        title: "Justificativa obrigatória",
+        description: "Por favor, informe o motivo da alteração.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setIsLoading(true)
+      
+      const [startY, startM, startD] = editFormData.departureDate.split('-').map(Number)
+      const start = new Date(startY, startM - 1, startD, 12, 0, 0)
+      
+      let endDate = editFormData.returnDate || editFormData.departureDate
+      let formattedDates: string[] = []
+      
+      if (absenceToEdit.reason === "medical" || absenceToEdit.reason === "personal") {
+         endDate = editFormData.departureDate
+         formattedDates = [editFormData.departureDate]
+      } else {
+         const [endY, endM, endD] = endDate.split('-').map(Number)
+         const end = new Date(endY, endM - 1, endD, 12, 0, 0)
+         const dates = eachDayOfInterval({ start, end })
+         formattedDates = dates.map((date) => format(date, "yyyy-MM-dd"))
+      }
+
+      const updateData = {
+        dateRange: {
+          start: editFormData.departureDate,
+          end: endDate,
+        },
+        dates: formattedDates,
+        departureTime: editFormData.departureTime || undefined,
+        returnTime: (absenceToEdit.reason !== "medical" && editFormData.returnTime && editFormData.returnDate) ? editFormData.returnTime : undefined,
+      }
+
+      await updateAbsenceRecord(absenceToEdit.id, updateData)
+
+      syncAbsenceToSheets('update', { id: absenceToEdit.id, ...updateData })
+      
+      await fetch('/api/notify-absence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          reason: absenceToEdit.reason,
+          customReason: absenceToEdit.reason === "other" ? absenceToEdit.customReason : undefined,
+          dates: formattedDates,
+          isEdit: true,
+          editReason: editFormData.editReason,
+          startTime: editFormData.departureTime,
+          endTime: editFormData.returnTime,
+          userName: `${user.firstName} ${user.lastName}`
+        })
+      })
+
+      setAbsences(prev => prev.map(a => 
+        a.id === absenceToEdit.id ? { ...a, ...updateData } : a
+      ))
+
+      toast({
+        title: "Ausência atualizada",
+        description: "O horário foi alterado e a administração notificada.",
+      })
+
+      setIsEditDialogOpen(false)
+      setAbsenceToEdit(null)
+    } catch (error: any) {
+      toast({
+        title: "Erro",
+        description: error.message || "Ocorreu um erro ao atualizar a ausência",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const formatDate = (dateString: string) => {
     try {
       if (!dateString) return 'Data não disponível'
@@ -802,9 +914,6 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
   const formatDateRange = (absence: any) => {
     try {
-      // Verificar se tem horários
-      const hasTime = absence.departureTime && absence.returnTime
-
       if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
         const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
         const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
@@ -823,11 +932,18 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         const startFormatted = format(startDate, "dd/MM/yyyy")
         const endFormatted = format(endDate, "dd/MM/yyyy")
 
-        if (hasTime) {
-          return `De ${startFormatted} ${absence.departureTime} até ${endFormatted} ${absence.returnTime}`
+        if (startFormatted === endFormatted) {
+          if (absence.departureTime && absence.returnTime) {
+             return `${startFormatted} das ${absence.departureTime} às ${absence.returnTime}`
+          } else if (absence.departureTime) {
+             return `${startFormatted} a partir das ${absence.departureTime}`
+          }
+          return startFormatted
         }
 
-        return `De ${startFormatted} até ${endFormatted}`
+        const startStr = absence.departureTime ? `${startFormatted} às ${absence.departureTime}` : startFormatted
+        const endStr = absence.returnTime ? `${endFormatted} às ${absence.returnTime}` : endFormatted
+        return `De ${startStr} até ${endStr}`
       } else if (absence.dates && absence.dates.length > 1) {
         return `${absence.dates.length} dias`
       } else if (absence.dates && absence.dates.length === 1) {
@@ -845,8 +961,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
         const dateFormatted = format(date, "dd/MM/yyyy")
 
-        if (hasTime) {
-          return `${dateFormatted} ${absence.departureTime} - ${absence.returnTime}`
+        if (absence.departureTime && absence.returnTime) {
+          return `${dateFormatted} das ${absence.departureTime} às ${absence.returnTime}`
+        } else if (absence.departureTime) {
+          return `${dateFormatted} a partir das ${absence.departureTime}`
         }
 
         return dateFormatted
@@ -1257,6 +1375,18 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     </div>
                   )}
                   
+                  {(absence.reason === "medical" || absence.reason === "personal") && isDateInFuture(absence.dateRange?.start) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-blue-500 hover:text-blue-700 hover:bg-blue-50"
+                      onClick={() => handleEditClick(absence)}
+                    >
+                      <Pencil className="h-3.5 w-3.5 mr-1" />
+                      Alterar
+                    </Button>
+                  )}
+
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1679,6 +1809,126 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   )}
                 </Button>
               )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para editar data/horário */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-md w-[95vw] sm:w-full max-h-[90vh] overflow-y-auto pr-4">
+          <DialogHeader>
+            <DialogTitle className="text-blue-600 flex items-center gap-2">
+              <Pencil className="h-4 w-4" />
+              Alterar Data / Horário
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <Alert className="bg-blue-50 border-blue-200">
+              <AlertCircle className="h-4 w-4 text-blue-500" />
+              <AlertDescription className="text-blue-700">
+                Você está remarcando a ausência de <strong>{absenceToEdit ? (ABSENCE_REASONS.find(r => r.id === absenceToEdit.reason)?.label || absenceToEdit.reason) : ""}</strong>. Informe o motivo da alteração.
+              </AlertDescription>
+            </Alert>
+
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="edit-departure-date" className="text-sm font-medium">Data de Saída</Label>
+                <Input
+                  id="edit-departure-date"
+                  type="date"
+                  value={editFormData.departureDate}
+                  onChange={(e) => setEditFormData({ ...editFormData, departureDate: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="edit-departure-time" className="text-sm font-medium">Horário de Saída</Label>
+                <Input
+                  id="edit-departure-time"
+                  type="time"
+                  value={editFormData.departureTime}
+                  onChange={(e) => setEditFormData({ ...editFormData, departureTime: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+
+              {absenceToEdit && absenceToEdit.reason !== "medical" && absenceToEdit.reason !== "personal" && (
+                <>
+                  <div>
+                    <Label htmlFor="edit-return-date" className="text-sm font-medium">Data de Retorno</Label>
+                    <Input
+                      id="edit-return-date"
+                      type="date"
+                      value={editFormData.returnDate}
+                      min={editFormData.departureDate}
+                      onChange={(e) => setEditFormData({ ...editFormData, returnDate: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="edit-return-time" className="text-sm font-medium">Horário de Retorno</Label>
+                    <Input
+                      id="edit-return-time"
+                      type="time"
+                      value={editFormData.returnTime}
+                      onChange={(e) => setEditFormData({ ...editFormData, returnTime: e.target.value })}
+                      className="mt-1"
+                    />
+                  </div>
+                </>
+              )}
+
+              {absenceToEdit && (absenceToEdit.reason === "medical" || absenceToEdit.reason === "personal") && (
+                <div>
+                  <Label htmlFor="edit-return-time-single" className="text-sm font-medium">Horário de Retorno <span className="text-gray-400 font-normal">(Opcional)</span></Label>
+                  <Input
+                    id="edit-return-time-single"
+                    type="time"
+                    value={editFormData.returnTime}
+                    onChange={(e) => setEditFormData({ ...editFormData, returnTime: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+              )}
+
+              <div>
+                <Label htmlFor="edit-reason" className="text-sm font-medium">Motivo da Alteração <span className="text-red-500">*</span></Label>
+                <Textarea
+                  id="edit-reason"
+                  value={editFormData.editReason}
+                  onChange={(e) => setEditFormData({ ...editFormData, editReason: e.target.value })}
+                  placeholder="Explique por que está alterando a data/horário desta ausência..."
+                  className="min-h-[90px] mt-1"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-2">
+              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmEditAbsence}
+                disabled={isLoading || !editFormData.editReason.trim() || !editFormData.departureDate}
+                className="bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent mr-2" />
+                    Salvando...
+                  </>
+                ) : (
+                  <>
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Confirmar Alteração
+                  </>
+                )}
+              </Button>
             </div>
           </div>
         </DialogContent>

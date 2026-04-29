@@ -240,6 +240,23 @@ export async function POST(request: Request) {
     }
 
     // ------------------------------------------------------------------
+    // NOVO: Alteração de Data/Horário de Ausência Futura
+    // ------------------------------------------------------------------
+    const isEdit = body.isEdit
+    if (isEdit) {
+      const editReason = body.editReason
+      const timeInfo = (body.startTime && body.endTime) ? ` das ${body.startTime} às ${body.endTime}` : (body.startTime ? ` a partir das ${body.startTime}` : '')
+      const newDateStr = startDateStr === endDateStr ? startDateStr : `de ${startDateStr} até ${endDateStr}`
+      
+      const discordMsg = `🔄 **Alteração de Horário/Data**\n\nOlá **${userName}**,\nSeu registro de ausência por **${finalReasonText}** foi reagendado para **${newDateStr}${timeInfo}**.\n\n**Motivo da Alteração:** ${editReason || 'Não informado'}`
+      const seaTalkMsg = `🔄 Alteração de Horário/Data\n\nAgente: ${userName}\nMotivo: ${finalReasonText}\nNova Data: ${newDateStr}${timeInfo}\n\n**Motivo da Alteração:** ${editReason || 'Não informado'}`
+
+      const discordResult = discordId ? await sendDiscordDM(discordId, discordMsg) : { success: false }
+      const seatalkResult = await sendSeaTalkMessage(seaTalkMsg)
+      return NextResponse.json({ success: (discordId ? discordResult.success : true) && seatalkResult.success, type: "edit" })
+    }
+
+    // ------------------------------------------------------------------
     // CASO 3: Atualização de Comprovante POSTERIOR / CORREÇÃO
     // ------------------------------------------------------------------
     if (isProofUpdate || isCorrection) {
