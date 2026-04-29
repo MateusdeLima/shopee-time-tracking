@@ -362,8 +362,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       return
     }
 
-    // Para Energia/Internet e Consultas, apenas data de saída é obrigatória no registro
-    if (formData.reason === "personal" || formData.reason === "medical") {
+    // Para Energia/Internet, Consultas e Outro, apenas data de saída é obrigatória no registro
+    if (formData.reason === "personal" || formData.reason === "medical" || formData.reason === "other") {
       if (!formData.departureDate) {
         setError("Selecione a data e hora de saída")
         return
@@ -421,7 +421,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         endDate = format(newEnd, "yyyy-MM-dd")
         const dates = eachDayOfInterval({ start, end: newEnd })
         formattedDates = dates.map((date) => format(date, "yyyy-MM-dd"))
-      } else if ((formData.reason === "personal" || formData.reason === "medical") && !formData.returnDate) {
+      } else if ((formData.reason === "personal" || formData.reason === "medical" || formData.reason === "other") && !formData.returnDate) {
         // Apenas data de saída - evitar fuso horário usando string ou meio-dia local
         formattedDates = [formData.departureDate]
         endDate = formData.departureDate
@@ -440,7 +440,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
       // Determinar o status inicial
       let initialStatus: "pending" | "completed" | "approved"
-      if ((formData.reason === "personal" || formData.reason === "medical") && !formData.returnDate) {
+      if (formData.reason === "other") {
+        initialStatus = "approved" // Motivo "Outro" não precisa de comprovante nem retorno obrigatório
+      } else if ((formData.reason === "personal" || formData.reason === "medical") && !formData.returnDate) {
         initialStatus = "pending" // Aguarda protocolo ou retorno da consulta
       } else if (formData.proofDocument) {
         initialStatus = "completed" // Com comprovante
@@ -495,7 +497,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           dates: formattedDates,
           customReason: formData.reason === "other" ? formData.customReason : undefined,
           startTime: formData.departureTime,
-          endTime: formData.returnTime,
+          endTime: formData.returnDate ? formData.returnTime : undefined,
           hasProof: !!finalProofUrl,
           proofUrl: finalProofUrl || undefined,
           certificateDays: (formData.reason === "certificate" && isCertificateMultiDay) ? certificateDays : undefined
@@ -748,30 +750,17 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     try {
       setIsLoading(true)
       
-      const [startY, startM, startD] = editFormData.departureDate.split('-').map(Number)
-      const start = new Date(startY, startM - 1, startD, 12, 0, 0)
-      
-      let endDate = editFormData.returnDate || editFormData.departureDate
-      let formattedDates: string[] = []
-      
-      if (absenceToEdit.reason === "medical" || absenceToEdit.reason === "personal") {
-         endDate = editFormData.departureDate
-         formattedDates = [editFormData.departureDate]
-      } else {
-         const [endY, endM, endD] = endDate.split('-').map(Number)
-         const end = new Date(endY, endM - 1, endD, 12, 0, 0)
-         const dates = eachDayOfInterval({ start, end })
-         formattedDates = dates.map((date) => format(date, "yyyy-MM-dd"))
-      }
+      // Para consulta médica: só atualiza data de saída e horário de saída
+      const formattedDates = [editFormData.departureDate]
 
       const updateData = {
         dateRange: {
           start: editFormData.departureDate,
-          end: endDate,
+          end: editFormData.departureDate,
         },
         dates: formattedDates,
         departureTime: editFormData.departureTime || undefined,
-        returnTime: (absenceToEdit.reason !== "medical" && editFormData.returnTime && editFormData.returnDate) ? editFormData.returnTime : undefined,
+        // returnTime NÃO é alterado aqui — só muda ao enviar o comprovante
       }
 
       await updateAbsenceRecord(absenceToEdit.id, updateData)
@@ -784,12 +773,10 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         body: JSON.stringify({
           userId: user.id,
           reason: absenceToEdit.reason,
-          customReason: absenceToEdit.reason === "other" ? absenceToEdit.customReason : undefined,
           dates: formattedDates,
           isEdit: true,
           editReason: editFormData.editReason,
           startTime: editFormData.departureTime,
-          endTime: editFormData.returnTime,
           userName: `${user.firstName} ${user.lastName}`
         })
       })
@@ -892,7 +879,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           Aprovado! <PartyPopper className="h-3 w-3 ml-1" />
         </Badge>
       )
-    } else if (absence.status === "completed") {
+    } else if (absence.status === "completed" && absence.reason !== "other") {
       return (
         <Badge className="bg-blue-100 text-blue-700 border-blue-200 flex items-center gap-1 w-fit">
           <FileText className="h-3 w-3" />
@@ -1333,7 +1320,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   </span>
 
                   <div className="flex flex-wrap gap-2">
-                    {absence.status === "completed" && absence.proofDocument && (
+                    {absence.status === "completed" && absence.proofDocument && absence.reason !== "other" && (
                       <>
                         <Button
                           variant="outline"
@@ -1355,7 +1342,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                         </Button>
                       </>
                     )}
-                    {absence.status === "pending" && (
+                    {absence.status === "pending" && absence.reason !== "other" && (
                       <div className="flex flex-col items-center">
                         <Button
                           variant="outline"
@@ -1375,7 +1362,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                     </div>
                   )}
                   
-                  {(absence.reason === "medical" || absence.reason === "personal") && isDateInFuture(absence.dateRange?.start) && (
+                  {absence.reason === "medical" && isDateInFuture(absence.dateRange?.start) && (
                     <Button
                       variant="ghost"
                       size="sm"
@@ -1479,7 +1466,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                   <div className="space-y-2">
                     <Label className="text-base font-semibold">
                       Data e Hora de Volta
-                      {formData.reason === "personal" && (
+                      {(formData.reason === "personal" || formData.reason === "other") && (
                         <span className="text-sm font-normal text-gray-500 ml-2">(Opcional)</span>
                       )}
                     </Label>
@@ -1493,7 +1480,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                           onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, returnDate: e.target.value })}
                           min={formData.departureDate}
                           max={formData.reason === "certificate" ? format(new Date(), "yyyy-MM-dd") : undefined}
-                          required={formData.reason !== "personal"}
+                          required={formData.reason !== "personal" && formData.reason !== "other"}
                           className="mt-1"
                         />
                       </div>
@@ -1820,7 +1807,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
           <DialogHeader>
             <DialogTitle className="text-blue-600 flex items-center gap-2">
               <Pencil className="h-4 w-4" />
-              Alterar Data / Horário
+              Remarcar Consulta
             </DialogTitle>
           </DialogHeader>
 
@@ -1828,13 +1815,15 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             <Alert className="bg-blue-50 border-blue-200">
               <AlertCircle className="h-4 w-4 text-blue-500" />
               <AlertDescription className="text-blue-700">
-                Você está remarcando a ausência de <strong>{absenceToEdit ? (ABSENCE_REASONS.find(r => r.id === absenceToEdit.reason)?.label || absenceToEdit.reason) : ""}</strong>. Informe o motivo da alteração.
+                Você está remarcando uma <strong>Consulta Médica</strong>. Informe a nova data e horário da consulta e o motivo da alteração.
+                <br />
+                <span className="text-xs text-blue-600 mt-1 block">O horário de retorno será registrado automaticamente ao enviar o comprovante.</span>
               </AlertDescription>
             </Alert>
 
             <div className="space-y-3">
               <div>
-                <Label htmlFor="edit-departure-date" className="text-sm font-medium">Data de Saída</Label>
+                <Label htmlFor="edit-departure-date" className="text-sm font-medium">Data da Consulta</Label>
                 <Input
                   id="edit-departure-date"
                   type="date"
@@ -1855,53 +1844,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
                 />
               </div>
 
-              {absenceToEdit && absenceToEdit.reason !== "medical" && absenceToEdit.reason !== "personal" && (
-                <>
-                  <div>
-                    <Label htmlFor="edit-return-date" className="text-sm font-medium">Data de Retorno</Label>
-                    <Input
-                      id="edit-return-date"
-                      type="date"
-                      value={editFormData.returnDate}
-                      min={editFormData.departureDate}
-                      onChange={(e) => setEditFormData({ ...editFormData, returnDate: e.target.value })}
-                      className="mt-1"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="edit-return-time" className="text-sm font-medium">Horário de Retorno</Label>
-                    <Input
-                      id="edit-return-time"
-                      type="time"
-                      value={editFormData.returnTime}
-                      onChange={(e) => setEditFormData({ ...editFormData, returnTime: e.target.value })}
-                      className="mt-1"
-                    />
-                  </div>
-                </>
-              )}
-
-              {absenceToEdit && (absenceToEdit.reason === "medical" || absenceToEdit.reason === "personal") && (
-                <div>
-                  <Label htmlFor="edit-return-time-single" className="text-sm font-medium">Horário de Retorno <span className="text-gray-400 font-normal">(Opcional)</span></Label>
-                  <Input
-                    id="edit-return-time-single"
-                    type="time"
-                    value={editFormData.returnTime}
-                    onChange={(e) => setEditFormData({ ...editFormData, returnTime: e.target.value })}
-                    className="mt-1"
-                  />
-                </div>
-              )}
-
               <div>
                 <Label htmlFor="edit-reason" className="text-sm font-medium">Motivo da Alteração <span className="text-red-500">*</span></Label>
                 <Textarea
                   id="edit-reason"
                   value={editFormData.editReason}
                   onChange={(e) => setEditFormData({ ...editFormData, editReason: e.target.value })}
-                  placeholder="Explique por que está alterando a data/horário desta ausência..."
+                  placeholder="Ex: Consulta reagendada pelo médico para outro dia..."
                   className="min-h-[90px] mt-1"
                   required
                 />

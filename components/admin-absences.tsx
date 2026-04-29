@@ -12,12 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { format, parseISO, startOfMonth, endOfMonth, isWithinInterval, startOfDay, endOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { Search, Calendar, Eye, Download, AlertCircle, Check, PartyPopper, Trash2, FileSpreadsheet, CalendarIcon, X } from "lucide-react"
+import { Search, Calendar, Eye, AlertCircle, Check, PartyPopper, Trash2, FileSpreadsheet, CalendarIcon, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Calendar as CalendarComponent } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { cn } from "@/lib/utils"
 import { getAbsenceRecords, getUserById, updateAbsenceRecord, deleteAbsenceRecord } from "@/lib/db"
 import { getCurrentUser } from "@/lib/auth"
 import { toast } from "@/components/ui/use-toast"
@@ -40,6 +37,9 @@ export function AdminAbsences() {
       to: undefined as Date | undefined
     }
   })
+  // Valores dos inputs antes de confirmar
+  const [dateInputFrom, setDateInputFrom] = useState("")
+  const [dateInputTo, setDateInputTo] = useState("")
   const [isExporting, setIsExporting] = useState(false)
 
   useEffect(() => {
@@ -87,24 +87,22 @@ export function AdminAbsences() {
     })
   }
 
-  const handleDateRangeChange = (field: 'from' | 'to', value: Date | undefined) => {
+  const applyDateRange = () => {
+    const from = dateInputFrom ? new Date(dateInputFrom + 'T00:00:00') : undefined
+    const to = dateInputTo ? new Date(dateInputTo + 'T23:59:59') : undefined
     setFilters(prev => ({
       ...prev,
-      month: "", // Limpa o filtro de mês quando seleciona período personalizado
-      dateRange: {
-        ...prev.dateRange,
-        [field]: value
-      }
+      month: "",
+      dateRange: { from, to }
     }))
   }
 
   const clearDateRange = () => {
+    setDateInputFrom("")
+    setDateInputTo("")
     setFilters(prev => ({
       ...prev,
-      dateRange: {
-        from: undefined,
-        to: undefined
-      }
+      dateRange: { from: undefined, to: undefined }
     }))
   }
 
@@ -158,42 +156,48 @@ export function AdminAbsences() {
     return absence.customReason || "Outro"
   }
 
-  const formatDateRange = (absence: any) => {
+  const formatDateRange = (absence: any, includeTime = false) => {
     try {
+      const depTime = absence.departureTime
+      const retTime = absence.returnTime
+
       if (absence.dateRange && absence.dateRange.start && absence.dateRange.end) {
         const [startYear, startMonth, startDay] = absence.dateRange.start.split('-').map(Number)
         const [endYear, endMonth, endDay] = absence.dateRange.end.split('-').map(Number)
         
-        if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) {
-          return "Data inválida"
-        }
+        if (!startYear || !startMonth || !startDay || !endYear || !endMonth || !endDay) return "Data inválida"
         
         const startDate = new Date(startYear, startMonth - 1, startDay)
         const endDate = new Date(endYear, endMonth - 1, endDay)
         
-        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-          return "Data inválida"
-        }
+        if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "Data inválida"
         
-        return `De ${format(startDate, "dd/MM/yyyy")} até ${format(endDate, "dd/MM/yyyy")}`
+        const startStr = format(startDate, "dd/MM/yyyy")
+        const endStr = format(endDate, "dd/MM/yyyy")
+
+        if (startStr === endStr) {
+          if (includeTime && depTime && retTime) return `${startStr} das ${depTime} às ${retTime}`
+          if (includeTime && depTime) return `${startStr} a partir das ${depTime}`
+          return startStr
+        }
+        if (includeTime && depTime) {
+          const s = `${startStr} às ${depTime}`
+          const e = retTime ? `${endStr} às ${retTime}` : endStr
+          return `De ${s} até ${e}`
+        }
+        return `De ${startStr} até ${endStr}`
       } else if (absence.dates && absence.dates.length > 1) {
         return `${absence.dates.length} dias`
       } else if (absence.dates && absence.dates.length === 1) {
         const [year, month, day] = absence.dates[0].split('-').map(Number)
-        
-        if (!year || !month || !day) {
-          return "Data inválida"
-        }
-        
+        if (!year || !month || !day) return "Data inválida"
         const date = new Date(year, month - 1, day)
-        
-        if (isNaN(date.getTime())) {
-          return "Data inválida"
-        }
-        
-        return format(date, "dd/MM/yyyy")
+        if (isNaN(date.getTime())) return "Data inválida"
+        const dateStr = format(date, "dd/MM/yyyy")
+        if (includeTime && depTime && retTime) return `${dateStr} das ${depTime} às ${retTime}`
+        if (includeTime && depTime) return `${dateStr} a partir das ${depTime}`
+        return dateStr
       }
-      
       return "Data não especificada"
     } catch (error) {
       console.error('Erro ao formatar intervalo de datas:', absence, error)
@@ -220,12 +224,18 @@ export function AdminAbsences() {
       if (absence.reason !== filters.reason) return false
     }
 
-    // Filtrar por período personalizado
+    // Filtrar por período personalizado (compara data da ausência, não data de registro)
     if (filters.dateRange.from && filters.dateRange.to) {
-      const absenceDate = parseISO(absence.createdAt)
-      if (!isWithinInterval(absenceDate, { 
-        start: startOfDay(filters.dateRange.from), 
-        end: endOfDay(filters.dateRange.to) 
+      // Pegar a data real da ausência: preferir dateRange.start, fallback para dates[0]
+      const absenceDateStr = absence.dateRange?.start || (absence.dates?.[0] ?? null)
+      if (!absenceDateStr) return false
+
+      const [y, m, d] = absenceDateStr.split('-').map(Number)
+      const absenceDate = new Date(y, m - 1, d)
+
+      if (!isWithinInterval(absenceDate, {
+        start: startOfDay(filters.dateRange.from),
+        end: endOfDay(filters.dateRange.to)
       })) {
         return false
       }
@@ -446,86 +456,60 @@ export function AdminAbsences() {
         </div>
       </div>
 
-      {/* Filtro de Período em uma linha separada */}
-      <div className="mb-6">
-        <div className="space-y-2">
-          <Label>Filtrar por Período</Label>
-          <div className="flex flex-wrap gap-2">
-            <div className="flex-1 min-w-[200px]">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !filters.dateRange.from && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filters.dateRange.from ? (
-                      format(filters.dateRange.from, "dd/MM/yyyy")
-                    ) : (
-                      "Data inicial"
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={filters.dateRange.from}
-                    onSelect={(date) => handleDateRangeChange('from', date)}
-                    initialFocus
-                    locale={ptBR}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <div className="flex-1 min-w-[200px]">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      "w-full justify-start text-left font-normal",
-                      !filters.dateRange.to && "text-muted-foreground"
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {filters.dateRange.to ? (
-                      format(filters.dateRange.to, "dd/MM/yyyy")
-                    ) : (
-                      "Data final"
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <CalendarComponent
-                    mode="single"
-                    selected={filters.dateRange.to}
-                    onSelect={(date) => handleDateRangeChange('to', date)}
-                    initialFocus
-                    locale={ptBR}
-                    disabled={(date) =>
-                      filters.dateRange.from ? date < filters.dateRange.from : false
-                    }
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            {(filters.dateRange.from || filters.dateRange.to) && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={clearDateRange}
-                className="h-10 w-10"
-              >
-                <X className="h-4 w-4" />
-                <span className="sr-only">Limpar período</span>
-              </Button>
-            )}
+      {/* Filtro de Período */}
+      <div className="mb-6 p-4 rounded-lg border bg-gray-50">
+        <Label className="text-sm font-semibold text-gray-700 mb-3 block">Filtrar por Período</Label>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+            <Label htmlFor="date-from" className="text-xs text-gray-500">Data inicial</Label>
+            <Input
+              id="date-from"
+              type="date"
+              value={dateInputFrom}
+              onChange={(e) => setDateInputFrom(e.target.value)}
+              className="bg-white"
+            />
           </div>
+
+          <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+            <Label htmlFor="date-to" className="text-xs text-gray-500">Data final</Label>
+            <Input
+              id="date-to"
+              type="date"
+              value={dateInputTo}
+              min={dateInputFrom}
+              onChange={(e) => setDateInputTo(e.target.value)}
+              className="bg-white"
+            />
+          </div>
+
+          <Button
+            onClick={applyDateRange}
+            disabled={!dateInputFrom && !dateInputTo}
+            className="bg-[#EE4D2D] hover:bg-[#D23F20] h-10 px-4"
+          >
+            <Search className="h-4 w-4 mr-2" />
+            Aplicar
+          </Button>
+
+          {(filters.dateRange.from || filters.dateRange.to) && (
+            <Button
+              variant="ghost"
+              onClick={clearDateRange}
+              className="h-10 text-gray-500 hover:text-red-600"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Limpar
+            </Button>
+          )}
+
+          {(filters.dateRange.from || filters.dateRange.to) && (
+            <span className="text-xs text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1 self-end">
+              Filtro ativo: {filters.dateRange.from ? format(filters.dateRange.from, "dd/MM/yyyy") : ""}
+              {filters.dateRange.from && filters.dateRange.to ? " → " : ""}
+              {filters.dateRange.to ? format(filters.dateRange.to, "dd/MM/yyyy") : ""}
+            </span>
+          )}
         </div>
       </div>
 
@@ -619,10 +603,28 @@ export function AdminAbsences() {
 
                 <div>
                   <Label className="text-sm text-gray-500">Período</Label>
-                  <p className="font-medium">{formatDateRange(selectedAbsence)}</p>
+                  <p className="font-medium">{formatDateRange(selectedAbsence, true)}</p>
+
+                  {/* Horários registrados */}
+                  {(selectedAbsence.departureTime || selectedAbsence.returnTime) && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {selectedAbsence.departureTime && (
+                        <span className="inline-flex items-center gap-1 text-xs bg-orange-50 text-orange-700 border border-orange-200 rounded px-2 py-1">
+                          <CalendarIcon className="h-3 w-3" />
+                          Saída: <strong>{selectedAbsence.departureTime}</strong>
+                        </span>
+                      )}
+                      {selectedAbsence.returnTime && (
+                        <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-1">
+                          <CalendarIcon className="h-3 w-3" />
+                          Retorno: <strong>{selectedAbsence.returnTime}</strong>
+                        </span>
+                      )}
+                    </div>
+                  )}
 
                   {selectedAbsence.dates.length <= 7 && (
-                    <div className="flex flex-wrap gap-2 mt-1">
+                    <div className="flex flex-wrap gap-2 mt-2">
                       {selectedAbsence.dates.map((date: string, index: number) => (
                         <Badge key={index} variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
                           <Calendar className="h-3 w-3 mr-1" />

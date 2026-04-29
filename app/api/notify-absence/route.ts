@@ -290,9 +290,15 @@ export async function POST(request: Request) {
     const endTimeStr = endTime ? ` às ${endTime}` : ""
     let timeInfo = bodyTimeInfo || `**Início:** ${startDateStr}${startTimeStr}`
 
-    // Para consultas médicas, omitimos a informação de "Fim" no registro inicial
-    if (!bodyTimeInfo && reason !== 'medical' && (startDateStr !== endDateStr || endTime)) {
-      timeInfo += `\n**Fim:** ${endDateStr}${endTimeStr}`
+    // Omitimos a informação de "Fim" se:
+    // 1. For consulta médica (medical) - sempre omitido no registro inicial
+    // 2. For "outro" ou "personal" e NÃO houver endTime nem mudança de dia
+    const isOptionalReturn = ['medical', 'other', 'personal'].includes(reason)
+    const hasEndInfo = (startDateStr !== endDateStr || endTime)
+
+    if (!bodyTimeInfo && (!isOptionalReturn || (reason !== 'medical' && hasEndInfo))) {
+      const endDayPart = startDateStr === endDateStr ? "" : `${endDateStr}`
+      timeInfo += `\n**Fim:** ${endDayPart}${endTimeStr}`
     }
 
     let discordMsg = ""
@@ -344,15 +350,19 @@ export async function POST(request: Request) {
       // ------------------------------------------------------------------
       // CASO 5: Ausências Genéricas (Médica, Pessoal, Atestado, Outro)
       // ------------------------------------------------------------------
-      const proofInfo = hasProof 
-        ? "Seu comprovante foi recebido e anexado ao registro. ✅" 
-        : "⚠️ **Lembrete:** Não esqueça de anexar o comprovante no sistema para que sua ausência seja validada pela administração."
       
-      discordMsg = `✅ **Registro concluído com sucesso**\n\nOlá **${userName}**,\nSua ausência por **${finalReasonText}** foi registrada com sucesso.\n\n${timeInfo}\n\n${proofInfo}`
+      // Para o motivo "outro", não mostramos info de comprovante (removido lembrete conforme pedido)
+      const proofInfo = reason === 'other'
+        ? "" 
+        : (hasProof 
+            ? "Seu comprovante foi recebido e anexado ao registro. ✅" 
+            : "⚠️ **Lembrete:** Não esqueça de anexar o comprovante no sistema para que sua ausência seja validada pela administração.")
+      
+      discordMsg = `✅ **Registro concluído com sucesso**\n\nOlá **${userName}**,\nSua ausência por **${finalReasonText}** foi registrada com sucesso.\n\n${timeInfo}${proofInfo ? `\n\n${proofInfo}` : ""}`
       
       const timeInfoClean = timeInfo.replace(/\*\*/g, '')
       const finalProofUrl = bodyProofUrl || proofUrl
-      const proofLinkInfo = finalProofUrl ? `\nLink do comprovante: ${finalProofUrl}` : ""
+      const proofLinkInfo = (finalProofUrl && reason !== 'other') ? `\nLink do comprovante: ${finalProofUrl}` : ""
       const durationInfo = (reason === 'certificate' && certificateDays && certificateDays > 1) ? `\nAtestado: ${certificateDays} dias` : ""
 
       seaTalkMsg = `📢 Nova Ausência Registrada\n\nAgente: ${userName}\nMotivo: ${finalReasonText}\nData: ${startDateStr}${endDateStr !== startDateStr ? ' a ' + endDateStr : ''}${durationInfo}\n${timeInfoClean}${proofLinkInfo}`
