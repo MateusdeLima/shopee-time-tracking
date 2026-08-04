@@ -22,8 +22,9 @@ import {
 } from "@/components/ui/select"
 import { Search, FileSpreadsheet, PieChart, BarChart3, Users, Calendar, Eye } from "lucide-react"
 import { HourBankAdminApproval } from "@/components/hour-bank-admin-approval"
-import { supabase } from "@/lib/supabase"
+import { getAbsenceRecords, getOvertimeRecords, getUsers, getHolidays } from "@/lib/db"
 import { format, parseISO, getMonth } from "date-fns"
+
 import { ptBR } from "date-fns/locale"
 import { Badge } from "@/components/ui/badge"
 
@@ -92,26 +93,47 @@ export function AdminAnalytics() {
   }, [])
 
   const loadData = async () => {
+
     try {
       setLoading(true)
-      const { data: absencesData } = await supabase
-        .from("absence_records")
-        .select(`*, users:user_id (id, first_name, last_name, email)`)
-        .order("created_at", { ascending: false })
+      const [absencesData, overtimeData, usersData, holidaysData] = await Promise.all([
+        getAbsenceRecords(),
+        getOvertimeRecords(),
+        getUsers(),
+        getHolidays(),
+      ])
 
-      const { data: overtimeData } = await supabase
-        .from("overtime_records")
-        .select(`*, users:user_id (id, first_name, last_name, email), holidays:holiday_id (id, name, date)`)
-        .order("created_at", { ascending: false })
+      const userMap = new Map(usersData.map((u) => [u.id, u]))
+      const holidayMap = new Map(holidaysData.map((h) => [h.id, h]))
 
-      const { data: usersData } = await supabase.from("users").select("*").order("first_name")
-      const { data: holidaysData } = await supabase.from("holidays").select("*").order("date", { ascending: false })
+      const absencesWithUsers = absencesData.map((a) => {
+        const u = userMap.get(a.userId)
+        return {
+          ...a,
+          user_id: a.userId,
+          created_at: a.createdAt,
+          users: u ? { id: u.id, first_name: u.firstName, last_name: u.lastName, email: u.email } : null,
+        }
+      })
+
+      const overtimeWithRelations = overtimeData.map((o) => {
+        const u = userMap.get(o.userId)
+        const h = holidayMap.get(o.holidayId)
+        return {
+          ...o,
+          user_id: o.userId,
+          holiday_id: o.holidayId,
+          created_at: o.createdAt,
+          users: u ? { id: u.id, first_name: u.firstName, last_name: u.lastName, email: u.email } : null,
+          holidays: h ? { id: h.id, name: h.name, date: h.date } : null,
+        }
+      })
 
       setData({
-        absences: absencesData || [],
-        overtimeRecords: overtimeData || [],
-        users: usersData || [],
-        holidays: holidaysData || [],
+        absences: absencesWithUsers,
+        overtimeRecords: overtimeWithRelations,
+        users: usersData,
+        holidays: holidaysData,
       })
     } catch (error) {
       console.error("Erro ao carregar dados:", error)
@@ -119,6 +141,7 @@ export function AdminAnalytics() {
       setLoading(false)
     }
   }
+
 
   const exportToGoogleSheets = async () => {
     setIsExporting(true)

@@ -143,56 +143,20 @@ export function AdminNotifications({ isAdmin }: AdminNotificationsProps) {
       }
     }
 
-    // Limpar canal anterior se existir
-    if (channelRef.current) {
-      channelRef.current.unsubscribe()
-    }
-
-    // Configurar listener para novos registros de ausência
-    channelRef.current = supabase
-      .channel('admin_absence_notifications')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'absence_records'
-        },
-        async (payload) => {
-          console.log('🔔 REALTIME: Nova ausência detectada:', payload.new.id)
-          await handleNewAbsence(payload.new)
-        }
-      )
-      .subscribe((status) => {
-        console.log('🔔 REALTIME: Status da conexão:', status)
-        if (status === 'SUBSCRIBED') {
-          console.log('🔔 REALTIME: ✅ Conectado com sucesso ao canal de ausências!')
-        } else if (status === 'CHANNEL_ERROR') {
-          console.log('🔔 REALTIME: ❌ Erro na conexão do canal')
-        } else if (status === 'TIMED_OUT') {
-          console.log('🔔 REALTIME: ⏰ Timeout na conexão')
-        } else if (status === 'CLOSED') {
-          console.log('🔔 REALTIME: 🔴 Conexão fechada')
-        }
-      })
-
-    // Sistema de polling como backup (verifica a cada 5 segundos)
+    // Sistema de polling (verifica a cada 20 segundos)
     const pollingInterval = setInterval(async () => {
-      console.log('🔔 POLLING: Verificando novas ausências...')
       await checkForNewAbsencesLocal()
-    }, 5000)
+    }, 20000)
+
 
     // Salvar referência do interval para limpeza
     const cleanup = () => {
-      console.log('🔔 AdminNotifications: Limpando recursos')
-      if (channelRef.current) {
-        channelRef.current.unsubscribe()
-      }
       clearInterval(pollingInterval)
     }
 
     // Carregar notificações existentes
     loadRecentNotifications()
+
 
     return cleanup
   }, [isAdmin])

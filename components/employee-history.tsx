@@ -112,32 +112,11 @@ export function EmployeeHistory({ user }: EmployeeHistoryProps) {
     const loadRecords = async () => {
       await loadHolidays()
       await loadUserRecords()
-    calculateHoursMap()
+      calculateHoursMap()
     }
 
     loadRecords()
 
-    // Inscrever-se para atualizações em tempo real
-    const subscription = supabase
-      .channel('overtime_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'overtime_records',
-          filter: `user_id=eq.${user.id}`
-        },
-        () => {
-          loadRecords()
-        }
-      )
-      .subscribe()
-
-    // Limpar inscrição quando o componente for desmontado
-    return () => {
-      subscription.unsubscribe()
-    }
   }, [user.id])
 
   const handleEdit = (record: any) => {

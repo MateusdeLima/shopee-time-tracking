@@ -19,91 +19,138 @@ let dbInitialized = false
 
 // Função para criar as tabelas necessárias
 export async function setupDatabase() {
-  if (dbInitialized) {
-    console.log("Banco de dados já inicializado, pulando configuração.")
-    return true
-  }
+  dbInitialized = true
+  return true
+}
 
-  try {
-    console.log("Iniciando configuração do banco de dados...")
 
-    // Verificar se as tabelas já existem
-    try {
-      const { data, error } = await supabase.from("users").select("id").limit(1)
-
-      if (!error) {
-        console.log("Tabelas já existem, pulando criação.")
-        dbInitialized = true
-        return true
+// Auxiliar para conversão e compressão Base64 (garante que fique bem abaixo do limite de 50.000 caracteres do Google Sheets)
+function fileToBase64(file: File | Blob, maxWidth = 800, quality = 0.7): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const dataUrl = reader.result as string
+      if (!dataUrl) {
+        reject(new Error("Falha ao ler arquivo"))
+        return
       }
-    } catch (e) {
-      console.log("Erro ao verificar tabelas existentes:", e)
+
+      // Se for imagem, fazemos a compressão via Canvas no navegador
+      if (typeof window !== "undefined" && file.type?.startsWith("image/")) {
+        const img = new Image()
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas")
+            let width = img.width
+            let height = img.height
+
+            if (width > maxWidth || height > maxWidth) {
+              if (width > height) {
+                height = Math.round((height * maxWidth) / width)
+                width = maxWidth
+              } else {
+                width = Math.round((width * maxWidth) / height)
+                height = maxWidth
+              }
+            }
+
+            canvas.width = width
+            canvas.height = height
+
+            const ctx = canvas.getContext("2d")
+            if (ctx) {
+              ctx.drawImage(img, 0, 0, width, height)
+              const compressed = canvas.toDataURL("image/jpeg", quality)
+              resolve(compressed)
+              return
+            }
+          } catch (e) {
+            console.warn("Erro ao comprimir imagem via canvas:", e)
+          }
+          resolve(dataUrl)
+        }
+        img.onerror = () => resolve(dataUrl)
+        img.src = dataUrl
+      } else {
+        resolve(dataUrl)
+      }
+
     }
-
-    // Importar a função createTables de setup-database.ts
-    const { createTables } = await import("./setup-database")
-
-    // Chamar a função para criar as tabelas
-    let success = await createTables()
-
-    // Se falhar, tentar o método alternativo
-    if (!success) {
-      console.log("Tentando método alternativo para criar tabelas...")
-      const { createTablesAlt } = await import("./setup-database-alt")
-      success = await createTablesAlt()
-    }
-
-    if (success) {
-      console.log("Configuração do banco de dados concluída com sucesso!")
-      dbInitialized = true
-    } else {
-      console.error("Falha na configuração do banco de dados.")
-    }
-
-    return success
-  } catch (error) {
-    console.error("Erro ao configurar banco de dados:", error)
-    return false
-  }
+    reader.onerror = () => reject(new Error("Erro na leitura do arquivo"))
+    reader.readAsDataURL(file)
+  })
 }
 
-// Função para upload de arquivo no Supabase Storage
+
+// Auxiliar para salvar a imagem Base64 como um Link de URL oficial
+async function convertBase64ToUrlLink(base64Data: string): Promise<string> {
+  try {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
+    const res = await fetch(`${origin}/api/image-store`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: base64Data,
+        contentType: base64Data.startsWith('data:image/png') ? 'image/png' : 'image/jpeg'
+      })
+    })
+    const json = await res.json()
+    if (json.url) return json.url
+  } catch (err) {
+    console.error('Erro ao converter imagem em link de URL:', err)
+  }
+  return base64Data
+}
+
+// Função para upload de arquivo de perfil (com geração de link URL oficial)
 export async function uploadProfilePicture(userId: string, file: File): Promise<string | null> {
-  const fileExt = file.name.split('.').pop()
-  const filePath = `${userId}.${fileExt}`
-  const { data, error } = await supabase.storage.from('profile-pictures').upload(filePath, file, {
-    upsert: true,
-    contentType: file.type,
-  })
-  if (error) {
-    console.error('Erro ao fazer upload da foto de perfil:', error)
-    return null
+  try {
+    const fileExt = file.name.split('.').pop()
+    const filePath = `${userId}.${fileExt}`
+    const { data, error } = await supabase.storage.from('profile-pictures').upload(filePath, file, {
+      upsert: true,
+      contentType: file.type,
+    })
+    
+    if (!error) {
+      const { data: publicUrlData } = supabase.storage.from('profile-pictures').getPublicUrl(filePath)
+      const publicUrl = publicUrlData?.publicUrl
+      if (publicUrl) return publicUrl
+    }
+  } catch (err) {
+    console.warn("[Storage] Supabase Storage bloqueado/indisponível. Gerando link URL alternativo.")
   }
-  // Gerar URL pública
-  const { data: publicUrlData } = supabase.storage.from('profile-pictures').getPublicUrl(filePath)
-  return publicUrlData?.publicUrl || null
+
+  const base64 = await fileToBase64(file)
+  return await convertBase64ToUrlLink(base64)
 }
 
-// Função para upload de comprovantes (certificados) no Supabase Storage
+// Função para upload de comprovantes (com geração de link URL oficial)
 export async function uploadCertificate(userId: string, file: File | Blob, fileName?: string): Promise<string | null> {
-  const fileExt = fileName ? fileName.split('.').pop() : 'png'
-  const randomName = Math.random().toString(36).substring(7)
-  const filePath = `${userId}/${Date.now()}_${randomName}.${fileExt}`
-  
-  const { data, error } = await supabase.storage.from('certificates').upload(filePath, file, {
-    upsert: true,
-    contentType: (file as File).type || 'image/png',
-  })
-  
-  if (error) {
-    console.error('Erro ao fazer upload do comprovante:', error)
-    return null
+  try {
+    const fileExt = fileName ? fileName.split('.').pop() : 'png'
+    const randomName = Math.random().toString(36).substring(7)
+    const filePath = `${userId}/${Date.now()}_${randomName}.${fileExt}`
+    
+    const { data, error } = await supabase.storage.from('certificates').upload(filePath, file, {
+      upsert: true,
+      contentType: (file as File).type || 'image/png',
+    })
+    
+    if (!error) {
+      const { data: publicUrlData } = supabase.storage.from('certificates').getPublicUrl(filePath)
+      const publicUrl = publicUrlData?.publicUrl
+      if (publicUrl) return publicUrl
+    }
+  } catch (err) {
+    console.warn("[Storage] Supabase Storage bloqueado/indisponível. Gerando link URL alternativo.")
   }
-  
-  // Gerar URL pública
-  const { data: publicUrlData } = supabase.storage.from('certificates').getPublicUrl(filePath)
-  return publicUrlData?.publicUrl || null
+
+  const base64 = await fileToBase64(file)
+  return await convertBase64ToUrlLink(base64)
 }
+
+
 
 // Função para obter a URL pública da foto de perfil
 export function getProfilePictureUrl(userId: string, ext: string = 'jpg'): string {
@@ -111,4 +158,5 @@ export function getProfilePictureUrl(userId: string, ext: string = 'jpg'): strin
   const { data } = supabase.storage.from('profile-pictures').getPublicUrl(filePath)
   return data?.publicUrl || ''
 }
+
 

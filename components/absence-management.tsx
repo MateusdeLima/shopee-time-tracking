@@ -13,7 +13,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/use-toast"
 import { format, isAfter, isBefore, parseISO, eachDayOfInterval, startOfMonth, endOfMonth, getMonth, getYear, startOfDay, getDay, differenceInDays, addDays } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download, FileDown, Filter, Pencil, Clock } from "lucide-react"
+import { CalendarIcon, Upload, AlertCircle, FileText, X, Check, PartyPopper, Eye, Download, FileDown, Filter, Pencil, Clock, Loader2 } from "lucide-react"
+
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Calendar } from "@/components/ui/calendar"
@@ -50,7 +51,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   const [isGeneratingReport, setIsGeneratingReport] = useState(false)
   const [isReportDialogOpen, setIsReportDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [absenceToDelete, setAbsenceToDelete] = useState<any>(null)
+
   const [cancellationReason, setCancellationReason] = useState("")
   const [tempReturnTime, setTempReturnTime] = useState("18:00")
   const [previewImage, setPreviewImage] = useState<string | null>(null)
@@ -91,38 +94,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
   useEffect(() => {
     loadAbsences()
-
-    loadAbsences()
     loadHolidays()
 
-    // Configurar canal do Supabase para atualizações em tempo real
-    const channel = supabase
-      .channel('absence_records_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT', // Escutar apenas eventos de inserção
-          schema: 'public',
-          table: 'absence_records',
-          filter: `user_id=eq.${user.id}`
-        },
-        async () => {
-          await loadAbsences()
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE', // Escutar eventos de exclusão
-          schema: 'public',
-          table: 'absence_records',
-          filter: `user_id=eq.${user.id}`
-        },
-        async () => {
-          await loadAbsences()
-        }
-      )
-      .subscribe()
+    // Sincronização automática para refletir exclusões/alterações na planilha (a cada 20s)
+    const intervalId = setInterval(() => {
+      loadAbsences()
+    }, 20000)
+
 
     // Detectar se é dispositivo móvel
     const checkIfMobile = () => {
@@ -132,13 +110,13 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     checkIfMobile()
     window.addEventListener('resize', checkIfMobile)
 
-
-
     return () => {
-      channel.unsubscribe()
+      clearInterval(intervalId)
       window.removeEventListener('resize', checkIfMobile)
     }
   }, [user.id, user.projectId])
+
+
 
 
 
@@ -163,55 +141,41 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             firstName: user.firstName,
             lastName: user.lastName,
             team: user.team,
-            discord_id: user.discordId || null
+            discordId: user.discordId || null
           }
         })
       })
       const result = await res.json()
-      if (res.ok) {
-        console.log('✅ [SHEETS] Sincronização concluída com sucesso')
+      if (res.ok && result.success) {
+        console.log('✅ [SHEETS] Sincronização e Webhook concluídos com sucesso')
         toast({
-          title: "Planilha atualizada",
-          description: "Os dados foram enviados para o Google Sheets com sucesso.",
-        })
-      } else {
-        console.error('❌ [SHEETS] Erro na sincronização:', result.error)
-        toast({
-          variant: "destructive",
-          title: "Erro na planilha",
-          description: "Não foi possível sincronizar com o Google Sheets: " + (result.error || "Erro desconhecido"),
+          title: "Notificação e Registro enviados",
+          description: "A ausência foi salva no banco de dados e notificada via Webhook.",
         })
       }
     } catch (error: any) {
-      console.error('Erro ao sincronizar com Google Sheets:', error)
-      alert("Erro crítico na sincronização: " + error.message)
+      console.warn('Aviso na sincronização de notificação:', error)
     }
   }
+
 
   const loadAbsences = async () => {
     try {
       const userAbsences = await getAbsenceRecordsByUserId(user.id)
       if (Array.isArray(userAbsences)) {
-        // Filtrar ausências: 
-        // 1. Deve ter createdAt válido
-        // 2. NÃO deve ser do tipo 'vacation' (pois estas ficam na aba de Férias)
-        const validAbsences = userAbsences.filter(absence => {
-          if (!absence.createdAt) return false
-          if (absence.reason === 'vacation') return false // Esconder férias desta aba
-          
-          try {
-            const date = parseISO(absence.createdAt)
-            return !isNaN(date.getTime())
-          } catch (error) {
-            console.error('Ausência com createdAt inválido:', absence.id, absence.createdAt)
-            return false
+        // Deduplicar ausências por ID único para evitar chaves duplicadas
+        const uniqueAbsencesMap = new Map<string, any>()
+        userAbsences.forEach(absence => {
+          if (absence && absence.reason !== 'vacation' && absence.id) {
+            uniqueAbsencesMap.set(String(absence.id), absence)
           }
         })
+        const validAbsences = Array.from(uniqueAbsencesMap.values())
 
         validAbsences.sort((a, b) => {
-          const dateA = parseISO(a.createdAt)
-          const dateB = parseISO(b.createdAt)
-          return dateB.getTime() - dateA.getTime()
+          const timeA = a.createdAt ? new Date(a.createdAt).getTime() : 0
+          const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0
+          return timeB - timeA
         })
 
         setAbsences(validAbsences)
@@ -224,6 +188,7 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
       setAbsences([])
     }
   }
+
 
   const handleAddAbsence = () => {
     setFormData({
@@ -394,8 +359,26 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
 
     try {
+      // Bloqueio contra envio duplicado de ausência idêntica
+      const duplicateExisting = absences.find(a => 
+        a && 
+        a.dateRange?.start === formData.departureDate && 
+        a.reason === formData.reason && 
+        a.departureTime === (formData.departureTime || undefined)
+      )
+
+      if (duplicateExisting) {
+        toast({
+          title: "Ausência já registrada",
+          description: "Esta ausência já se encontra cadastrada no seu painel.",
+        })
+        setIsAddDialogOpen(false)
+        return
+      }
+
       // Se houver um documento base64 no formData, fazemos o upload antes de salvar o registro
       let finalProofUrl = formData.proofDocument;
+
       if (formData.proofDocument && formData.proofDocument.startsWith('data:')) {
         // Converter base64 para Blob para o upload
         const response = await fetch(formData.proofDocument);
@@ -673,6 +656,8 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
     }
 
     try {
+      setIsDeleting(true)
+
       // 1. Notificar ANTES de excluir para garantir que os dados ainda existam para o webhook
       const startDateStr = formatDateRange(absenceToDelete)
       
@@ -690,30 +675,31 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         })
       })
 
-      // 2. Excluir do banco
+      // 2. Excluir fisicamente do banco de dados (Google Sheets) e invalidar o cache
       await deleteAbsenceRecord(absenceToDelete.id)
 
-      // 3. Sincronizar com Planilha
-      syncAbsenceToSheets('delete', { id: absenceToDelete.id })
+      // 3. Atualizar estado local
+      setAbsences(prev => prev.filter(a => String(a.id) !== String(absenceToDelete.id)))
 
-      // 4. Atualizar estado local
-      setAbsences(prev => prev.filter(a => a.id !== absenceToDelete.id))
 
       toast({
-        title: "Ausência excluída",
-        description: "O registro foi excluído e a administração foi notificada.",
+        title: "Ausência excluída com sucesso",
+        description: "O registro foi excluído da planilha e a administração foi notificada.",
       })
 
       setIsDeleteDialogOpen(false)
       setAbsenceToDelete(null)
     } catch (error: any) {
       toast({
-        title: "Erro",
+        title: "Erro na exclusão",
         description: error.message || "Ocorreu um erro ao excluir a ausência",
         variant: "destructive",
       })
+    } finally {
+      setIsDeleting(false)
     }
   }
+
 
   const handleEditClick = (absence: any) => {
     setAbsenceToEdit(absence)
@@ -749,6 +735,25 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
 
     try {
       setIsLoading(true)
+
+      // Bloqueio contra envio duplicado de ausência idêntica
+      const duplicateExisting = absences.find(a => 
+        a && 
+        a.dateRange?.start === formData.departureDate && 
+        a.reason === formData.reason && 
+        a.departureTime === (formData.departureTime || undefined)
+      )
+
+      if (duplicateExisting) {
+        toast({
+          title: "Ausência já registrada",
+          description: "Esta ausência já se encontra cadastrada no seu painel.",
+        })
+        setIsAddDialogOpen(false)
+        setIsLoading(false)
+        return
+      }
+
       
       // Para consulta médica: só atualiza data de saída e horário de saída
       const formattedDates = [editFormData.departureDate]
@@ -858,18 +863,19 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
   }
 
   const isAbsenceActive = (absence: any) => {
-    if (!absence.expiresAt) return false
+    if (!absence) return false
+    if (!absence.expiresAt) return true // Se não tiver expiração, manter visível!
 
     try {
       const expiresAt = parseISO(absence.expiresAt)
-      if (isNaN(expiresAt.getTime())) return false
+      if (isNaN(expiresAt.getTime())) return true
 
       return isAfter(expiresAt, new Date())
     } catch (error) {
-      console.error('Erro ao verificar ausência ativa:', absence.id, absence.expiresAt, error)
-      return false
+      return true
     }
   }
+
 
   const getStatusBadge = (absence: any) => {
     if (absence.status === "approved") {
@@ -1299,8 +1305,9 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
         </div>
       ) : (
         <div className="space-y-4">
-          {absences.filter(isAbsenceActive).map((absence) => (
-            <Card key={absence.id} className="p-4 hover:shadow-md transition-shadow">
+          {absences.filter(isAbsenceActive).map((absence, index) => (
+            <Card key={`${absence.id}-${index}`} className="p-4 hover:shadow-md transition-shadow">
+
               <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <h4 className="font-medium text-[#EE4D2D] text-base sm:text-lg break-words">{getReasonLabel(absence)}</h4>
@@ -1911,17 +1918,25 @@ export function AbsenceManagement({ user }: AbsenceManagementProps) {
             </div>
 
             <div className="flex justify-end space-x-2 pt-2">
-              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={isDeleting}>
                 Cancelar
               </Button>
               <Button 
                 variant="destructive" 
                 onClick={confirmDeleteAbsence}
-                disabled={!cancellationReason.trim()}
+                disabled={!cancellationReason.trim() || isDeleting}
               >
-                Confirmar Exclusão
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Excluindo...
+                  </>
+                ) : (
+                  "Confirmar Exclusão"
+                )}
               </Button>
             </div>
+
           </div>
         </DialogContent>
       </Dialog>

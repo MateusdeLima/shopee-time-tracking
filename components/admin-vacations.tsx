@@ -10,8 +10,8 @@ import { Check, X, Calendar, Search, User, Pencil, Trash2, AlertCircle, Image as
 import { Input } from "@/components/ui/input"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { getUserById, createAbsenceRecord, deleteAbsenceRecord, getAbsenceRecords, updateAbsenceRecord, getUsers } from "@/lib/db"
 import { supabase } from "@/lib/supabase"
-import { getUserById, createAbsenceRecord, deleteAbsenceRecord } from "@/lib/db"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -39,34 +39,29 @@ export function AdminVacations() {
   const fetchVacationRequests = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('absence_records')
-        .select(`
-          *,
-          users:user_id (id, first_name, last_name, email, discord_id)
-        `)
-        .eq('reason', 'vacation')
-        .order('created_at', { ascending: false })
+      const [absences, users] = await Promise.all([getAbsenceRecords(), getUsers()])
+      const userMap = new Map(users.map((u) => [u.id, u]))
 
-      if (error) throw error
-
-      // Transformar dados para camelCase manual para simplificar esta view
-      const transformed = (data || []).map(req => ({
-        id: req.id,
-        userId: req.user_id,
-        userName: `${req.users?.first_name} ${req.users?.last_name}`,
-        userEmail: req.users?.email,
-        discordId: req.users?.discord_id,
-        dates: req.dates,
-        status: req.status,
-        createdAt: req.created_at,
-        dateRange: req.date_range,
-        proofDocument: req.proof_document
-      }))
+      const vacationAbsences = absences.filter((a) => a.reason === "vacation")
+      const transformed = vacationAbsences.map((req) => {
+        const u = userMap.get(req.userId)
+        return {
+          id: req.id,
+          userId: req.userId,
+          userName: u ? `${u.firstName} ${u.lastName}` : "Usuário Desconhecido",
+          userEmail: u?.email || "",
+          discordId: u?.discordId || "",
+          dates: req.dates,
+          status: req.status,
+          createdAt: req.createdAt,
+          dateRange: req.dateRange,
+          proofDocument: req.proofDocument,
+        }
+      })
 
       setRequests(transformed)
     } catch (error) {
-      console.error('Erro ao buscar solicitações de férias:', error)
+      console.error("Erro ao buscar solicitações de férias:", error)
       toast({
         title: "Erro",
         description: "Não foi possível carregar as solicitações de férias.",
@@ -77,14 +72,10 @@ export function AdminVacations() {
     }
   }
 
-  const handleDecision = async (request: any, decision: 'approved' | 'rejected' | 'pending') => {
+  const handleDecision = async (request: any, decision: "approved" | "rejected" | "pending") => {
     try {
-      const { error } = await supabase
-        .from('absence_records')
-        .update({ status: decision })
-        .eq('id', request.id)
+      await updateAbsenceRecord(Number(request.id), { status: decision })
 
-      if (error) throw error
 
       // Notificar via Discord (apenas se for aprovado ou rejeitado)
       if (decision !== 'pending') {

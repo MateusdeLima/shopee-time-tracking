@@ -1,29 +1,4 @@
-import { supabase } from "./supabase"
-import { createUser, type User } from "./db"
-import { initializeDb } from "./db"
-
-// Função para converter nomes de campos do Supabase para o formato camelCase
-function convertToCamelCase<T>(data: any): T {
-  if (!data) return data
-
-  if (Array.isArray(data)) {
-    return data.map((item) => convertToCamelCase(item)) as unknown as T
-  }
-
-  if (typeof data === "object" && data !== null) {
-    const newObj: any = {}
-
-    Object.keys(data).forEach((key) => {
-      // Converter snake_case para camelCase
-      const newKey = key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
-      newObj[newKey] = convertToCamelCase(data[key])
-    })
-
-    return newObj as T
-  }
-
-  return data as T
-}
+import { createUser, getUserByEmail, getUserById, initializeDb, type User } from "./db"
 
 // Função para autenticar funcionário
 export async function authenticateEmployee(
@@ -34,44 +9,31 @@ export async function authenticateEmployee(
   cpf?: string,
   birthDate?: string,
   profilePictureUrl?: string,
-  shift?: "8-17" | "9-18",
+  shift?: "8-17" | "9-18"
 ): Promise<User> {
   try {
-    // Inicializar o banco de dados primeiro
     await initializeDb()
 
-    // Verificar se é um login de funcionário (Novo fluxo: Email + Opcional ID)
     if (email) {
-      const { data: user, error } = await supabase.from("users").select("*").eq("email", email).maybeSingle()
-
-      if (error) {
-        console.error("Erro ao buscar usuário por email:", error)
-        throw new Error("Erro ao verificar cadastro. Tente novamente.")
-      }
+      const user = await getUserByEmail(email)
 
       if (!user) {
         throw new Error("E-mail não cadastrado. Entre em contato com o administrador.")
       }
 
-      // Se o usuário forneceu o ID (username)
       if (username) {
         if (user.username !== username) {
           throw new Error("ID incorreto para este e-mail.")
         }
-        return convertToCamelCase<User>(user)
+        return user
       }
 
-      // Se o usuário forneceu APENAS o e-mail
-      if (user.is_first_access) {
-        // Primeiro acesso permitido apenas com email
-        return convertToCamelCase<User>(user)
+      if (user.isFirstAccess) {
+        return user
       } else {
-        // Não é primeiro acesso, ID é obrigatório
         throw new Error("Este e-mail já foi acessado. Por favor, insira seu ID.")
       }
     }
-
-    // Remoção do fluxo antigo de criação de conta/primeiro acesso manual
 
     throw new Error("Dados de autenticação incompletos")
   } catch (error) {
@@ -81,58 +43,37 @@ export async function authenticateEmployee(
 }
 
 // Função para autenticar administrador
-export async function authenticateAdmin(email: string, password: string): Promise<User> {
-  // Autenticar via Supabase Auth
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+export async function authenticateAdmin(email: string, password?: string): Promise<User> {
+  await initializeDb()
 
-  if (error || !data.user) {
-    throw new Error("Credenciais inválidas. Tente novamente.")
+  if (!email || !email.trim()) {
+    throw new Error("Por favor, digite o e-mail de administrador.")
   }
 
-  // Buscar usuário na tabela users
-  const { data: userData, error: userError } = await supabase
-    .from("users")
-    .select("*")
-    .eq("email", email)
-    .maybeSingle()
+  const user = await getUserByEmail(email.trim())
 
-  if (userError) {
-    throw new Error("Erro ao buscar usuário admin no banco de dados.")
-  }
-
-  // Se não existir, criar automaticamente como admin
-  let user = userData
   if (!user) {
-    const { data: newUser, error: createError } = await supabase
-      .from("users")
-      .insert([
-        {
-          first_name: data.user.user_metadata?.first_name || "Admin",
-          last_name: data.user.user_metadata?.last_name || "",
-          email: email,
-    role: "admin",
-          username: data.user.user_metadata?.username || email.split("@")[0],
-          is_first_access: false,
-        },
-      ])
-      .select()
-      .single()
-    if (createError) {
-      throw new Error("Erro ao criar usuário admin no banco de dados.")
-    }
-    user = newUser
+    throw new Error("E-mail de administrador não encontrado no sistema.")
   }
 
-  // Garantir que é admin
   if (user.role !== "admin") {
     throw new Error("Acesso restrito: apenas administradores podem acessar este painel.")
   }
 
-  return convertToCamelCase<User>(user)
+  if (!password || !password.trim()) {
+    throw new Error("Por favor, digite a senha de acesso.")
+  }
+
+  const inputPassword = password.trim()
+  const expectedPassword = (user.password || user.username || user.id).trim()
+
+  if (inputPassword !== expectedPassword) {
+    throw new Error("Senha incorreta. Por favor, digite a senha correta cadastrada para este e-mail.")
+  }
+
+  return user
 }
+
 
 // Função para verificar autenticação atual
 export function getCurrentUser(): User | null {
@@ -163,17 +104,9 @@ export function logout(): void {
 // Função para verificar se um email já está registrado
 export async function isEmailRegistered(email: string): Promise<boolean> {
   try {
-    // Inicializar o banco de dados primeiro
     await initializeDb()
-
-    const { data, error } = await supabase.from("users").select("id").eq("email", email).maybeSingle()
-
-    if (error && error.code !== "PGRST116") {
-      console.error("Erro ao verificar email registrado:", error)
-      throw new Error("Erro ao verificar email. Tente novamente.")
-    }
-
-    return !!data
+    const user = await getUserByEmail(email)
+    return !!user
   } catch (error) {
     console.error("Erro em isEmailRegistered:", error)
     throw error
@@ -183,17 +116,9 @@ export async function isEmailRegistered(email: string): Promise<boolean> {
 // Função para obter o username de um email registrado
 export async function getUsernameByEmail(email: string): Promise<string | null> {
   try {
-    // Inicializar o banco de dados primeiro
     await initializeDb()
-
-    const { data, error } = await supabase.from("users").select("username").eq("email", email).maybeSingle()
-
-    if (error && error.code !== "PGRST116") {
-      console.error("Erro ao buscar username por email:", error)
-      return null
-    }
-
-    return data ? data.username : null
+    const user = await getUserByEmail(email)
+    return user ? user.username : null
   } catch (error) {
     console.error("Erro em getUsernameByEmail:", error)
     return null
@@ -206,26 +131,15 @@ export async function refreshCurrentUser(): Promise<User | null> {
     const currentUser = getCurrentUser()
     if (!currentUser) return null
 
-    // Buscar dados atualizados do banco
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", currentUser.id)
-      .single()
-
-    if (error) {
-      console.error("Erro ao recarregar dados do usuário:", error)
-      return currentUser // Retorna o usuário atual se houver erro
+    const updatedUser = await getUserById(currentUser.id)
+    if (updatedUser) {
+      setCurrentUser(updatedUser)
+      return updatedUser
     }
 
-    // Converter para camelCase e atualizar localStorage
-    const updatedUser = convertToCamelCase<User>(data)
-    setCurrentUser(updatedUser)
-    
-    return updatedUser
+    return currentUser
   } catch (error) {
     console.error("Erro em refreshCurrentUser:", error)
-    return getCurrentUser() // Retorna o usuário atual se houver erro
+    return getCurrentUser()
   }
 }
-

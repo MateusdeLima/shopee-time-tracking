@@ -93,19 +93,20 @@ export function EmployeeLoginForm() {
 
   const handleModalClose = async () => {
     if (formData.email) {
-      // Marcar como não sendo mais o primeiro acesso após ver o modal
       try {
         const user = await getUserByEmail(formData.email)
         if (user) {
           await updateUser(user.id, { isFirstAccess: false })
-          router.push("/employee/dashboard")
         }
       } catch (err) {
         console.error("Erro ao marcar primeiro acesso:", err)
-        router.push("/employee/dashboard")
       }
     }
     setShowFirstAccessModal(false)
+    setShowLoadingScreen(true)
+    setTimeout(() => {
+      router.push("/employee/dashboard")
+    }, 1500)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -125,8 +126,12 @@ export function EmployeeLoginForm() {
       // Salvar usuário
       setCurrentUser(user)
 
+      const isFirstAccessBool =
+        user.isFirstAccess === true ||
+        String(user.isFirstAccess).trim().toLowerCase() === "true"
+
       // Se for primeiro acesso, mostrar modal
-      if (user.isFirstAccess) {
+      if (isFirstAccessBool) {
         setGeneratedId(user.username || "")
         setShowFirstAccessModal(true)
         return // Não redirecionar ainda
@@ -137,6 +142,7 @@ export function EmployeeLoginForm() {
         description: `Bem-vindo(a), ${user.firstName}!`,
         duration: 2000,
       })
+
 
       // Redirecionar
       // Redirecionar

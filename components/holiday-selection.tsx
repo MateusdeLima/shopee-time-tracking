@@ -63,40 +63,10 @@ export function HolidaySelection({ user }: HolidaySelectionProps) {
       }
     }
 
-    // Configurar subscription para atualizações em tempo real
-    const channel = supabase
-      .channel('overtime_records_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // Escutar todos os eventos (INSERT, UPDATE, DELETE)
-          schema: 'public',
-          table: 'overtime_records',
-          filter: `user_id=eq.${user.id}` // Filtrar apenas registros do usuário atual
-        },
-        async (payload) => {
-          console.log('Mudança detectada:', payload)
-          // Recarregar registros quando houver mudanças
-          await loadUserRecords()
-          
-          // Se houver um feriado selecionado, atualizar suas estatísticas
-          if (selectedHoliday?.id) {
-            const stats = await getUserHolidayStats(user.id, selectedHoliday.id)
-            const maxHours = stats.max - stats.used
-            setRemainingHours(maxHours)
-          }
-        }
-      )
-      .subscribe()
-
     loadActiveHolidays()
     loadUserRecords()
-
-    // Cleanup da subscription
-    return () => {
-      channel.unsubscribe()
-    }
   }, [user.id, selectedHoliday?.id])
+
 
   useEffect(() => {
     const updateHolidayStats = async () => {
