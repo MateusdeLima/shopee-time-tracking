@@ -20,7 +20,8 @@ O **Shopee Page Control** é um sistema completo e centralizado criado para aten
 
 #### 1. Painel de Gerenciamento de Ausências
 Exibição clara e simplificada das ausências registradas, status de envio de comprovantes, horários agendados e opções para geração de relatórios ou cancelamento.
-![Gerenciamento de Ausências](./path/to/image_e5ab85.png)
+<img width="1915" height="912" alt="image" src="https://github.com/user-attachments/assets/c765be8a-ae77-485b-a0f7-b519c5dbe492" />
+
 
 #### 2. Registro de Ausências Futuras
 Modal intuitivo com validação de horários de saída e retorno, categorizado pelos principais motivos corporativos (Consulta Médica, Energia/Internet, Atestado/Emergencial, Outro).
