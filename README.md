@@ -20,17 +20,21 @@ O **Shopee Page Control** é um sistema completo e centralizado criado para aten
 
 #### 1. Painel de Gerenciamento de Ausências
 Exibição clara e simplificada das ausências registradas, status de envio de comprovantes, horários agendados e opções para geração de relatórios ou cancelamento.
-<img width="1915" height="912" alt="image" src="https://github.com/user-attachments/assets/c765be8a-ae77-485b-a0f7-b519c5dbe492" />
+<img width="1918" height="909" alt="image" src="https://github.com/user-attachments/assets/02661da8-7b70-4f20-a8e6-8ea4a23484f6" />
+
 
 
 #### 2. Registro de Ausências Futuras
 Modal intuitivo com validação de horários de saída e retorno, categorizado pelos principais motivos corporativos (Consulta Médica, Energia/Internet, Atestado/Emergencial, Outro).
-![Registro de Ausência](./path/to/image_e5abe1.png)
+<img width="1911" height="910" alt="image" src="https://github.com/user-attachments/assets/ac7b2ace-bb95-4730-b802-00119f186ba5" />
+
 
 #### 3. Emissão de Relatório Individual
 Filtro rápido por mês para geração e download de relatórios consolidados em formato PDF.
-![Filtro de Relatório](./path/to/image_e5aeca.png)
-![Relatório Gerado](./path/to/image_e5af28.png)
+<img width="1911" height="910" alt="image" src="https://github.com/user-attachments/assets/46fa9a55-621f-4523-a59a-397f55785628" />
+
+<img width="802" height="850" alt="image" src="https://github.com/user-attachments/assets/18b3d1cc-e1b5-4070-b5cc-2e0ce11b27f4" />
+
 
 ---
 
@@ -41,7 +45,7 @@ Painel administrativo completo exibindo indicadores estratégicos em tempo real:
 - **KPIs Globais:** Total de ausências, horas extras acumuladas, total de agentes ativos e feriados cadastrados.
 - **Gráficos e Insights:** Distribuição de ausências por motivo (Consulta Médica, Atestado, Falha de Energia/Internet, Outros) e ranking de Horas Extras.
 - **Ferramentas de Gestão:** Busca por agente/motivo, ordenação mensal, controle de acessos e exportação de planilhas.
-![Dashboard Administrativo](./path/to/image_e61bad.png)
+<img width="1915" height="912" alt="image" src="https://github.com/user-attachments/assets/09144064-b4b7-4f84-98ee-5db2d0d0d991" />
 
 ---
 
